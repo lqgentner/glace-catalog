@@ -79,9 +79,8 @@ https://titiler.xyz/cog/preview.png
   sequential ramp hides the sign, which is the whole information content.
 - **`*_qa_num` is an integer count on tiles and a float mean on mosaics.** They
   are not the same quantity; the mosaic band is named `num_obs_mean`.
-- **`visual` assets are not measurements.** `coh12_rgb` and `rtc_rgb` are 8-bit
-  display codes under a fixed stretch, and `rtc_rgb` is in dB while everything
-  else is linear. Never read a `visual` asset for analysis.
+- **PMTiles are for drawing, not reading.** The archives on the mosaics
+  collection are pre-stretched 8-bit tiles. For any value, read the COGs.
 - **nodata is NaN** on every float32 raster and **0** on the uint16 counts.
 - **Colormap names in `renders` are portable stand-ins.** The designed maps are
   `cmc.lipari` for coherence and `cmc.navia` for backscatter (cmcrameri,
@@ -90,9 +89,9 @@ https://titiler.xyz/cog/preview.png
 
 ## Data quality notes
 
-- Coverage is the **glacier perimeter**, not the country: the Swiss run
-  composites the buffered SGI2023 outline only, 143 MGRS tiles. There is no
-  data over the Mittelland, and that is not a gap.
+- Coverage follows the **glacier perimeter**, not an administrative boundary.
+  Tiles exist where there is ice to observe, so the footprint is ragged and the
+  space between glacierised regions is not a data gap.
 - `glace:glacier_fraction` is pinned to one RGI7 version and computed once per
   scope, so it cannot drift between years. The lookup table is published as the
   `glacier-fractions` collection asset.
@@ -101,7 +100,7 @@ https://titiler.xyz/cog/preview.png
 
 ## Related
 
-- `glace-ch-tiles` and `glace-ch-mosaics` cover the same pixels at different
+- The tiles and mosaics collections cover the same pixels at different
   resolutions on different grids. Pair them on the year.
 - GLACE Alps applies the same pipeline across the Alpine Convention perimeter
-  and will be published as a separate catalog with the same structure.
+  and supersedes this catalog.

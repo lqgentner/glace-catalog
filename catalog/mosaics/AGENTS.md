@@ -24,14 +24,19 @@ cube = odc.stac.load(
 change = cube.sel(time="2024") - cube.sel(time="2021")
 ```
 
-## Do not read the `visual` assets
+## Drawing versus reading
 
-`coh12_rgb` and `rtc_rgb` are renderings: 8-bit display codes under a fixed
-stretch, WEBP-compressed, alpha marking absent data. `rtc_rgb` is in **decibels**
-while every other raster in this catalog is linear, and both average in display
-space in their overviews. They exist so a map client can draw a year without a
-tile server. For anything quantitative use the float32 `data` and `quality`
-assets.
+Two products, and they are not interchangeable.
+
+**PMTiles**, registered as `rel: "pmtiles"` links with MapLibre styles as
+`style` assets, are what a map client uses. Their pixels are 8-bit display codes
+under a fixed stretch, and the backscatter archives are in **decibels** while
+every raster in this catalog is linear. They are renderings. Never read one for
+a value.
+
+**The COGs** carry the measurements. The `renders` block declares the stretch,
+the ramp and the decibel `expression`, so a client can colorize them at draw
+time and get the same picture with the numbers still underneath.
 
 ## `*_qa_num` is a mean here
 

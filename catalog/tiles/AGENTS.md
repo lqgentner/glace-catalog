@@ -76,3 +76,5 @@ the tiles are per-UTM-zone and the mosaics are WebMercator.
 - Tiles are 1000 × 1000 px with one internal overview level, LERC_ZSTD
   compressed with a per-quantity error bound anchored to that quantity's own
   measurement noise (1e-3 for coherence, 1e-5 for linear backscatter).
+- Coverage follows the glacier perimeter, so the tile set is ragged. A missing
+  tile means no ice there, not a processing gap.

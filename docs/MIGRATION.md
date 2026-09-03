@@ -207,99 +207,106 @@ a directory listing.
 ## 4. Visualization: the decision, and what settled it
 
 **Published: 12 float32 LERC analysis COGs per year, rendered client-side
-through the `renders` block, plus 2 RGBA WEBP false-colour COGs. Raster PMTiles
-are retired.**
+through the `renders` block, plus PMTiles archives with MapLibre styles as the
+web-map product.**
 
-### Why not raster PMTiles
+> **This reverses an earlier decision in this document (2026-09-03).** PMTiles
+> were retired on the reading that Portolan's rules for them are vector-shaped
+> and that a raster archive could not satisfy them honestly. That reading was
+> wrong on the decisive point, and a measurement settled the rest. Both
+> corrections are below, because the reasoning that produced the wrong call is
+> worth keeping visible.
 
-Not forbidden — but every rule it touches is vector-shaped, and rashid enforces
-all three:
+### What the measurement said
 
-- `PTL-VIZ-003` requires the `rel: "pmtiles"` link to carry a **non-empty
-  `pmtiles:layers`** array of default-visible layers. A raster archive has no
-  vector layers, so the field would hold a placeholder that means nothing.
-- `PTL-VIZ-002` requires any collection with a PMTiles link **or any
-  collection-level `visual` asset** to register a `style` asset, and
-  `PTL-VIZ-005` requires that style to be a MapLibre GL style JSON. Both COG
-  paths avoid this entirely: a display-ready COG is the spec's "render from
-  source" path and needs no style file.
-- `PORTO-FMT-011` puts the link at **collection** level, but GLACE's archives
-  are per year and per layer: 14 × 11 = 154 links on one collection document.
-- The stretch is baked permanently into 8-bit RGBA, so changing a palette means
-  re-tiling — the opposite of where the spec's raster-styling discussion is
-  heading.
+Serving the mosaics to the web map as COGs costs **about four times the bytes**
+of serving them as PMTiles, measured in `glace-viewer` against real tiles. That
+is a wire measurement, not a file-size one: a browser GeoTIFF reader batches
+range reads into fixed blocks, so it fetches more than the viewport needs, and
+the gap is wider over a network than any local comparison shows.
 
-The escape hatch that makes the rest work: `PTL-VIZ-002` is scoped to
-**collections**. A `visual` asset on an *item* does not trigger the style
-requirement, which is why the false-colour rasters live on the year item.
+Four times is not a margin a catalog can argue away. PMTiles is the display
+product.
 
-### Why the false-colour COGs earn their place
+### Why the compliance objection was wrong
 
-Measured on one real tile:
+Three rules govern raster PMTiles, and rashid enforces all three. Each was read
+as a blocker; none is.
 
-| | analysis (LERC) | false colour (RGBA WEBP q80) |
-| --- | ---: | ---: |
-| `coh12` | 1.23 B/px | 0.32 B/px |
-| `rtc` | 2.30 B/px | 0.44 B/px |
+- **`PTL-VIZ-003` requires a non-empty `pmtiles:layers`.** The objection was
+  that a raster archive has no layers, so the array would be a placeholder. It
+  is not: the web-map-links v1.3.0 schema leaves the field optional and untyped
+  beyond "array of strings", and a MapLibre style over a raster source **does**
+  have layers. `glace-viewer` already names them — `glace-pmtiles-coh12_vv_2023`
+  — so the array names the style layer a client switches on. That is the field
+  used as intended.
+- **`PTL-VIZ-002` and `PTL-VIZ-005` require a MapLibre GL style asset.** Read as
+  a tax. It is the opposite: `js/map.js` already builds these layer definitions
+  at runtime, so publishing them externalises the viewer's own configuration
+  into a standard file that something other than `glace-viewer` can load. It is
+  the same argument that moved raster styling out of `layers.json` and into
+  `renders`, one product over.
+- **Collection-level registration.** 14 layers × 11 years is 154 links on one
+  document. Verbose, and legal.
 
-A single-band uint8 display copy was also measured and does **not** earn its
-place: uint8+DEFLATE lands at 95 % of the LERC baseline for coherence and 49 %
-for backscatter, so it costs an extra product for at best a halving, while the
-float32 original serves the same view through `renders` with the palette and the
-range still client-side. Only false colour genuinely cannot be served from the
-analysis COGs — a browser COG protocol reads one GeoTIFF per URL and cannot join
-VV and VH — so that is the one derivative built.
+Verified rather than argued: a fixture registering raster PMTiles this way —
+`rel: "pmtiles"` links carrying `pmtiles:layers`, web-map-links v1.3.0 declared,
+MapLibre styles as `style` assets with exactly one `default` — returns **0
+errors** from rashid.
 
-Lossier LERC was also measured and rejected: 2.5e-3 on coherence (one display
-step) saves 19 % and 1.5e-4 on backscatter saves 27 %, neither worth loosening a
-bound anchored to the data's own measurement noise.
+The one real cost stands: the stretch is baked into 8-bit tiles, so changing a
+palette means re-tiling. That is why the analysis COGs keep `renders`, where the
+ramp and range stay client-side and cost nothing to change.
 
-### The dB question, settled
+### What this retires
 
-`rtc_rgb`'s channels are in **decibels**, while every other raster in the catalog
-is linear. This is correct and not a spec violation:
+The false-colour RGBA WEBP COGs (`coh12_rgb`, `rtc_rgb`) are dropped from
+`item_assets` and from `renders`. They existed only to serve false colour once
+PMTiles were retired; PMTiles serve the same view at a quarter of the bytes, in
+a format built for it, so the derivative has no consumer left. Measured at
+0.32 B/px (coh12) and 0.44 B/px (rtc), they were a good answer to the wrong
+question.
 
-- The linear-everywhere rule binds *measurements*. An RGBA WEBP COG holds 8-bit
-  display codes under a fixed stretch — neither linear power nor dB, just
-  indices. The rule never reaches it.
-- Portolan says nothing about units. What it does require of that file is
-  embedded per-band statistics and valid percent (`PTL-DAT-009/010`) —
-  **including on the alpha band** — which describe the display codes either way.
-- Backscatter spans ~16 dB, about two and a half decades of linear power. A
-  linear 8-bit stretch collapses nearly all glacier ice into the darkest few
-  codes; dB is the standard display transform and the measurements confirm the
-  dark end is where linear quantisation hurts.
+That also removes the dB-versus-linear wrinkle from the `data` role entirely:
+every COG in the catalog is linear, and the only decibel pixels in the store are
+in PMTiles archives that are labelled renderings.
 
-The confusion risk is real and is handled as documentation, not format: the
-asset `description` and each `bands[]` entry name the transform and its range.
-The same reasoning covers the internal overviews, which average in display
-space — correct for a rendering, wrong for a measurement, and one more reason
-the asset is `visual` and never `data`.
+### What the measurements ruled out, and still do
+
+A single-band uint8 display COG remains rejected, on the same numbers as before:
+95 % of the LERC baseline for coherence and 49 % for backscatter is not worth a
+second product when the float32 original serves the same view through `renders`.
+Lossier LERC is also still rejected — 2.5e-3 on coherence saves 19 %, 1.5e-4 on
+backscatter saves 27 %, neither worth loosening a bound anchored to the data's
+own measurement noise.
+
+### The styles
+
+Four MapLibre GL style files under `mosaics/styles/`, committed rather than
+generated: they encode colour, opacity and legend stops, which are design
+decisions that belong in review. `default.json` carries both `style` and
+`default` roles, as Portolan requires when there is more than one.
+
+The only generated part is the year each style's `pmtiles://` source names;
+`finalize-catalog` repoints them at the most recent published year.
+
+Each carries its legend under `metadata.portolan:legend`, which is where the
+`LEGEND_STOPS` plumbing goes — out of `layers.json` and into a file MapLibre
+loads directly.
 
 ### What the `renders` block does
 
 Both collections declare `render` **v2.0.0** (the version the Portolan profile
 registry pins; FTW still uses v1.0.0, and in v2.0.0 an item's `renders` moves
-into `properties`). It carries what used to live in `DEFAULT_STYLES` and a
-bespoke `layers.json`: per-layer `rescale`, `colormap_name`, `resampling`,
-`nodata`, and — for RTC and QA-CQM — `expression: "10*log10(...)"`, so the
-decibel convention is *declared in the catalog* rather than only implemented in
-the viewer.
+into `properties`). It carries per-layer `rescale`, `colormap_name`,
+`resampling`, `nodata`, and — for RTC and QA-CQM — `expression:
+"10*log10(...)"`, so the decibel convention is *declared in the catalog* rather
+than only implemented in the viewer.
 
 `colormap_name` names portable matplotlib maps (`magma`, `gray`, `viridis`,
 `rdbu`) rather than the designed cmcrameri maps (`cmc.lipari`, `cmc.navia`),
 because a generic client will not have cmcrameri registered. The designed maps
 are named in each collection's `AGENTS.md`.
-
-### What this retires
-
-`create_rgba_vrt`'s PMTiles path, `run_rio_pmtiles`, `_rio_executable`, the
-`rio-pmtiles` dependency, spike S5, `layers.json`, the `rel: "pmtiles"` links,
-and the `LEGEND_STOPS` / `ramp_colors` legend plumbing. The LUT machinery
-(`color_lookup_table`, `build_luts`, `build_rgb_luts`, `rgba_vrt`,
-`estimate_stretch`) is **kept** — it is exactly what builds the RGBA WEBP COGs.
-`webmap.py` should be renamed to reflect that it now builds display rasters
-rather than web maps.
 
 ---
 
@@ -364,10 +371,12 @@ Ordered by what blocks what.
       `describedby` links.
 - [ ] **P-4 — Thumbnails.** `PTL-VIZ-001` is an error and both collections need
       one, generated from the default styling.
-- [ ] **P-5 — The false-colour COG writer.** Replace the PMTiles step with an
-      RGBA WEBP COG built off the same LUT chain. Verify GDAL's COG driver keeps
-      the alpha band under `COMPRESS=WEBP`, and that the alpha band carries
-      statistics.
+- [ ] **P-5 — PMTiles step and style generation.** The tiler in `webmap.py`
+      was never deleted, so this is mostly restoring what M-6 had marked for
+      removal: `build_pmtiles`, `run_rio_pmtiles`, `create_rgba_vrt` and the
+      `rio-pmtiles` dependency all stay. New work is the per-year
+      `rel: "pmtiles"` links on the mosaics collection, and `finalize-catalog`
+      repointing the four style files at the most recent published year.
 
 ### Before the Alps
 
@@ -377,8 +386,9 @@ Ordered by what blocks what.
       one tile; the Alps mosaic at 41 984 × 69 120 needs 9 levels and the CH test
       COG stopped at 7.
 - [ ] **P-8 — Spikes S3 and S5 at scale.** S3 (a 2 209-source VRT chain on S3)
-      is still the most likely thing to force a design change. S5 is retired
-      with PMTiles.
+      is still the most likely thing to force a design change. S5 (`rio pmtiles`
+      reading `/vsis3` with `AWS_PROFILE` only) is back in scope now that
+      PMTiles are, though `subprocess_s3_env` already implements it.
 
 ### Worth doing, not blocking
 
@@ -399,7 +409,7 @@ Ordered by what blocks what.
 - [ ] **P-15 — Labels catalog.** Left in `deep-glacier-mapping` for now
       (`build-labels-catalog.py`, `rasterize-labels.py`). It is STAC creation and
       belongs here eventually, as a third collection or a sibling catalog.
-- [ ] **P-16 — Rename `webmap.py`.** It builds display rasters now, not web maps.
+- [ ] **P-16 — ~~Rename `webmap.py`~~.** Dropped: it builds web maps after all.
 - [ ] **P-17 — Delete the originals from `deep-glacier-mapping`** once P-3 lands
       and this repository can build a store: `scopes.py`, `stac/`, `mosaics.py`,
       `webmap.py`, `gdal_s3.py`'s subprocess helper, and `scripts/stac/`. Until
@@ -552,9 +562,9 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-3 | Year sub-catalogs only; `PTL-CAT-001` accepted rather than adding two more directory levels | 3 |
 | M-4 | Per-year manifest and config are **tiles-collection** assets keyed `manifest-{year}`; the mosaic-item placement and the 24 000 `describedby` links are dropped. Supersedes D-18 | 3 |
 | M-5 | Item mirror at `{collection}/items.parquet`, role `collection-mirror`, no `rel: "items"` link. Supersedes D-6's root-level `tiles.parquet` with role `stac-items` | 3 |
-| M-6 | Raster PMTiles retired; false colour ships as 2 RGBA WEBP COGs on the year item. Resolves D-12 and §14 of `PLAN.md` | 4 |
+| M-6 | ~~Raster PMTiles retired~~ **superseded by M-19** | 4 |
 | M-7 | Single-band uint8 display COGs rejected on measurement — 95 %/49 % of the LERC baseline is not worth a second product | 4 |
-| M-8 | `rtc_rgb` is in dB; every `data` asset stays linear. Documented in the asset description and band entries | 4 |
+| M-8 | ~~`rtc_rgb` is in dB~~ **moot under M-19**: the only decibel pixels left are inside PMTiles archives | 4 |
 | M-9 | `renders` v2.0.0 on both collections replaces `DEFAULT_STYLES` and `layers.json` as the home of raster styling; `expression` declares the dB conversion | 4 |
 | M-10 | `colormap_name` names portable matplotlib maps; the cmcrameri maps are named in `AGENTS.md` | 4 |
 | M-11 | Producer and host are both UZH, one provider entry, so the catalog is official. Source Cooperative is the storage vendor, not the host | 2 |
@@ -564,6 +574,9 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement, not the optional nicety D-24 made it. It gates the CH rehearsal, not just the Alps | 6 |
 | M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 2 |
 | M-17 | **ETag is dropped from the manifest**; `sha256` alone, multihash-encoded. Supersedes D-25's "both, for different jobs" | 6 |
+| M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors. Reverses M-6 | 4 |
+| M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 4 |
+| M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year | 4 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |
 
 ---
@@ -576,7 +589,7 @@ For anyone holding the `stac-store-refactor` documents.
 | --- | --- | --- |
 | `{year}/{tile}/` shared by both collections | `tiles/{year}/{tile}/` | Portolan requires a collection to own its items |
 | `tiles.parquet` at root, role `stac-items` | `tiles/items.parquet`, role `collection-mirror` | `PTL-MIR-002`; `stac-items` is a Planetary Computer habit |
-| PMTiles as `rel: "pmtiles"` links | retired | `PTL-VIZ-002/003/005` are vector-shaped; §4 |
+| PMTiles as `rel: "pmtiles"` links | kept, and now with MapLibre styles | the rules are satisfiable and PMTiles is 4x cheaper on the wire; §4 |
 | `layers.json` + `DEFAULT_STYLES` | `renders` v2.0.0 on both collections | a standard home has existed since 2023 |
 | band statistics gate the Alps only (D-24) | gate everything | `PTL-DAT-009` is an error |
 | manifest as mosaic-item asset + `describedby` on every tile item (D-18) | tiles-collection asset keyed by year | `PTL-AST-005`; simpler and semantically right |

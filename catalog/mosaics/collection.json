@@ -4,6 +4,7 @@
   "stac_extensions": [
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
     "https://stac-extensions.github.io/render/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
     "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
     "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
@@ -12,7 +13,7 @@
   ],
   "id": "glace-ch-mosaics",
   "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed WebMercator grid",
-  "description": "One mosaic per year of the GLACE Switzerland composites, warped from the 10 m MGRS tiles onto the WebMercatorQuad grid at zoom 13 (19.109 m, about 13.2 m on the ground at 46.5 degrees north). Every year sits on the same fixed grid, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Aligning to the tile matrix also means the COGs' internal overview levels land exactly on zoom 12, 11 and below: each file is itself a tile pyramid, and a browser reading it at low zoom fetches a decimated overview rather than full-resolution pixels it would discard. Twelve single-band analysis rasters per year in linear units, plus two false-colour renderings for display. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
+  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto the WebMercatorQuad grid at zoom 13 (19.109 m, about 13.2 m on the ground at 46.5 degrees north). Every year sits on the same fixed grid, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Aligning to the tile matrix also means the COGs' internal overview levels land exactly on zoom 12, 11 and below: each file is itself a tile pyramid, and a browser reading it at low zoom fetches a decimated overview rather than full-resolution pixels it would discard. Twelve single-band analysis rasters per year, in linear units. Drawing is served separately by PMTiles archives registered on this collection, with MapLibre styles alongside them. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -20,7 +21,6 @@
     "InSAR coherence",
     "backscatter",
     "glaciers",
-    "Switzerland",
     "Alps",
     "mosaic",
     "cryosphere"
@@ -130,20 +130,6 @@
       "colormap_name": "gray",
       "resampling": "average",
       "nodata": "nan"
-    },
-    "coh12_rgb": {
-      "title": "COH12 false colour — R: VV, G: VH, B: VV/VH",
-      "assets": [
-        "coh12_rgb"
-      ],
-      "resampling": "average"
-    },
-    "rtc_rgb": {
-      "title": "RTC false colour — R: VV, G: VH, B: VV-VH (all dB)",
-      "assets": [
-        "rtc_rgb"
-      ],
-      "resampling": "average"
     }
   },
   "item_assets": {
@@ -332,64 +318,6 @@
           "nodata": "nan"
         }
       ]
-    },
-    "coh12_rgb": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 false colour (display)",
-      "description": "A rendering, not a measurement. Eight-bit display codes under a fixed stretch, WEBP-compressed, with an alpha band marking absent data. R = COH12 VV over 0.10-0.80, G = COH12 VH over 0.10-0.60, B = VV/VH. The stretch is fixed rather than per-year so the year slider compares like with like. Its internal overviews average in display space, which is correct for a rendering and wrong for a measurement: read the float32 assets for anything but drawing.",
-      "roles": [
-        "visual",
-        "overview",
-        "cloud-optimized"
-      ],
-      "raster:spatial_resolution": 19.109257071294063,
-      "bands": [
-        {
-          "name": "red",
-          "data_type": "uint8"
-        },
-        {
-          "name": "green",
-          "data_type": "uint8"
-        },
-        {
-          "name": "blue",
-          "data_type": "uint8"
-        },
-        {
-          "name": "alpha",
-          "data_type": "uint8"
-        }
-      ]
-    },
-    "rtc_rgb": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC false colour (display)",
-      "description": "A rendering, not a measurement. Eight-bit display codes under a fixed stretch, WEBP-compressed, with an alpha band marking absent data. Channels are in decibels, unlike every other raster in this catalog: R = RTC VV over -18.5 to -5 dB, G = RTC VH over -26 to -11 dB, B = VV-VH dB. Backscatter spans about two and a half decades of linear power, so a linear eight-bit stretch would collapse nearly all glacier ice into the darkest few codes. The conversion is applied here and only here; the float32 assets stay linear.",
-      "roles": [
-        "visual",
-        "overview",
-        "cloud-optimized"
-      ],
-      "raster:spatial_resolution": 19.109257071294063,
-      "bands": [
-        {
-          "name": "red",
-          "data_type": "uint8"
-        },
-        {
-          "name": "green",
-          "data_type": "uint8"
-        },
-        {
-          "name": "blue",
-          "data_type": "uint8"
-        },
-        {
-          "name": "alpha",
-          "data_type": "uint8"
-        }
-      ]
     }
   },
   "assets": {
@@ -415,6 +343,40 @@
       "description": "Rendered from the most recent year's rtc_rgb mosaic under the same fixed stretch the render definitions declare.",
       "roles": [
         "thumbnail"
+      ]
+    },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "COH12 false colour",
+      "description": "The default view: coherence VV, VH and their ratio as R, G and B.",
+      "roles": [
+        "style",
+        "default"
+      ]
+    },
+    "style-coherence-vv": {
+      "href": "./styles/coherence-vv.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "COH12 VV",
+      "roles": [
+        "style"
+      ]
+    },
+    "style-backscatter-rgb": {
+      "href": "./styles/backscatter-rgb.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "RTC false colour",
+      "roles": [
+        "style"
+      ]
+    },
+    "style-backscatter-vv": {
+      "href": "./styles/backscatter-vv.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "RTC VV",
+      "roles": [
+        "style"
       ]
     }
   },

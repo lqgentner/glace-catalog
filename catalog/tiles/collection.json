@@ -12,7 +12,7 @@
   ],
   "id": "glace-ch-tiles",
   "title": "GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid",
-  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over the glacierised Swiss Alps, on the 10 km MGRS grid at 10 m resolution. One item per (tile, year), carrying twelve single-band Cloud-Optimized GeoTIFFs: COH12 and RTC in VV and VH, and for each of those four measurements a pair of QA layers — the contributing observation count (QA-NUM) and the composite quality metric (QA-CQM), which is the local resolution-weighting's own record of how well each pixel was resolved. Compositing is locally resolution weighted (LRW): each acquisition's contribution is weighted by how well it resolves the pixel, so layover and shadow are down-weighted rather than averaged in. All values are linear — backscatter in linear power, QA-CQM as a linear ratio — with the decibel conversion declared in the render definitions rather than applied to the stored pixels, as CEOS-ARD PFS SAR item 3.1 asks. Every raster carries its full processing record in its own GeoTIFF tags, so a file separated from this catalog still says how it was made. Items are grouped into one sub-catalog per year; the item mirror at items.parquet is the query path.",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over Alpine glaciers, on the 10 km MGRS grid at 10 m resolution. One item per (tile, year), carrying twelve single-band Cloud-Optimized GeoTIFFs: COH12 and RTC in VV and VH, and for each of those four measurements a pair of QA layers — the contributing observation count (QA-NUM) and the composite quality metric (QA-CQM), which is the local resolution-weighting's own record of how well each pixel was resolved. Compositing is locally resolution weighted (LRW): each acquisition's contribution is weighted by how well it resolves the pixel, so layover and shadow are down-weighted rather than averaged in. All values are linear — backscatter in linear power, QA-CQM as a linear ratio — with the decibel conversion declared in the render definitions rather than applied to the stored pixels, as CEOS-ARD PFS SAR item 3.1 asks. Every raster carries its full processing record in its own GeoTIFF tags, so a file separated from this catalog still says how it was made. Items are grouped into one sub-catalog per year; the item mirror at items.parquet is the query path.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -20,7 +20,6 @@
     "InSAR coherence",
     "backscatter",
     "glaciers",
-    "Switzerland",
     "Alps",
     "cryosphere"
   ],

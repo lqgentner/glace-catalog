@@ -1,8 +1,8 @@
 # GLACE mosaics — annual composites on a fixed WebMercator grid
 
-One item per year, each carrying twelve single-band analysis rasters and two
-false-colour display rasters, all on the WebMercatorQuad grid at zoom 13
-(19.109 m, about 13.2 m on the ground at 46.5°N).
+One item per year, each carrying twelve single-band analysis rasters on the
+WebMercatorQuad grid at zoom 13 (19.109 m, about 13.2 m on the ground at 46.5°N),
+plus a set of PMTiles archives for drawing them.
 
 ## Why this grid
 
@@ -17,22 +17,37 @@ Two properties, both deliberate:
   overview instead of full-resolution pixels it would throw away, and at max
   zoom a tiler's warp is the identity.
 
-## Analysis rasters versus display rasters
+## Two ways to consume it
 
-The twelve `data` and `quality` assets carry the measurements, in linear units,
-and are what you read for anything quantitative.
+**To draw a map**, use the PMTiles. They are registered as `rel: "pmtiles"`
+links on this collection, with MapLibre GL styles as `style` assets — load the
+style directly and it works:
 
-The two `visual` assets — `coh12_rgb` and `rtc_rgb` — are renderings. Their
-pixels are 8-bit display codes under a fixed stretch, not measurements, and
-`rtc_rgb`'s channels are in **decibels** while every other raster here is
-linear. Their internal overviews average in display space, which is right for
-drawing and wrong for measuring. Read the float32 assets for anything else.
+```js
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol("pmtiles", protocol.tile);
+new maplibregl.Map({
+  container: "map",
+  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/default.json",
+});
+```
+
+**To read values**, use the COGs. The `renders` block on this collection carries
+the fixed stretch, colour ramp and — for backscatter and the quality metric —
+the decibel `expression`, so a titiler-compatible client draws them correctly
+without a style file:
+
+```
+https://titiler.xyz/cog/preview.png
+  ?url=.../mosaics/2024/rtc_vv.tif
+  &expression=10*log10(b1)&rescale=-18.5,-5&colormap_name=gray
+```
 
 The stretch is fixed rather than per-year on purpose: a percentile stretch
 recomputed each year would give every year its own scale and turn a real change
 in coherence into no visible change at all.
 
-## Reading it
+## Building a cube
 
 ```python
 import odc.stac
@@ -64,6 +79,8 @@ everything else and described as a mean. The 10 m tiles keep the integer count.
 
 ## Provenance
 
-Derived in this repository from the `glace-ch-tiles` collection by a VRT chain:
-per-zone mosaic, warp to the canonical grid, union, then one streaming COG copy.
-No pixel is resampled twice. Upstream provenance is the tiles collection's.
+Derived in this repository from the tiles collection by a VRT chain: per-zone
+mosaic, warp to the canonical grid, union, then one streaming COG copy. No pixel
+is resampled twice. The PMTiles are tiled from the published mosaics, so the
+level a client reads at max zoom is a copy rather than a second resampling.
+Upstream provenance is the tiles collection's.

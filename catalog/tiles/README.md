@@ -1,7 +1,8 @@
 # GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid
 
 One item per (MGRS tile, year), each carrying twelve single-band
-Cloud-Optimized GeoTIFFs on the 10 km MGRS grid at 10 m resolution.
+Cloud-Optimized GeoTIFFs on the 10 km MGRS grid at 10 m resolution, in that
+tile's own UTM zone.
 
 ## The twelve assets
 
@@ -49,13 +50,13 @@ sequential ramp hides the sign.
 
 ## Caveats
 
+- **Coverage follows the glacier perimeter, not an administrative boundary.**
+  Tiles are composited where there is ice to observe, so the footprint is ragged
+  and the gaps between glacierised regions are not data gaps.
 - **Glacier fractions are pinned, not recomputed.** `glace:glacier_fraction` and
   `glace:glacier_fraction_buffered` come from `glacier-fractions.parquet`,
   computed once against one RGI7 version, so the same tile cannot carry
   different values in different years.
-- **Coverage is the perimeter, not the country.** The Swiss run composites
-  glacier tiles only — the buffered SGI2023 outline, 143 tiles — so there is no
-  data over the Mittelland.
 - **QA-NUM's zero is nodata**, not "zero observations". A pixel with no
   contributing acquisition is absent, not counted.
 

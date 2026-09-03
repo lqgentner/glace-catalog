@@ -1,0 +1,46 @@
+{
+  "version": 8,
+  "name": "GLACE — COH12 false colour (2024)",
+  "sources": {
+    "data": {
+      "type": "raster",
+      "url": "pmtiles://../2024/coh12_rgb.pmtiles",
+      "tileSize": 256,
+      "minzoom": 5,
+      "maxzoom": 13,
+      "attribution": "GLACE, University of Zurich · Contains modified Copernicus Sentinel data"
+    }
+  },
+  "layers": [
+    {
+      "id": "glace-coh12_rgb-2024",
+      "type": "raster",
+      "source": "data",
+      "paint": {
+        "raster-opacity": 1,
+        "raster-resampling": "linear"
+      }
+    }
+  ],
+  "metadata": {
+    "portolan:legend": {
+      "title": "COH12 false colour",
+      "type": "ramp",
+      "stops": [
+        {
+          "color": "#1b1035",
+          "label": "low coherence"
+        },
+        {
+          "color": "#7b2382",
+          "label": ""
+        },
+        {
+          "color": "#fcfdbf",
+          "label": "high coherence"
+        }
+      ]
+    },
+    "description": "R: COH12 VV (0.10-0.80), G: COH12 VH (0.10-0.60), B: VV/VH. Ice and firn read bright where coherence holds between repeat passes; wet snow and fast-moving ice decorrelate and go dark."
+  }
+}
