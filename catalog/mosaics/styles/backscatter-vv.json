@@ -28,18 +28,22 @@
       "type": "ramp",
       "stops": [
         {
+          "value": -18.5,
           "color": "#0b0b0b",
           "label": "-18.5 dB"
         },
         {
+          "value": -12.0,
           "color": "#8a8a8a",
           "label": "-12 dB"
         },
         {
+          "value": -5.0,
           "color": "#ffffff",
           "label": "-5 dB"
         }
-      ]
+      ],
+      "unit": "dB"
     },
     "description": "Terrain-corrected backscatter, co-polarised, -18.5 to -5 dB."
   }

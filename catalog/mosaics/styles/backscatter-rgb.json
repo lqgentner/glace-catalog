@@ -28,18 +28,22 @@
       "type": "ramp",
       "stops": [
         {
+          "value": -18.5,
           "color": "#101010",
           "label": "low"
         },
         {
+          "value": -12.0,
           "color": "#7a8a99",
           "label": ""
         },
         {
+          "value": -5.0,
           "color": "#f2f2f2",
           "label": "high"
         }
-      ]
+      ],
+      "unit": "dB"
     },
     "description": "R: RTC VV (-18.5 to -5 dB), G: RTC VH (-26 to -11 dB), B: VV-VH dB. Decibels, unlike the analysis rasters."
   }

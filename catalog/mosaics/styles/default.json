@@ -28,14 +28,17 @@
       "type": "ramp",
       "stops": [
         {
+          "value": 0.1,
           "color": "#1b1035",
           "label": "low coherence"
         },
         {
+          "value": 0.45,
           "color": "#7b2382",
           "label": ""
         },
         {
+          "value": 0.8,
           "color": "#fcfdbf",
           "label": "high coherence"
         }

@@ -290,8 +290,35 @@ decisions that belong in review. `default.json` carries both `style` and
 The only generated part is the year each style's `pmtiles://` source names;
 `finalize-catalog` repoints them at the most recent published year.
 
-Each carries its legend under `metadata.portolan:legend`, which is where the
-`LEGEND_STOPS` plumbing goes — out of `layers.json` and into a file MapLibre
+#### How standard is any of this
+
+Worth being precise, because the layers differ and only some of it is settled.
+
+| layer | status |
+| --- | --- |
+| MapLibre GL Style Spec v8, the file format | **De-facto standard, and mandated.** Forked from the Mapbox GL Style Spec; implemented by MapLibre GL JS and Native, deck.gl, QGIS, ArcGIS, tileserver-gl, Martin, Felt. Portolan pins it by name and media type (`formats.md`), and `PTL-VIZ-005` enforces the media type. Not our choice to make |
+| `"type": "raster"` sources | **Standard.** Raster sources are core to style-spec v8, as old as the format |
+| the `pmtiles://` URL scheme | **Ecosystem convention, in no specification.** It is the `pmtiles.js` protocol handler, so a client must call `addProtocol("pmtiles", …)` before it can load these files. FTW writes it the same way (`pmtiles://./Unknown.pmtiles`) |
+| `metadata.portolan:legend` | **Not in the Portolan specification at all** — grepped, it appears nowhere in `portolan-spec`. It is FTW's convention and we copied it. MapLibre's `metadata` is explicitly free-form and ignored by renderers, so the file stays valid, but nothing reads this block except code written for it |
+| raster PMTiles styling as a whole | **Unspecified, and we are first.** Portolan's raster styling is open under [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41), and its style requirements are written for vector. Every style file in FTW and portolan-nl is a vector source; there is no raster precedent to follow |
+
+So the container is standard and required of us; the raster application of it is
+territory the specification has not covered yet. Two consequences worth holding:
+
+- **This may have to change when #41 lands.** It is a small, generated-adjacent
+  surface — four files — so the cost of being early is bounded, and being early
+  with a real raster case is more useful to that discussion than waiting.
+- **The legend block earns its place only by convention.** Keep it aligned with
+  FTW's shape (`value`, `color`, `label` per stop, plus `unit`) so that if one of
+  the two conventions is standardized, it is one convention and not two.
+
+The honest test of whether these files are more than a viewer config: would
+anything else load them? Yes — any MapLibre GL JS or Native client, the Portolan
+browser, tileserver-gl — but **only after registering the pmtiles protocol**.
+That is a real limit, and it is the same limit every PMTiles publisher has.
+
+Each style carries its legend under `metadata.portolan:legend`, which is where
+the `LEGEND_STOPS` plumbing goes — out of `layers.json` and into a file MapLibre
 loads directly.
 
 ### What the `renders` block does
@@ -400,6 +427,10 @@ Ordered by what blocks what.
       the catalog legible in any browser.
 - [ ] **P-12 — Catalog logo** in `_assets/`, linked `rel: "icon"`. Registries
       list catalogs side by side.
+- [ ] **P-17b — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
+      (raster styling).** This catalog is the first Portolan raster PMTiles case;
+      the four style files and the `renders` blocks are both candidate inputs to
+      that discussion, and both may need changing when it settles.
 - [ ] **P-13 — Register in the Portolan registry** once published
       (`portolan:register-catalog`).
 - [ ] **P-14 — Test `@developmentseed/deck.gl-geotiff`** against a LERC_ZSTD
