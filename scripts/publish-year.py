@@ -48,8 +48,9 @@ import pandas as pd
 from glace_catalog import mosaics, stac, webmap
 from glace_catalog.config import settings
 from glace_catalog.scopes import get_scope
+from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.save import write_year_items
-from glace_catalog.stac.store import CONFIG_NAME, MANIFEST_NAME, STEPS
+from glace_catalog.stac.store import CONFIG_NAME, MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -130,7 +131,7 @@ def step_copy(
     verified — so copying them out is not housekeeping, it is the step that stops
     the cleanup destroying the record.
     """
-    year_dir = layout.year(args.year)
+    year_dir = layout.tile_year(args.year)
     year_dir.mkdir(parents=True, exist_ok=True)
     (year_dir / MANIFEST_NAME).write_bytes((src / MANIFEST_NAME).read_bytes())
     config = src / CONFIG_NAME
@@ -243,7 +244,7 @@ def step_mosaics(
         tags=tags,
         layers=args.layers,
     )
-    stac.store.upload_tree(staged, layout.mosaics(args.year))
+    stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return written
 
 
@@ -262,7 +263,7 @@ def tiling_chain(
     Falls back to the tile chain when the mosaics are absent, so ``--steps
     pmtiles`` still works on its own.
     """
-    published = {key: layout.mosaics(args.year) / f"{key}.tif" for key in chain.linear}
+    published = {key: layout.mosaic_year(args.year) / f"{key}.tif" for key in chain.linear}
     if not all(path.exists() for path in published.values()):
         logger.warning(
             "Not every mosaic is published for %d; tiling from the tile chain instead, "
@@ -379,32 +380,36 @@ def step_items(
         bbox=bbox,
         start=window[0],
         end=window[1],
-        assets=mosaic_assets(state, frame, has_config=layout.config(args.year).exists()),
-        pmtiles=pmtiles_links(state),
+        assets=mosaic_assets(state, frame),
         build_fingerprint=build_fingerprint,
     )
     mosaic_item.properties["description"] = (
-        f"Annual mosaics of the GLACE {scope.title} composites for {args.year}, plus the "
-        "run manifest and configuration. Those two documents cover the year's tiles as "
-        "much as its mosaics; they hang here because this is the year's only per-year item."
+        f"Annual mosaics of the GLACE composites for {args.year}, on the canonical "
+        "WebMercatorQuad grid every year of this collection shares."
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp)
+        staged_tiles = Path(tmp) / "tiles"
+        staged_mosaics = Path(tmp) / "mosaics"
         write_year_items(
             tile_items,
             mosaic_item,
-            staged,
+            staged_tiles,
+            staged_mosaics,
             tiles_collection_id=scope.tiles_collection_id,
             mosaics_collection_id=scope.mosaics_collection_id,
+            scope_title=scope.catalog_title,
+            portolan_schema=PORTOLAN_SCHEMA,
+            year=args.year,
         )
-        # Root-relative hrefs, so the per-year index survives a bucket move
+        # Root-relative hrefs, so the year's slice survives a bucket move
         # untouched; finalize-catalog rebases them onto the published URL.
         stac.export_geoparquet(
             [_rooted(item, args.year) for item in tile_items],
-            staged / "items.parquet",
+            staged_tiles / YEAR_INDEX_NAME,
         )
-        stac.store.upload_tree(staged, layout.year(args.year))
+        stac.store.upload_tree(staged_tiles, layout.tile_year(args.year))
+        stac.store.upload_tree(staged_mosaics, layout.mosaic_year(args.year))
     logger.info("items: %d tile items and one mosaic item", len(tile_items))
 
 
@@ -413,15 +418,13 @@ def _rooted(item: pystac.Item, year: int) -> pystac.Item:
     rooted = item.clone()
     tile = item.properties["glace:mgrs_tile"]
     for asset in rooted.assets.values():
-        asset.href = f"{year}/{tile}/{asset.href}"
+        asset.href = f"tiles/{year}/{tile}/{asset.href}"
     return rooted
 
 
 def mosaic_assets(
     state: stac.BuildState,
     frame: pd.DataFrame,
-    *,
-    has_config: bool,
 ) -> dict[str, stac.MosaicAsset]:
     """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing."""
     written = state.details.get("mosaics", {})
@@ -439,33 +442,12 @@ def mosaic_assets(
         assets[asset_key] = stac.MosaicAsset(
             href=f"{asset_key}.tif",
             title=f"{asset_key} annual mosaic",
-            roles=["metadata", "quality"] if "_qa_" in asset_key else ["data", "overview"],
+            roles=["quality"] if "_qa_" in asset_key else ["data", "cloud-optimized"],
             size=detail.get("size"),
             band=band,
             extra={"raster:spatial_resolution": detail.get("resolution")},
         )
-    assets["manifest"] = stac.MosaicAsset(
-        href=f"../{MANIFEST_NAME}",
-        title="Composite run manifest",
-        roles=["metadata"],
-        media_type="application/vnd.apache.parquet",
-    )
-    if has_config:
-        assets["config"] = stac.MosaicAsset(
-            href=f"../{CONFIG_NAME}",
-            title="Composite run configuration",
-            roles=["metadata"],
-            media_type="application/yaml",
-        )
     return assets
-
-
-def pmtiles_links(state: stac.BuildState) -> dict[str, str]:
-    """Assemble the mosaic item's PMTiles links from what the ``pmtiles`` step recorded."""
-    return {
-        layer_id: f"../pmtiles/{detail['url']}"
-        for layer_id, detail in sorted(state.details.get("pmtiles", {}).items())
-    }
 
 
 def parse_args() -> argparse.Namespace:

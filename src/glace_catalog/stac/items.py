@@ -21,14 +21,12 @@ import pystac
 from pystac.utils import datetime_to_str
 
 from glace_catalog.stac.naming import (
-    ASSET_KEYS,
     IGNORE_VALUE,
     LABEL_SOURCES,
     POLARIZATIONS,
     PRODUCTS,
 )
 from glace_catalog.stac.tags import (
-    METADATA_VOCABULARY_NOTE,
     SPECIFICATION_URL,
     require_valid,
     standard_fields,
@@ -70,7 +68,6 @@ The extension's README explicitly allows this, and its schema would reject the
 declaration anyway: it enumerates no Composite Backscatter product.
 """
 
-MANIFEST_HREF = "../manifest.parquet"
 """Where a tile item finds its year's manifest, relative to the item."""
 
 PMTILES_LINK_REL = "pmtiles"
@@ -168,14 +165,19 @@ def _asset(
     # A dimensionless band carries no unit at all rather than an empty string.
     if info.band_unit:
         band["unit"] = info.band_unit
+    stats = dict(info.statistics)
     if statistics is not None:
-        band["statistics"] = statistics
+        stats.update(statistics)
+    if stats:
+        band["statistics"] = stats
     asset.extra_fields["bands"] = [band]
     asset.extra_fields["raster:spatial_resolution"] = info.spatial_resolution
     asset.extra_fields["raster:bits_per_sample"] = info.bits_per_sample
     asset.extra_fields["file:byte_order"] = info.byte_order
     if info.size is not None:
         asset.extra_fields["file:size"] = info.size
+    if info.checksum is not None:
+        asset.extra_fields["file:checksum"] = info.checksum
     asset.extra_fields.update(tag_fields(info.tags))
     asset.extra_fields.update(standard_fields(info.tags))
     return asset
@@ -196,7 +198,7 @@ def _data_asset(
         file,
         info,
         title=f"{quantity} {file.polarization}, {_method_label(file)}",
-        roles=["data", "coherence" if is_coh else "backscatter"],
+        roles=["data", "cloud-optimized"],
         statistics=None if valid_percent is None else {"valid_percent": valid_percent},
     )
     asset.extra_fields["sar:polarizations"] = [file.polarization]
@@ -210,7 +212,7 @@ def _qa_asset(file: CompositeFile, info: RasterInfo) -> pystac.Asset:
         file,
         info,
         title=f"{layer} ({file.product} {file.polarization}, {_method_label(file)})",
-        roles=["metadata", "quality"],
+        roles=["quality"],
     )
 
 
@@ -349,18 +351,6 @@ def build_tile_item(
 
     _apply_processing_metadata(item, raster_info)
     _add_specification_link(item)
-    # The year's manifest is the run's own record of these files. Linking it
-    # from every tile item means a consumer who lands here can reach the
-    # provenance without knowing the mosaics collection exists.
-    item.add_link(
-        pystac.Link(
-            rel="describedby",
-            target=MANIFEST_HREF,
-            media_type="application/vnd.apache.parquet",
-            title="Composite run manifest",
-        ),
-    )
-
     return item
 
 
@@ -484,79 +474,6 @@ def _band_title(asset_key: str) -> str:
     return f"{quantity} {pol}, {role}"
 
 
-def _item_asset_definition(
-    asset_key: str,
-    *,
-    resolution: float,
-    title: str,
-    roles: list[str],
-) -> dict[str, Any]:
-    """One ``item_assets`` entry: what every item's asset under this key holds."""
-    is_num = asset_key.endswith("_qa_num")
-    band: dict[str, Any] = {
-        "name": asset_key,
-        "data_type": "uint16" if is_num else "float32",
-        "nodata": 0 if is_num else "nan",
-    }
-    return {
-        "type": pystac.MediaType.COG,
-        "title": title,
-        "roles": roles,
-        "raster:spatial_resolution": resolution,
-        "bands": [band],
-    }
-
-
-def tile_item_assets() -> dict[str, dict[str, Any]]:
-    """``item_assets`` of the tiles collection: twelve keys on the 10 m MGRS grid."""
-    return {
-        key: _item_asset_definition(
-            key,
-            resolution=10.0,
-            title=f"{_band_title(key)}, LRW composite",
-            roles=["metadata", "quality"] if "_qa_" in key else ["data"],
-        )
-        for key in ASSET_KEYS
-    }
-
-
-def mosaic_item_assets(resolution: float) -> dict[str, dict[str, Any]]:
-    """``item_assets`` of the mosaics collection: the same keys, different truths.
-
-    The keys are identical to the tiles collection's, which is exactly why the
-    two are separate collections: within one, a key could not name both a 10 m
-    measurement and its annual summary.
-
-    A QA-NUM mosaic is a *mean* of contributing observations rather than a count,
-    so it is float32 with a NaN nodata where the tile is uint16 with a zero one.
-    """
-    assets = {
-        key: _item_asset_definition(
-            key,
-            resolution=resolution,
-            title=f"{_band_title(key)}, annual mosaic",
-            roles=["metadata", "quality"] if "_qa_" in key else ["data", "overview"],
-        )
-        for key in ASSET_KEYS
-    }
-    for key, definition in assets.items():
-        if key.endswith("_qa_num"):
-            definition["bands"] = [
-                {"name": key, "data_type": "float32", "nodata": "nan"},
-            ]
-    assets["manifest"] = {
-        "type": "application/vnd.apache.parquet",
-        "title": "Composite run manifest",
-        "roles": ["metadata"],
-    }
-    assets["config"] = {
-        "type": "application/yaml",
-        "title": "Composite run configuration",
-        "roles": ["metadata"],
-    }
-    return assets
-
-
 def build_mosaic_item(
     scope: Scope,
     year: int,
@@ -665,136 +582,6 @@ _PRODUCERS = [
     ),
 ]
 _KEYWORDS = ["Sentinel-1", "SAR", "InSAR coherence", "backscatter", "glaciers"]
-
-
-def _check_edition(collection_id: str, items: Sequence[pystac.Item], version: str) -> None:
-    """Reject a collection whose items do not all belong to one edition.
-
-    Raises
-    ------
-    ValueError
-        If the items carry more than one ``version``. A collection spanning two
-        editions could not describe its own pixels, since an edition is exactly
-        what fixes how they are read.
-    """
-    editions = {item.properties.get("version") for item in items}
-    if editions != {version}:
-        msg = (
-            f"collection {collection_id!r} is version {version!r} but its items carry "
-            f"{sorted(str(edition) for edition in editions)}. Rebuild the whole dataset "
-            f"for one edition rather than mixing."
-        )
-        raise ValueError(msg)
-
-
-def build_tiles_collection(
-    scope: Scope,
-    items: Sequence[pystac.Item] = (),
-    *,
-    extent: pystac.Extent | None = None,
-    version: str = DATASET_VERSION,
-) -> pystac.Collection:
-    """Assemble the per-tile items into the tiles collection.
-
-    Parameters
-    ----------
-    scope
-        Scope being published.
-    items
-        Tile items, from :func:`build_tile_item`. May be empty when ``extent``
-        is given: a store with eleven years of Alpine tiles has 24 000 items, and
-        the collection document needs their envelope rather than their contents.
-    extent
-        Extent of the collection. Derived from ``items`` when absent.
-    version
-        Published edition; see :data:`DATASET_VERSION`.
-
-    Item links are **not** added here: the items are written by a separate
-    command, so the collection links them by explicit relative href through
-    :func:`~glace_catalog.stac.save.add_item_links` rather than by holding
-    resolved objects. Adding both would leave an unresolved link with a null
-    href beside every real one.
-    """
-    if items:
-        _check_edition(scope.tiles_collection_id, items, version)
-    collection = pystac.Collection(
-        id=scope.tiles_collection_id,
-        title=f"GLACE tiles: Sentinel-1 LRW composites, {scope.title}",
-        description=(
-            "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence "
-            "(COH12) and radiometrically terrain corrected backscatter (RTC) over "
-            f"{scope.title}, locally resolution weighted (LRW), on the 10 km MGRS grid "
-            "at 10 m resolution, with per-tile QA layers (observation count, composite "
-            f"quality metric). {METADATA_VOCABULARY_NOTE}"
-        ),
-        extent=extent if extent is not None else extent_from_items(items),
-        keywords=[*_KEYWORDS, scope.title],
-        providers=_PRODUCERS,
-    )
-    collection.item_assets = {
-        key: pystac.ItemAssetDefinition(definition)
-        for key, definition in tile_item_assets().items()
-    }
-    collection.extra_fields["version"] = version
-    collection.stac_extensions.append(VERSION_EXTENSION_URI)
-    _add_specification_link(collection)
-    return collection
-
-
-def build_mosaics_collection(
-    scope: Scope,
-    items: Sequence[pystac.Item] = (),
-    *,
-    extent: pystac.Extent | None = None,
-    version: str = DATASET_VERSION,
-) -> pystac.Collection:
-    """Assemble the annual mosaic items into the mosaics collection.
-
-    Parameters
-    ----------
-    scope
-        Scope being published; supplies the canonical grid the mosaics sit on.
-    items
-        Mosaic items, from :func:`build_mosaic_item`. May be empty when
-        ``extent`` is given.
-    extent
-        Extent of the collection. Derived from ``items`` when absent.
-    version
-        Published edition; see :data:`DATASET_VERSION`.
-
-    Item links are **not** added here: the items are written by a separate
-    command, so the collection links them by explicit relative href through
-    :func:`~glace_catalog.stac.save.add_item_links` rather than by holding
-    resolved objects. Adding both would leave an unresolved link with a null
-    href beside every real one.
-    """
-    if items:
-        _check_edition(scope.mosaics_collection_id, items, version)
-    grid = scope.grid
-    collection = pystac.Collection(
-        id=scope.mosaics_collection_id,
-        title=f"GLACE mosaics: annual Sentinel-1 composites, {scope.title}",
-        description=(
-            f"One mosaic per year of the GLACE {scope.title} composites, warped from the "
-            f"10 m MGRS tiles onto the WebMercatorQuad grid at zoom 13 "
-            f"({grid.resolution:.3f} m). Every year sits on the same fixed grid, so the "
-            "series stacks and differences without an alignment step, and the COGs' "
-            "internal overview levels land on the tile-matrix zoom levels below 13. "
-            "Values are linear throughout; the observation-count layers become a mean "
-            f"rather than a count under averaging. {METADATA_VOCABULARY_NOTE}"
-        ),
-        extent=extent if extent is not None else extent_from_items(items),
-        keywords=[*_KEYWORDS, scope.title, "mosaic"],
-        providers=_PRODUCERS,
-    )
-    collection.item_assets = {
-        key: pystac.ItemAssetDefinition(definition)
-        for key, definition in mosaic_item_assets(grid.resolution).items()
-    }
-    collection.extra_fields["version"] = version
-    collection.stac_extensions.append(VERSION_EXTENSION_URI)
-    _add_specification_link(collection)
-    return collection
 
 
 def build_label_collection(

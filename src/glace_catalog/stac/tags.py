@@ -210,6 +210,16 @@ class RasterInfo:
     bits_per_sample: int = 32
     byte_order: str = "little-endian"
     size: int | None = None
+    checksum: str | None = None
+    """Multihash-encoded sha256 of the file, as ``file:checksum`` requires."""
+    statistics: dict[str, float] = field(default_factory=dict)
+    """Embedded band statistics, as ``minimum``/``maximum``/``mean``/``stddev``/
+    ``valid_percent``.
+
+    Portolan raises these to a MUST (``PTL-DAT-009``, and ``PTL-DAT-010`` for the
+    valid percent wherever a band declares nodata), so an empty mapping here is a
+    raster that cannot be published, not a field that happens to be absent.
+    """
 
     @property
     def is_decibel(self) -> bool:

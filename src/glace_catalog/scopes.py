@@ -132,6 +132,16 @@ class Scope:
     coverage: float
 
     @property
+    def catalog_title(self) -> str:
+        """Title of the root catalog, as ``root`` links to it must repeat.
+
+        Portolan requires a title on every ``child`` and ``item`` link, and a
+        client renders link titles without fetching what they point at, so the
+        title travels with the link rather than being looked up.
+        """
+        return f"GLACE {self.title}"
+
+    @property
     def tiles_collection_id(self) -> str:
         """Identifier of the per-tile collection, e.g. ``glace-ch-tiles``."""
         return f"glace-{self.key}-tiles"

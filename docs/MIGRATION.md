@@ -474,16 +474,41 @@ Ordered by what blocks what.
       to an item mirror exactly as to a vector dataset: spatially ordered rows, a
       `bbox` covering column with per-row-group statistics, ≤150 000 rows per
       group. The current `export_geoparquet` does none of the three.
-- [ ] **P-3 — Generators to the new layout.** `StoreLayout` is reworked;
-      `save.py`, `items.py`, `publish-year.py` and `finalize-catalog.py` still
-      write the old flat tree. Includes: year sub-catalog documents with their
-      README/AGENTS, `collection-mirror` role on the index, absolute https asset
-      hrefs plus `alternate` s3, `file:size`/`file:checksum` from the manifest,
-      per-year `manifest-{year}` collection assets, dropping the 24 000
-      `describedby` links.
+- [x] **P-3 — Generators ported.** Done 2026-09-03. Verified by driving the
+      generators over synthetic items and validating the output: **0 rashid
+      errors across 8 objects**, with every structural link resolved by hand at
+      both depths. What changed:
+
+      - **The collection documents became source, not output.**
+        `build_tiles_collection` and `build_mosaics_collection` are deleted;
+        `finalize-catalog` now *patches* the tracked documents, adding only what
+        depends on the run (year links, per-year manifest assets, temporal
+        extent, PMTiles links) and never touching the prose, providers, license,
+        `item_assets`, `renders` or style registrations. A generator that
+        rewrote the descriptions would make every publication an unreviewable
+        diff and put the dataset's prose in Python string literals.
+      - Item documents at two depths, with different parents: a tile item's
+        parent is its **year sub-catalog**, a mosaic item's is the collection.
+      - Year sub-catalogs generated with their `README.md` and `AGENTS.md`,
+        which `PTL-FIL-001` requires of every catalog directory.
+      - The `describedby` link to the manifest is gone from all 24 000 tile
+        items (M-4), and the manifest and configuration are off the mosaic item.
+      - `file:checksum` and full band statistics plumbed through `RasterInfo`.
+      - Asset roles aligned with the committed `item_assets`: `["data",
+        "cloud-optimized"]` and `["quality"]`, not `["data", "backscatter"]` and
+        `["metadata", "quality"]`.
+      - `layers.json` and its writer deleted — `renders` and the MapLibre styles
+        replaced it.
 - [ ] **P-4 — Thumbnails.** `PTL-VIZ-001` is an error and both collections need
       one, generated from the default styling.
-- [ ] **P-5 — PMTiles step and style generation.** The tiler in `webmap.py`
+- [x] **P-5 — PMTiles registration.** `finalize-catalog` now writes the
+      per-year `rel: "pmtiles"` links and repoints the four style files at the
+      most recent published year. The tiler itself was never deleted. Still
+      unrun at scale (P-8).
+- [ ] **P-5b — Tiler output path.** `publish-year --steps pmtiles` uploads to
+      `layout.pmtiles(year)`, which is now `mosaics/pmtiles/{year}/`; unverified
+      against a real run.
+- [ ] ~~**P-5 — PMTiles step and style generation.**~~ The tiler in `webmap.py`
       was never deleted, so this is mostly restoring what M-6 had marked for
       removal: `build_pmtiles`, `run_rio_pmtiles`, `create_rgba_vrt` and the
       `rio-pmtiles` dependency all stay. New work is the per-year

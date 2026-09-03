@@ -27,8 +27,9 @@ from datetime import datetime
 import json
 import logging
 from pathlib import Path
+import re
 import tempfile
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from freezebase.raster import rasterio_open
 import numpy as np
@@ -38,17 +39,20 @@ import pystac
 from pystac.utils import str_to_datetime
 from upath import UPath
 
-from glace_catalog import stac, webmap
+from glace_catalog import stac
 from glace_catalog.config import settings
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import extent_from_items
-from glace_catalog.stac.save import read_item
-from glace_catalog.stac.store import ITEMS_INDEX_NAME, upload_tree
+from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, read_item
+from glace_catalog.stac.store import (
+    CONFIG_NAME,
+    ITEMS_INDEX_NAME,
+    MANIFEST_NAME,
+    upload_tree,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from glace_catalog.scopes import Scope
+    from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -148,154 +152,200 @@ def collection_asset(
     return pystac.Asset(href=href, title=title, media_type=media_type, roles=roles)
 
 
-def build_collections(
-    scope: Scope,
-    extent: pystac.Extent,
-    tile_hrefs: Sequence[str],
-    mosaic_items: Sequence[pystac.Item],
-) -> tuple[pystac.Collection, pystac.Collection]:
-    """Build both collection documents, with their links and collection assets."""
-    tiles = stac.build_tiles_collection(scope, extent=extent)
-    stac.save.add_item_links(tiles, tile_hrefs)
-    tiles.add_asset(
-        "items",
-        collection_asset(
-            "../tiles.parquet",
-            title="stac-geoparquet index of every tile item",
-            roles=["stac-items"],
-            media_type="application/vnd.apache.parquet",
-        ),
-    )
-    tiles.add_asset(
-        "glacier-fractions",
-        collection_asset(
-            "../glacier-fractions.parquet",
-            title="Per-tile RGI7 glacier fractions",
-            roles=["metadata"],
-            media_type="application/vnd.apache.parquet",
-        ),
-    )
+def _load(path: Path) -> dict:
+    """Read one tracked source document."""
+    return json.loads(path.read_text())
 
-    mosaics = stac.build_mosaics_collection(
-        scope,
-        extent=extent_from_items(mosaic_items) if mosaic_items else extent,
-    )
-    stac.save.add_item_links(
-        mosaics,
-        [f"../{item.properties['start_datetime'][:4]}/mosaics/item.json" for item in mosaic_items],
-    )
-    mosaics.add_asset(
-        "items",
-        collection_asset(
-            "../mosaics.parquet",
-            title="stac-geoparquet index of every annual mosaic item",
-            roles=["stac-items"],
-            media_type="application/vnd.apache.parquet",
-        ),
-    )
-    mosaics.add_asset(
-        "thumbnail",
-        collection_asset(
-            "../thumbnail.png",
-            title="GLACE overview",
-            roles=["thumbnail"],
-            media_type=pystac.MediaType.PNG,
-        ),
-    )
-    return tiles, mosaics
+
+def _keep(links: Sequence[dict], drop: set[str]) -> list[dict]:
+    """Links other than the ones this run regenerates."""
+    return [link for link in links if link.get("rel") not in drop]
+
+
+def patch_collections(
+    source_dir: Path,
+    years: Sequence[int],
+    mosaic_items: Sequence[pystac.Item],
+    *,
+    base_url: str,
+    has_config: Mapping[int, bool],
+) -> dict[str, dict]:
+    """Patch the tracked collection documents with what has actually been published.
+
+    **These documents are source, not output.** Their prose, providers, license,
+    ``item_assets``, ``renders`` and style registrations are written by hand and
+    reviewed in git; nothing here touches them. What this adds is only what
+    depends on the run: the links to the years that exist, the per-year manifest
+    and configuration assets, and the temporal extent.
+
+    That split is the whole reason the catalog is kept in git. A generator that
+    rewrote the descriptions would make every publication a diff nobody can
+    review, and would put the dataset's prose in Python string literals.
+
+    Parameters
+    ----------
+    source_dir
+        The tracked ``catalog/`` directory.
+    years
+        Published years, ascending.
+    mosaic_items
+        The mosaic items, read back from the store, for the temporal extent.
+    base_url
+        Public base URL, for the per-year asset hrefs.
+    has_config
+        Whether each year archived its run configuration.
+
+    Returns
+    -------
+    dict
+        ``{"tiles": ..., "mosaics": ...}``, the patched documents.
+    """
+    base = base_url.rstrip("/")
+    patched: dict[str, dict] = {}
+
+    tiles = _load(source_dir / TILES_DIR / "collection.json")
+    tiles["links"] = [
+        *_keep(tiles["links"], {"child", "item", "self"}),
+        *[stac.year_child_link(year) for year in years],
+    ]
+    for year in years:
+        tiles.setdefault("assets", {})[f"manifest-{year}"] = {
+            "href": f"{base}/{TILES_DIR}/{year}/{MANIFEST_NAME}",
+            "type": "application/vnd.apache.parquet",
+            "title": f"Composite run manifest, {year}",
+            "description": (
+                "Every file the composite run wrote that year, with its size, digest, "
+                "band statistics and full provenance tag set. The run's own record; "
+                "the rasters remain the source of truth and carry the same tags."
+            ),
+            "roles": ["metadata"],
+        }
+        if has_config.get(year):
+            tiles["assets"][f"config-{year}"] = {
+                "href": f"{base}/{TILES_DIR}/{year}/{CONFIG_NAME}",
+                "type": "application/yaml",
+                "title": f"Composite run configuration, {year}",
+                "roles": ["metadata"],
+            }
+    patched["tiles"] = tiles
+
+    mosaics = _load(source_dir / MOSAICS_DIR / "collection.json")
+    mosaics["links"] = [
+        *_keep(mosaics["links"], {"item", "child", "self"}),
+        *[stac.mosaic_item_link(year) for year in years],
+    ]
+    patched["mosaics"] = mosaics
+
+    if mosaic_items:
+        interval = extent_from_items(mosaic_items).temporal.to_dict()["interval"]
+        for document in patched.values():
+            document["extent"]["temporal"]["interval"] = interval
+    return patched
+
+
+def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
+    """Point every MapLibre style at the most recent published year.
+
+    The styles are tracked source — their colours, opacity and legend stops are
+    reviewed — but the year in each ``pmtiles://`` source is the one part that
+    follows from the run rather than from a design decision, so it is the one
+    part rewritten here.
+
+    Returns
+    -------
+    int
+        Number of style files written.
+    """
+    out = staged / MOSAICS_DIR / "styles"
+    out.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json")):
+        style = json.loads(path.read_text())
+        source = style["sources"]["data"]
+        source["url"] = re.sub(r"/\d{4}/", f"/{latest}/", source["url"])
+        style["name"] = re.sub(r"\(\d{4}\)", f"({latest})", style["name"])
+        for layer in style.get("layers", []):
+            layer["id"] = re.sub(r"-\d{4}$", f"-{latest}", layer["id"])
+        (out / path.name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
+        written += 1
+    logger.info("Repointed %d style(s) at %d", written, latest)
+    return written
+
+
+def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int], base_url: str) -> list[dict]:
+    """Register every published web-map archive on the mosaics collection.
+
+    Portolan puts PMTiles registration at collection level (``PORTO-FMT-011``),
+    so a per-year archive is a link here rather than an asset of the year item.
+    The ``pmtiles:layers`` array names the MapLibre style layer a client switches
+    on, which is what the field is for; it is the same id the styles use.
+    """
+    base = base_url.rstrip("/")
+    links: list[dict] = []
+    for year in years:
+        directory = layout.pmtiles(year)
+        if not directory.exists():
+            continue
+        for archive in sorted(directory.iterdir()):
+            if archive.suffix != ".pmtiles":
+                continue
+            layer = archive.stem
+            links.append(
+                {
+                    "rel": "pmtiles",
+                    "href": f"{base}/{MOSAICS_DIR}/pmtiles/{year}/{archive.name}",
+                    "type": "application/vnd.pmtiles",
+                    "title": f"{layer} web-map tiles, {year}",
+                    "pmtiles:layers": [f"glace-{layer}-{year}"],
+                },
+            )
+    logger.info("Registered %d web-map archive(s)", len(links))
+    return links
 
 
 def write_documents(
-    scope: Scope,
+    source_dir: Path,
     layout: stac.StoreLayout,
-    collections: tuple[pystac.Collection, pystac.Collection],
+    documents: Mapping[str, dict],
     *,
     base_url: str,
+    latest: int,
 ) -> None:
-    """Write the root catalog and both collection documents, and upload them.
+    """Stage the patched source documents and upload them.
 
-    Only these three documents; every item was written by ``publish-year`` with
-    links that already point here, so nothing per-year is rewritten.
+    The root catalog gains its absolute ``self`` link here and only here. A
+    tracked file whose correct content depends on the deployment target is diff
+    noise and a merge conflict waiting to happen, so ``public_base`` is applied
+    at publication rather than committed.
     """
-    tiles, mosaics = collections
-    catalog = pystac.Catalog(
-        id=f"glace-{scope.key}",
-        title=f"GLACE: Sentinel-1 glacier composites, {scope.title}",
-        description=(
-            f"GLACE over {scope.title}: annual Sentinel-1 coherence and backscatter "
-            "composites on the 10 km MGRS grid, their annual mosaics on the "
-            "WebMercatorQuad grid, and the web-map tiles rendered from them."
-        ),
-    )
-    catalog.add_link(
-        pystac.Link(
-            rel="preview",
-            target="./thumbnail.png",
-            media_type=pystac.MediaType.PNG,
-            title="GLACE overview",
-        ),
-    )
-    for collection in (tiles, mosaics):
-        catalog.add_child(collection)
-
     base = base_url.rstrip("/")
     with tempfile.TemporaryDirectory() as tmp:
         staged = Path(tmp)
-        catalog_payload = catalog.to_dict(include_self_link=False)
-        catalog_payload["links"] = [
+        catalog = _load(source_dir / "catalog.json")
+        catalog["links"] = [
             {"rel": "self", "href": f"{base}/catalog.json", "type": "application/json"},
-            {"rel": "root", "href": "./catalog.json", "type": "application/json"},
-            {"rel": "child", "href": "./tiles/collection.json", "type": "application/json"},
-            {"rel": "child", "href": "./mosaics/collection.json", "type": "application/json"},
-            *[
-                link
-                for link in catalog_payload["links"]
-                if link["rel"] not in {"self", "root", "child"}
-            ],
+            *_keep(catalog["links"], {"self"}),
         ]
-        (staged / "catalog.json").write_text(json.dumps(catalog_payload, indent=2) + "\n")
+        (staged / "catalog.json").write_text(
+            json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+        )
 
-        for directory, collection in (("tiles", tiles), ("mosaics", mosaics)):
-            payload = collection.to_dict(include_self_link=False)
-            payload["links"] = [
-                {"rel": "root", "href": "../catalog.json", "type": "application/json"},
-                {"rel": "parent", "href": "../catalog.json", "type": "application/json"},
-                *[
-                    link
-                    for link in payload["links"]
-                    if link["rel"] not in {"self", "root", "parent"}
-                ],
-            ]
+        for directory, document in documents.items():
             path = staged / directory / "collection.json"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(payload, indent=2) + "\n")
+            path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
 
+        # The prose travels with the documents that link it: PTL-FIL-001 wants
+        # both files in every catalog and collection directory.
+        for name in ("README.md", "AGENTS.md"):
+            (staged / name).write_bytes((source_dir / name).read_bytes())
+            for directory in documents:
+                (staged / directory / name).write_bytes(
+                    (source_dir / directory / name).read_bytes(),
+                )
+
+        repoint_styles(source_dir, staged, latest)
         upload_tree(staged, layout.root)
-
-
-def write_layers_manifest(layout: stac.StoreLayout, years: Sequence[int]) -> int:
-    """Merge every year's build state into the viewer's ``layers.json``.
-
-    The build state already records everything the viewer needs — a layer id, a
-    colour map, a value range, a zoom range, a size — as the ``pmtiles`` step
-    produces it, and this is the only command that sees all the years, so it owns
-    the merge. The layer id is the archive's filename stem, which the naming rules
-    make a contract rather than an assumption.
-    """
-    entries: list[dict[str, Any]] = []
-    for year in years:
-        state = stac.BuildState.load(layout.build_state(year))
-        entries.extend(
-            {**detail, "url": f"{year}/pmtiles/{detail['url']}"}
-            for _, detail in sorted(state.details.get("pmtiles", {}).items())
-        )
-    if not entries:
-        logger.info("No web-map archives recorded; layers.json not written")
-        return 0
-    manifest = webmap.build_viewer_manifest(entries)
-    layout.layers.write_text(json.dumps(manifest, indent=2) + "\n")
-    logger.info("Wrote %s with %d layers", layout.layers, len(entries))
-    return len(entries)
 
 
 def render_thumbnail(layout: stac.StoreLayout, years: Sequence[int]) -> bool:
@@ -368,6 +418,12 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="absolute URL the published root answers at; the only absolute href in the store",
     )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "catalog",
+        help="tracked catalog/ directory holding the hand-maintained documents",
+    )
     parser.add_argument("--skip-thumbnail", action="store_true")
     parser.add_argument("--skip-validate", action="store_true")
     return parser.parse_args()
@@ -383,7 +439,7 @@ def main() -> None:
     years = published_years(layout)
 
     tables = [read_year_index(layout, year) for year in years]
-    extent, tile_hrefs, versions = tiles_summary(tables)
+    _extent, tile_hrefs, versions = tiles_summary(tables)
     if len(versions) > 1:
         msg = (
             f"the store's tile items carry editions {sorted(versions)}. A collection "
@@ -394,18 +450,30 @@ def main() -> None:
     logger.info("%d tile items across %d year(s)", len(tile_hrefs), len(years))
 
     mosaic_items = read_mosaic_items(layout, years)
-    collections = build_collections(scope, extent, tile_hrefs, mosaic_items)
-    write_documents(scope, layout, collections, base_url=args.base_url)
+    documents = patch_collections(
+        args.source,
+        years,
+        mosaic_items,
+        base_url=args.base_url,
+        has_config={year: layout.config(year).exists() for year in years},
+    )
+    documents["mosaics"]["links"] += pmtiles_links(layout, years, args.base_url)
+    write_documents(
+        args.source,
+        layout,
+        documents,
+        base_url=args.base_url,
+        latest=years[-1],
+    )
 
     stac.concat_indexes(
-        [layout.items_index(year) for year in years],
+        [layout.year_index(year) for year in years],
         layout.tiles_index,
         base_url=args.base_url,
     )
     if mosaic_items:
         stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=args.base_url)
 
-    write_layers_manifest(layout, years)
     if not args.skip_thumbnail:
         render_thumbnail(layout, years)
     if not args.skip_validate:
