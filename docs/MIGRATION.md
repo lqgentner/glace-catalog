@@ -22,7 +22,7 @@ been carried across; §10 lists what changed and why.
 | repository | scaffolded from `portolan-sdi/portolan-catalog-template`, all gates green |
 | catalog documents | root + both collections written, **0 rashid errors** |
 | layout | redesigned to collection-owned, **validated against a generated fixture** |
-| pipeline code | moved from `deep-glacier-mapping`, namespace rewritten, `StoreLayout` reworked |
+| pipeline code | **copied** from `deep-glacier-mapping`, namespace rewritten, `StoreLayout` reworked. Originals still in place until P-3 (§7) |
 | generators | **not yet updated** to the new layout — this is the main remaining work (§6) |
 | published store | still the old flat tree at `s3://s1-bursts/data/glace-ch` |
 
