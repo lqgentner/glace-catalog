@@ -347,12 +347,23 @@ Ordered by what blocks what.
       (`build-labels-catalog.py`, `rasterize-labels.py`). It is STAC creation and
       belongs here eventually, as a third collection or a sibling catalog.
 - [ ] **P-16 — Rename `webmap.py`.** It builds display rasters now, not web maps.
+- [ ] **P-17 — Delete the originals from `deep-glacier-mapping`** once P-3 lands
+      and this repository can build a store: `scopes.py`, `stac/`, `mosaics.py`,
+      `webmap.py`, `gdal_s3.py`'s subprocess helper, and `scripts/stac/`. Until
+      then both copies exist and only the old one works (§7).
 
 ---
 
 ## 7. What moved, and what did not
 
-Moved to `glace-catalog`, namespace rewritten `glacier_mapping` → `glace_catalog`:
+**The move is staged, not finished.** The code below is copied into this
+repository with its namespace rewritten, and the originals are still in
+`deep-glacier-mapping`. They stay there until P-3 lands, because until the
+generators write the new layout this repository cannot build a store and that
+one still can. Deleting the working copy first would leave nothing functional in
+either place. Remove them in the same commit that closes P-3.
+
+Copied to `glace-catalog`, namespace rewritten `glacier_mapping` → `glace_catalog`:
 
 ```
 src/glace_catalog/scopes.py        canonical grids, extents, collection ids
