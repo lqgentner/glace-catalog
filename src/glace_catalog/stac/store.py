@@ -122,13 +122,22 @@ class StoreLayout:
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
-            |-- items.parquet  thumbnail.png
-            `-- {year}/item.json + 12 analysis COGs + 2 visual COGs
+            |-- items.parquet  thumbnail.png  styles/
+            |-- pmtiles/{year}/{layer}.pmtiles
+            `-- {year}/item.json + 12 analysis COGs
 
-    Two things are deliberately *not* mirrored from the old flat layout. There
-    is no per-year directory shared by both collections, because a year is not a
-    thing either collection owns; and there is no ``pmtiles/`` directory, because
-    the web-map products are now item assets rather than link targets.
+    One thing is deliberately not mirrored from the old flat layout: there is no
+    per-year directory shared by both collections, because a year is not a thing
+    either collection owns.
+
+    The web-map archives sit under ``mosaics/pmtiles/{year}/`` rather than beside
+    the rasters they render, for two reasons. They are registered as
+    *collection*-level links, so putting them inside an item's own directory
+    would place a collection-level product under an item; and the stems would
+    otherwise collide — ``coh12_vv.tif`` is linear float32 and
+    ``coh12_vv.pmtiles`` is a pre-stretched 8-bit rendering, the backscatter ones
+    in decibels. Two files one letter apart holding different quantities is the
+    kind of thing that reads fine until someone compares them.
 
     Dotfiles are build state, never published: ``.build-state.json`` records what
     a step already did, and ``.items.parquet`` is the year's slice of the item
@@ -265,6 +274,20 @@ class StoreLayout:
     def mosaic_item(self, year: int) -> Path | UPath:
         """Item document of one year's mosaics."""
         return self.mosaic_year(year) / "item.json"
+
+    @property
+    def styles(self) -> Path | UPath:
+        """MapLibre GL style assets of the mosaics collection."""
+        return self.mosaics / "styles"
+
+    def pmtiles(self, year: int) -> Path | UPath:
+        """Directory of one year's web-map archives.
+
+        Deliberately not inside the year's item directory: these are registered
+        as collection-level links, and keeping them apart stops
+        ``coh12_vv.pmtiles`` sitting beside the ``coh12_vv.tif`` it renders.
+        """
+        return self.mosaics / "pmtiles" / str(year)
 
 
 def _tag_columns(tags: Mapping[str, str]) -> dict[str, str | None]:

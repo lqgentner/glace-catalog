@@ -19,9 +19,9 @@ Two properties, both deliberate:
 
 ## Two ways to consume it
 
-**To draw a map**, use the PMTiles. They are registered as `rel: "pmtiles"`
-links on this collection, with MapLibre GL styles as `style` assets — load the
-style directly and it works:
+**To draw a map**, use the PMTiles under `pmtiles/{year}/`. They are registered
+as `rel: "pmtiles"` links on this collection, with MapLibre GL styles as `style`
+assets — load the style directly and it works:
 
 ```js
 const protocol = new pmtiles.Protocol();
@@ -65,6 +65,18 @@ cube = odc.stac.load(
 
 Every year shares one grid, so the result is a clean time axis with no
 resampling step.
+
+## The two products are not interchangeable
+
+`{year}/rtc_vv.tif` is linear power. `pmtiles/{year}/rtc_vv.pmtiles` is the same
+measurement rendered: 8-bit, pre-stretched, and in **decibels**. They are kept in
+separate directories rather than side by side for exactly that reason — the
+names would otherwise differ by one extension while the quantities differ by a
+logarithm.
+
+Coherence is not converted: `coh12_*` archives are linear values under a fixed
+stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because those span decades
+of linear power and a linear 8-bit stretch would collapse them.
 
 ## Caveat: the count layers are means
 

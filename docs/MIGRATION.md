@@ -134,7 +134,9 @@ catalogs that `PTL-CAT-001` wants come for free.
 └── mosaics/
     ├── collection.json  README.md  AGENTS.md
     ├── items.parquet  thumbnail.png
-    └── {year}/item.json + 12 analysis COGs + 2 display COGs
+    ├── styles/{name}.json          # MapLibre GL, committed
+    ├── pmtiles/{year}/{layer}.pmtiles
+    └── {year}/item.json + 12 analysis COGs
 ```
 
 Decisions inside that, and the reasoning:
@@ -184,9 +186,45 @@ is served by `items.parquet` instead, which is what every piece of documentation
 here points consumers at. Revisit if browsing proves painful — and if so, group
 *and* generate the markdown, rather than doing what FTW did.
 
+**Nothing is qualified in a filename that the path already says.** No EPSG
+code, no year, no scope. The question comes up because a tile COG sits in its
+own UTM zone while a mosaic COG is EPSG:3857, so `coh12_vv.tif` names two
+different grids in two places.
+
+Against putting it in the name: the directory already says which collection and
+therefore which grid; `proj:code` on every item says it authoritatively and
+machine-readably; for tiles the code *varies per tile*, and the tile directory
+(`32TLR48`) already encodes the zone, so `coh12_vv_32632.tif` would be
+redundant noise; and it lengthens every href and every asset key, because rule 1
+makes the key the stem.
+
+The stronger version of the question is the year, not the CRS — someone pulling
+four years of `coh12_vv.tif` into one directory to difference them collides on
+every file, which no EPSG suffix would have prevented. That is real, and it is
+still not worth qualifying for: the collision is a flattening a user performs,
+`odc.stac` and `rasterio` read by URL and never flatten, and item ids
+(`ch-mosaic-2024`) already disambiguate. Fields of the World and portolan-nl
+both qualify fully (`luchtfoto-2024-19an1-rgb.tif`), so this is a real fork —
+the trade is short predictable hrefs and `assets[key].href == f"{key}.tif"`
+against flatten-safety, and we take the former.
+
+What *does* need disambiguating is not the CRS but the **units and role**, which
+is why the PMTiles moved rather than gained a suffix. A blanket `_db` suffix
+would have been wrong anyway: only `rtc_*` and `*_qa_cqm` are decibels;
+`coh12_*` are linear values under a stretch.
+
 **The mosaics collection has no year catalogs.** Eleven items, under the
 threshold, so the collection links them directly and `mosaics/{year}/` is simply
 the item's own subdirectory.
+
+**Web-map archives sit apart from the rasters they render.** `mosaics/pmtiles/
+{year}/coh12_vv.pmtiles`, not `mosaics/{year}/coh12_vv.pmtiles`. Two reasons,
+and the second is the one that matters: they are registered as *collection*-level
+links, so an item's own directory is the wrong place for them; and beside the
+COG the stems collide — `coh12_vv.tif` is linear float32 and `coh12_vv.pmtiles`
+is a pre-stretched 8-bit rendering, the backscatter ones in decibels. Two files
+one letter apart holding different quantities reads fine until someone compares
+them.
 
 **Per-year run records are collection assets.** `PTL-AST-005` forbids assets on a
 catalog, so the year catalog cannot own the manifest that sits beside it. The
@@ -607,6 +645,8 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-17 | **ETag is dropped from the manifest**; `sha256` alone, multihash-encoded. Supersedes D-25's "both, for different jobs" | 6 |
 | M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors. Reverses M-6 | 4 |
 | M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 4 |
+| M-22 | Web-map archives live at `mosaics/pmtiles/{year}/`, not beside the COGs they render: they are collection-level products, and the stems would otherwise collide across two different quantities | 3 |
+| M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem | 3 |
 | M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year | 4 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |
 

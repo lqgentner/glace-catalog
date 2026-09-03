@@ -4,7 +4,7 @@
   "sources": {
     "data": {
       "type": "raster",
-      "url": "pmtiles://../2024/coh12_rgb.pmtiles",
+      "url": "pmtiles://../pmtiles/2024/coh12_rgb.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,

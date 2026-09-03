@@ -4,7 +4,7 @@
   "sources": {
     "data": {
       "type": "raster",
-      "url": "pmtiles://../2024/rtc_vv.pmtiles",
+      "url": "pmtiles://../pmtiles/2024/rtc_vv.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
