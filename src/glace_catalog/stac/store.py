@@ -1,0 +1,707 @@
+"""The store on object storage: where its files go, and how they get there.
+
+A GLACE store is one self-contained, relocatable tree holding the composite
+COGs, the documents describing them, the annual mosaics and the web-map tiles.
+This module owns the parts of that which touch the object store: the layout, the
+run manifest that says what a year's composites are, the server-side copy that
+moves them in, and the build state that makes a rerun safe.
+
+Two rules run through all of it. Composites are **copied, never rewritten**, so
+the bytes and the compression the run chose survive exactly; and every step
+records an **input fingerprint** rather than a "done" flag, so a step whose
+inputs moved reruns itself instead of letting a stale product through.
+"""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+import hashlib
+import json
+import logging
+from secrets import token_hex
+from typing import TYPE_CHECKING, Any
+
+import pandas as pd
+from upath import UPath
+
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name
+from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+MANIFEST_NAME = "manifest.parquet"
+CONFIG_NAME = "config.yaml"
+BUILD_STATE_NAME = ".build-state.json"
+YEAR_INDEX_NAME = ".items.parquet"
+ITEMS_INDEX_NAME = "items.parquet"
+"""Filename of a collection's item mirror.
+
+Fixed by convention rather than by the specification, which requires only that
+the mirror be registered as a collection asset with the ``collection-mirror``
+role. Tooling looks for this name, so a collection that uses it is found without
+reading the collection document first.
+"""
+
+README_NAME = "README.md"
+AGENTS_NAME = "AGENTS.md"
+THUMBNAIL_NAME = "thumbnail.png"
+
+TILES_DIR = "tiles"
+MOSAICS_DIR = "mosaics"
+"""Directory, and collection-id suffix, of each collection.
+
+The scope prefixes these into the published ids (``glace-ch-tiles``), but the
+directory stays unprefixed: the scope is already the store root, so repeating it
+one level down would only make every href longer.
+"""
+
+MANIFEST_VERSION = 1
+"""Schema version of :data:`MANIFEST_NAME`, written into its parquet metadata."""
+
+MANIFEST_COLUMNS: tuple[str, ...] = (
+    "filename",
+    "tile",
+    "asset_key",
+    "product",
+    "qa",
+    "polarization",
+    "composite_start",
+    "composite_end",
+    "size",
+    "etag",
+    "valid_percent",
+    "band_name",
+    "band_unit",
+    "data_type",
+    "nodata",
+    "spatial_resolution",
+    "bits_per_sample",
+    "byte_order",
+)
+"""Fixed columns of the manifest, before the one column per provenance tag.
+
+The tag columns are SCREAMING_CASE and these are lowercase, so the two
+vocabularies cannot collide.
+"""
+
+
+@dataclass(frozen=True)
+class StoreLayout:
+    """Where everything in one store lives.
+
+    The tree is **collection-owned**: every document and every byte a collection
+    publishes sits beneath that collection's directory. Portolan requires it
+    (core: "a collection directory MUST contain a ``collection.json`` and holds
+    one subdirectory per item"), and it is what lets a year catalog exist at all,
+    since a catalog may appear below a collection to organize its items.
+
+    ::
+
+        {root}/
+        |-- catalog.json  README.md  AGENTS.md  _assets/
+        |-- tiles/
+        |   |-- collection.json  README.md  AGENTS.md
+        |   |-- items.parquet          # collection-mirror, every year
+        |   |-- thumbnail.png
+        |   |-- glacier-fractions.parquet
+        |   `-- {year}/
+        |       |-- catalog.json  README.md  AGENTS.md
+        |       |-- manifest.parquet  config.yaml
+        |       |-- .build-state.json  .items.parquet
+        |       `-- {tile}/item.json + 12 COGs
+        `-- mosaics/
+            |-- collection.json  README.md  AGENTS.md
+            |-- items.parquet  thumbnail.png
+            `-- {year}/item.json + 12 analysis COGs + 2 visual COGs
+
+    Two things are deliberately *not* mirrored from the old flat layout. There
+    is no per-year directory shared by both collections, because a year is not a
+    thing either collection owns; and there is no ``pmtiles/`` directory, because
+    the web-map products are now item assets rather than link targets.
+
+    Dotfiles are build state, never published: ``.build-state.json`` records what
+    a step already did, and ``.items.parquet`` is the year's slice of the item
+    mirror before :mod:`finalize-catalog` concatenates it. Naming them with a
+    leading dot keeps them out of the item mirror's own directory listing and out
+    of the publish sync.
+
+    Parameters
+    ----------
+    root
+        Store root, e.g. ``s3://s1-bursts/data/glace-ch`` or ``/mnt/glace/ch``.
+    """
+
+    root: Path | UPath
+
+    # -- root ------------------------------------------------------------
+
+    @property
+    def catalog(self) -> Path | UPath:
+        """Root catalog. The publish step stamps its absolute ``self`` link."""
+        return self.root / "catalog.json"
+
+    @property
+    def readme(self) -> Path | UPath:
+        """Root ``README.md``, linked ``rel: "describedby"``."""
+        return self.root / README_NAME
+
+    @property
+    def agents(self) -> Path | UPath:
+        """Root ``AGENTS.md``, linked ``rel: "agents"``."""
+        return self.root / AGENTS_NAME
+
+    @property
+    def logo(self) -> Path | UPath:
+        """Catalog logo, linked ``rel: "icon"`` from the root catalog."""
+        return self.root / "_assets" / "logo.png"
+
+    # -- tiles collection ------------------------------------------------
+
+    @property
+    def tiles(self) -> Path | UPath:
+        """Directory owning the per-tile collection."""
+        return self.root / TILES_DIR
+
+    @property
+    def tiles_collection(self) -> Path | UPath:
+        """Collection document of the per-tile items."""
+        return self.tiles / "collection.json"
+
+    @property
+    def tiles_index(self) -> Path | UPath:
+        """Item mirror of every tile item, across every year.
+
+        Registered as a collection asset with the ``collection-mirror`` role,
+        which is the whole of Portolan's registration requirement: no
+        ``rel: "items"`` link accompanies it.
+        """
+        return self.tiles / ITEMS_INDEX_NAME
+
+    @property
+    def tiles_thumbnail(self) -> Path | UPath:
+        """Thumbnail of the tiles collection; a Portolan MUST for a geospatial one."""
+        return self.tiles / THUMBNAIL_NAME
+
+    @property
+    def glacier_fractions(self) -> Path | UPath:
+        """Per-tile RGI7 glacier fractions, pinned to one inventory version."""
+        return self.tiles / "glacier-fractions.parquet"
+
+    def tile_year(self, year: int) -> Path | UPath:
+        """Directory of the sub-catalog organizing one year's tile items."""
+        return self.tiles / str(year)
+
+    def tile_year_catalog(self, year: int) -> Path | UPath:
+        """Sub-catalog listing one year's tile items."""
+        return self.tile_year(year) / "catalog.json"
+
+    def tile(self, year: int, tile: str) -> Path | UPath:
+        """Directory of one tile item, holding its twelve COGs and its ``item.json``."""
+        return self.tile_year(year) / tile
+
+    def manifest(self, year: int) -> Path | UPath:
+        """The year's copy of the composite run's manifest.
+
+        Sits under the tiles collection because that is what it records, and is
+        registered as a *collection* asset keyed ``manifest-{year}``: a catalog
+        organizes only and may carry no assets (PTL-AST-005), so a year catalog
+        cannot own its own record.
+        """
+        return self.tile_year(year) / MANIFEST_NAME
+
+    def config(self, year: int) -> Path | UPath:
+        """The year's copy of the composite run's configuration."""
+        return self.tile_year(year) / CONFIG_NAME
+
+    def build_state(self, year: int) -> Path | UPath:
+        """Build state of one year's publication. Not published."""
+        return self.tile_year(year) / BUILD_STATE_NAME
+
+    def year_index(self, year: int) -> Path | UPath:
+        """The year's slice of the item mirror, with root-relative hrefs.
+
+        A build artefact: ``finalize-catalog`` concatenates every year's slice
+        into :attr:`tiles_index` and rebases the hrefs onto the public base URL.
+        """
+        return self.tile_year(year) / YEAR_INDEX_NAME
+
+    # -- mosaics collection ----------------------------------------------
+
+    @property
+    def mosaics(self) -> Path | UPath:
+        """Directory owning the annual-mosaic collection."""
+        return self.root / MOSAICS_DIR
+
+    @property
+    def mosaics_collection(self) -> Path | UPath:
+        """Collection document of the annual mosaic items."""
+        return self.mosaics / "collection.json"
+
+    @property
+    def mosaics_index(self) -> Path | UPath:
+        """Item mirror of the annual mosaic items, one row per year."""
+        return self.mosaics / ITEMS_INDEX_NAME
+
+    @property
+    def mosaics_thumbnail(self) -> Path | UPath:
+        """Thumbnail of the mosaics collection."""
+        return self.mosaics / THUMBNAIL_NAME
+
+    def mosaic_year(self, year: int) -> Path | UPath:
+        """Directory of one year's mosaic item and its rasters."""
+        return self.mosaics / str(year)
+
+    def mosaic_item(self, year: int) -> Path | UPath:
+        """Item document of one year's mosaics."""
+        return self.mosaic_year(year) / "item.json"
+
+
+def _tag_columns(tags: Mapping[str, str]) -> dict[str, str | None]:
+    """One entry per provenance tag, absent ones as ``None``."""
+    return {tag: tags.get(tag) for tag in PROVENANCE_TAGS}
+
+
+def build_manifest_frame(
+    files: Sequence[CompositeFile],
+    raster_info: Mapping[str, Mapping[str, RasterInfo]],
+    listing: Mapping[str, tuple[int, str]],
+    valid_percents: Mapping[str, Mapping[str, float]],
+) -> pd.DataFrame:
+    """Assemble a run manifest from what a survey of the archive found.
+
+    Parameters
+    ----------
+    files
+        Every parsed composite of the year.
+    raster_info
+        Raster metadata per tile and asset key.
+    listing
+        ``(size, etag)`` per filename, from one listing of the source prefix.
+    valid_percents
+        Valid-data percentage per tile and *data* asset key. QA rows carry none.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per file, in ``(tile, asset_key)`` order.
+
+    Raises
+    ------
+    KeyError
+        If a file has no raster metadata or no listing entry.
+    """
+    rows: list[dict[str, Any]] = []
+    for file in sorted(files, key=lambda f: (f.tile, f.asset_key)):
+        info = raster_info[file.tile][file.asset_key]
+        size, etag = listing[file.path.name]
+        rows.append(
+            {
+                "filename": file.path.name,
+                "tile": file.tile,
+                "asset_key": file.asset_key,
+                "product": file.product,
+                "qa": file.qa,
+                "polarization": file.polarization,
+                "composite_start": file.start.date().isoformat(),
+                "composite_end": file.end.date().isoformat(),
+                "size": size,
+                "etag": etag,
+                "valid_percent": valid_percents.get(file.tile, {}).get(file.asset_key),
+                "band_name": info.band_name,
+                "band_unit": info.band_unit,
+                "data_type": info.data_type,
+                "nodata": info.nodata,
+                "spatial_resolution": info.spatial_resolution,
+                "bits_per_sample": info.bits_per_sample,
+                "byte_order": info.byte_order,
+                **_tag_columns(info.tags),
+            },
+        )
+    frame = pd.DataFrame(rows, columns=[*MANIFEST_COLUMNS, *PROVENANCE_TAGS])
+    frame.attrs["manifest_version"] = MANIFEST_VERSION
+    return frame
+
+
+def write_manifest(frame: pd.DataFrame, path: Path | UPath) -> None:
+    """Write a run manifest to parquet."""
+    with UPath(path).open("wb") as handle:
+        frame.to_parquet(handle, index=False)
+    logger.info("Wrote %s with %d rows", path, len(frame))
+
+
+def read_manifest(path: Path | UPath) -> pd.DataFrame:
+    """Read a run manifest, checking that it carries every expected column.
+
+    Raises
+    ------
+    ValueError
+        If columns the publisher depends on are absent.
+    """
+    with UPath(path).open("rb") as handle:
+        frame = pd.read_parquet(handle)
+    missing = [column for column in MANIFEST_COLUMNS if column not in frame.columns]
+    if missing:
+        msg = f"{path} is not a usable manifest: missing columns {', '.join(missing)}."
+        raise ValueError(msg)
+    return frame
+
+
+def manifest_digest(frame: pd.DataFrame) -> str:
+    """Content digest of a manifest, as the fingerprint the copy step keys on.
+
+    Taken over the filenames, sizes and ETags rather than the whole frame, so a
+    rewritten but unchanged manifest does not invalidate a copy.
+    """
+    payload = frame.loc[:, ["filename", "size", "etag"]].sort_values("filename")
+    digest = hashlib.sha256()
+    for record in payload.to_dict("records"):
+        digest.update(
+            "\t".join(str(record[column]) for column in payload.columns).encode() + b"\n",
+        )
+    return digest.hexdigest()
+
+
+def list_objects(directory: Path | UPath) -> dict[str, tuple[int, str]]:
+    """List one prefix as ``{filename: (size, etag)}``.
+
+    One listing replaces one remote open per file, which is the whole reason the
+    manifest keys on the ETag: verification has to work from what a listing
+    returns. For single-part uploads the ETag is the MD5, and a server-side copy
+    preserves it.
+    """
+    directory = UPath(directory)
+    entries: dict[str, tuple[int, str]] = {}
+    for info in directory.fs.ls(str(directory.path), detail=True):
+        name = str(info["name"]).rsplit("/", 1)[-1]
+        if not name:
+            continue
+        etag = str(info.get("ETag") or info.get("etag") or "").strip('"')
+        entries[name] = (int(info.get("size") or info.get("Size") or 0), etag)
+    return entries
+
+
+@dataclass(frozen=True)
+class ManifestMismatch:
+    """One file the manifest and the archive disagree about."""
+
+    filename: str
+    problem: str
+
+    def __str__(self) -> str:
+        """One log line: the file, then what disagrees about it."""
+        return f"{self.filename}: {self.problem}"
+
+
+def verify_manifest(
+    frame: pd.DataFrame,
+    listing: Mapping[str, tuple[int, str]],
+) -> list[ManifestMismatch]:
+    """Compare a manifest against a listing of the archive it describes.
+
+    Returns one record per disagreement, empty when the two match. The manifest
+    is a cache, not the source of truth — every tag it lists is also written into
+    the file — so this is what stops a stale cache describing an archive that
+    has moved on.
+    """
+    problems: list[ManifestMismatch] = []
+    for record in frame.loc[:, ["filename", "size", "etag"]].to_dict("records"):
+        name = str(record["filename"])
+        recorded_size, recorded_etag = int(record["size"]), str(record["etag"] or "")
+        found = listing.get(name)
+        if found is None:
+            problems.append(ManifestMismatch(name, "listed in the manifest but absent"))
+            continue
+        size, etag = found
+        if recorded_size != size:
+            problems.append(
+                ManifestMismatch(name, f"size {size} on the archive, {recorded_size} recorded"),
+            )
+        # An ETag the gateway did not return is not evidence of a mismatch.
+        elif recorded_etag and etag and recorded_etag != etag:
+            problems.append(
+                ManifestMismatch(name, f"etag {etag} on the archive, {recorded_etag} recorded"),
+            )
+    extra = sorted(set(listing) - set(frame["filename"]))
+    problems.extend(
+        ManifestMismatch(name, "present in the archive but absent from the manifest")
+        for name in extra
+        if name.endswith(".tif")
+    )
+    return problems
+
+
+def manifest_composites(frame: pd.DataFrame, src_dir: Path | UPath) -> list[CompositeFile]:
+    """Reconstruct the parsed composites a manifest describes.
+
+    Raises
+    ------
+    ValueError
+        If a listed filename does not follow the composite naming convention.
+    """
+    files: list[CompositeFile] = []
+    for name in frame["filename"]:
+        parsed = parse_composite_name(src_dir / str(name))
+        if parsed is None:
+            msg = f"{name} in the manifest is not a composite filename."
+            raise ValueError(msg)
+        files.append(parsed)
+    return files
+
+
+def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]]:
+    """Rebuild the per-asset raster metadata a manifest carries.
+
+    This is what collapses the publisher's most expensive work: the survey that
+    used to be one remote open per file becomes one read of the manifest.
+    """
+    info: dict[str, dict[str, RasterInfo]] = {}
+    for row in frame.to_dict("records"):
+        tags = {
+            tag: str(row[tag])
+            for tag in PROVENANCE_TAGS
+            if tag in row and row[tag] is not None and pd.notna(row[tag])
+        }
+        nodata = row["nodata"]
+        info.setdefault(str(row["tile"]), {})[str(row["asset_key"])] = RasterInfo(
+            tags=tags,
+            band_name=str(row["band_name"] or ""),
+            band_unit=str(row["band_unit"] or ""),
+            data_type=str(row["data_type"]),
+            nodata=None if nodata is None or pd.isna(nodata) else float(nodata),
+            spatial_resolution=float(row["spatial_resolution"]),
+            bits_per_sample=int(row["bits_per_sample"]),
+            byte_order=str(row["byte_order"]),
+            size=int(row["size"]),
+        )
+    return info
+
+
+def manifest_valid_percents(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
+    """Valid-data percentage per tile and data-asset key, as the manifest records it."""
+    percents: dict[str, dict[str, float]] = {}
+    columns = ["tile", "asset_key", "valid_percent"]
+    for record in frame.loc[frame["valid_percent"].notna(), columns].to_dict("records"):
+        tile, key = str(record["tile"]), str(record["asset_key"])
+        percents.setdefault(tile, {})[key] = float(record["valid_percent"])  # type: ignore[arg-type]
+    return percents
+
+
+@dataclass(frozen=True)
+class CopyResult:
+    """What one ``copy`` step did."""
+
+    copied: int
+    skipped: int
+
+    def __str__(self) -> str:
+        """One log line summarising the copy."""
+        return f"{self.copied} copied, {self.skipped} already present"
+
+
+def copy_composites(
+    files: Sequence[CompositeFile],
+    layout: StoreLayout,
+    year: int,
+    listing: Mapping[str, tuple[int, str]],
+    *,
+    max_workers: int = 16,
+) -> CopyResult:
+    """Copy a year's composites into the store, server-side.
+
+    Each file lands at ``{root}/{year}/{tile}/{asset_key}.tif`` through a
+    ``CopyObject``: no download, no upload, no egress, and the bytes and the
+    compression the run chose are preserved exactly.
+
+    Parameters
+    ----------
+    files
+        Parsed composites to publish.
+    layout
+        Store the files are copied into.
+    year
+        Year directory the files belong to.
+    listing
+        ``(size, etag)`` per source filename, used as the idempotency key.
+    max_workers
+        Size of the copy thread pool.
+
+    Returns
+    -------
+    CopyResult
+        How many files were copied and how many were already in place.
+    """
+    root = UPath(layout.root)
+    destinations = list_objects_recursive(layout.year(year))
+    # An object store needs no directory, but a local store does, and creating
+    # them once up front keeps that out of the copy pool.
+    for tile in sorted({file.tile for file in files}):
+        layout.tile(year, tile).mkdir(parents=True, exist_ok=True)
+
+    def copy_one(file: CompositeFile) -> bool:
+        target = layout.tile(year, file.tile) / file.published_name
+        key = f"{file.tile}/{file.published_name}"
+        source_size, source_etag = listing[file.path.name]
+        found = destinations.get(key)
+        # Skip only on an exact match of size and ETag: a same-size replacement
+        # is exactly the case a size-only check would wave through.
+        matches = found is not None and found[0] == source_size
+        if matches and (not source_etag or found[1] == source_etag):  # type: ignore[index]
+            return False
+        root.fs.cp(str(UPath(file.path).path), str(UPath(target).path))
+        return True
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        copied = sum(pool.map(copy_one, files))
+    result = CopyResult(copied=copied, skipped=len(files) - copied)
+    logger.info("Copied %d composites into %s: %s", len(files), layout.year(year), result)
+    return result
+
+
+def list_objects_recursive(directory: Path | UPath) -> dict[str, tuple[int, str]]:
+    """List one prefix and everything under it, keyed by path relative to it."""
+    directory = UPath(directory)
+    prefix = str(directory.path).rstrip("/") + "/"
+    entries: dict[str, tuple[int, str]] = {}
+    if not directory.fs.exists(str(directory.path)):
+        return entries
+    for info in directory.fs.find(str(directory.path), detail=True).values():
+        name = str(info["name"])
+        if not name.startswith(prefix):
+            continue
+        etag = str(info.get("ETag") or info.get("etag") or "").strip('"')
+        entries[name[len(prefix) :]] = (
+            int(info.get("size") or info.get("Size") or 0),
+            etag,
+        )
+    return entries
+
+
+def upload_tree(local: Path, destination: Path | UPath) -> int:
+    """Upload a locally staged directory tree in one pass.
+
+    Everything a step writes is staged locally and uploaded once: writing 2 209
+    small JSON files straight to the object store would be 2 209 round trips.
+    """
+    destination = UPath(destination)
+    sources = sorted(path for path in local.rglob("*") if path.is_file())
+    for path in sources:
+        target = destination / path.relative_to(local).as_posix()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(path.read_bytes())
+    logger.info("Uploaded %d files to %s", len(sources), destination)
+    return len(sources)
+
+
+STEPS: tuple[str, ...] = ("copy", "vrt", "mosaics", "pmtiles", "items")
+"""The publication steps, in the order they must run."""
+
+_UNFINGERPRINTED = frozenset({"vrt"})
+"""Steps that are always rerun.
+
+The VRTs are local and ephemeral, so a remote "done" can be true while the cache
+is empty. They take seconds to rebuild, so there is nothing to protect.
+"""
+
+
+@dataclass
+class BuildState:
+    """Per-step input fingerprints of one year's publication.
+
+    Recording only outputs is not enough: if ``copy`` replaces a source, or the
+    grid, bounds or style change, a state file saying "mosaics: done" would let a
+    stale product through. Each step records what it was built *from*, and reruns
+    itself exactly when that moved.
+
+    State is written once, atomically, after every output of a step is verified,
+    never appended per output — a crash halfway through ``pmtiles`` must leave
+    the step incomplete rather than done with six of fourteen archives present.
+    """
+
+    path: Path | UPath
+    fingerprints: dict[str, str] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def load(cls, path: Path | UPath) -> BuildState:
+        """Read the state beside a published year, or start an empty one."""
+        path = UPath(path)
+        if not path.exists():
+            return cls(path=path)
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning("Ignoring unreadable build state %s: %s", path, error)
+            return cls(path=path)
+        return cls(
+            path=path,
+            fingerprints=dict(payload.get("fingerprints", {})),
+            details=dict(payload.get("details", {})),
+        )
+
+    def is_current(self, step: str, fingerprint: str) -> bool:
+        """Whether ``step`` has already run against exactly these inputs."""
+        if step in _UNFINGERPRINTED:
+            return False
+        return self.fingerprints.get(step) == fingerprint
+
+    def record(self, step: str, fingerprint: str, detail: Any = None) -> None:
+        """Mark a step complete against its inputs and persist the whole state."""
+        self.fingerprints[step] = fingerprint
+        if detail is not None:
+            self.details[step] = detail
+        self.save()
+
+    def save(self) -> None:
+        """Write the state atomically."""
+        payload = json.dumps(
+            {"fingerprints": self.fingerprints, "details": self.details},
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+        path = UPath(self.path)
+        if path.protocol == "s3":
+            # PutObject is atomic on its own.
+            path.write_text(payload)
+            return
+        partial = path.with_name(f"{path.name}.{token_hex(8)}.partial")
+        try:
+            partial.write_text(payload)
+            partial.replace(path)
+        except BaseException:
+            partial.unlink(missing_ok=True)
+            raise
+
+    def invalidate_from(self, step: str) -> None:
+        """Drop the fingerprint of ``step`` and of every step that follows it."""
+        index = STEPS.index(step)
+        for later in STEPS[index:]:
+            self.fingerprints.pop(later, None)
+            self.details.pop(later, None)
+
+
+def fingerprint(*parts: Any) -> str:
+    """Stable digest over the values a step's output depends on."""
+    payload = json.dumps(parts, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def resolve_steps(requested: Iterable[str]) -> list[str]:
+    """Order and validate the requested steps.
+
+    Raises
+    ------
+    ValueError
+        If a step is not one of :data:`STEPS`.
+    """
+    wanted = set(requested)
+    unknown = sorted(wanted - set(STEPS))
+    if unknown:
+        msg = f"Unknown step(s) {', '.join(unknown)}; known steps are {', '.join(STEPS)}."
+        raise ValueError(msg)
+    return [step for step in STEPS if step in wanted]

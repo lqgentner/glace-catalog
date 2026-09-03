@@ -1,0 +1,52 @@
+{
+  "type": "Catalog",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
+  ],
+  "id": "glace-ch",
+  "title": "GLACE Switzerland — Sentinel-1 Glacier Coherence and Backscatter",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over the glacierised Swiss Alps, 2021 onward. Composites are locally resolution weighted (LRW), so each output pixel is dominated by the acquisitions that resolve it best rather than by whichever orbit happened to observe it most often. Two collections: per-tile composites on the 10 m MGRS grid for analysis and machine learning, and one annual mosaic per year on a fixed WebMercator grid for mapping and inspection. Every raster is a Cloud-Optimized GeoTIFF carrying the full processing record in its own tags. This catalog is the Swiss rehearsal for GLACE Alps, which applies the same pipeline across the Alpine Convention perimeter.",
+  "links": [
+    {
+      "rel": "root",
+      "href": "./catalog.json",
+      "type": "application/json",
+      "title": "GLACE Switzerland"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "Catalog README"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "Catalog agent guide"
+    },
+    {
+      "rel": "child",
+      "href": "./tiles/collection.json",
+      "type": "application/json",
+      "title": "GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid"
+    },
+    {
+      "rel": "child",
+      "href": "./mosaics/collection.json",
+      "type": "application/json",
+      "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed WebMercator grid"
+    },
+    {
+      "rel": "vcs",
+      "href": "https://github.com/lqgentner/glace-catalog",
+      "title": "Source repository"
+    },
+    {
+      "rel": "issues",
+      "href": "https://github.com/lqgentner/glace-catalog/issues",
+      "title": "Issue tracker"
+    }
+  ]
+}

@@ -1,0 +1,419 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/render/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json"
+  ],
+  "id": "glace-ch-tiles",
+  "title": "GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over the glacierised Swiss Alps, on the 10 km MGRS grid at 10 m resolution. One item per (tile, year), carrying twelve single-band Cloud-Optimized GeoTIFFs: COH12 and RTC in VV and VH, and for each of those four measurements a pair of QA layers — the contributing observation count (QA-NUM) and the composite quality metric (QA-CQM), which is the local resolution-weighting's own record of how well each pixel was resolved. Compositing is locally resolution weighted (LRW): each acquisition's contribution is weighted by how well it resolves the pixel, so layover and shadow are down-weighted rather than averaged in. All values are linear — backscatter in linear power, QA-CQM as a linear ratio — with the decibel conversion declared in the render definitions rather than applied to the stored pixels, as CEOS-ARD PFS SAR item 3.1 asks. Every raster carries its full processing record in its own GeoTIFF tags, so a file separated from this catalog still says how it was made. Items are grouped into one sub-catalog per year; the item mirror at items.parquet is the query path.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "Sentinel-1",
+    "SAR",
+    "InSAR coherence",
+    "backscatter",
+    "glaciers",
+    "Switzerland",
+    "Alps",
+    "cryosphere"
+  ],
+  "version": "1.0",
+  "providers": [
+    {
+      "name": "University of Zurich, Department of Geography",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data — burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing — and maintains this catalog. Hosted on Source Cooperative storage; corrections go through the catalog's issue tracker.",
+      "roles": [
+        "producer",
+        "processor",
+        "licensor",
+        "host"
+      ],
+      "url": "https://www.geo.uzh.ch/en/units/gis.html"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          5.9,
+          45.8,
+          10.5,
+          47.0
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2021-07-11T00:00:00Z",
+          "2024-10-06T00:00:00Z"
+        ]
+      ]
+    }
+  },
+  "renders": {
+    "coh12_vv": {
+      "title": "COH12 VV — 12-day coherence, co-polarised",
+      "assets": [
+        "coh12_vv"
+      ],
+      "rescale": [
+        [
+          0.1,
+          0.8
+        ]
+      ],
+      "colormap_name": "magma",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vh": {
+      "title": "COH12 VH — 12-day coherence, cross-polarised",
+      "assets": [
+        "coh12_vh"
+      ],
+      "rescale": [
+        [
+          0.1,
+          0.6
+        ]
+      ],
+      "colormap_name": "magma",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vv": {
+      "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
+      "assets": [
+        "rtc_vv"
+      ],
+      "expression": "10*log10(rtc_vv_b1)",
+      "rescale": [
+        [
+          -18.5,
+          -5.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh": {
+      "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
+      "assets": [
+        "rtc_vh"
+      ],
+      "expression": "10*log10(rtc_vh_b1)",
+      "rescale": [
+        [
+          -26.0,
+          -11.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vv_qa_num": {
+      "title": "COH12 VV — contributing observations",
+      "assets": [
+        "coh12_vv_qa_num"
+      ],
+      "rescale": [
+        [
+          0,
+          30
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "nearest",
+      "nodata": 0
+    },
+    "coh12_vv_qa_cqm": {
+      "title": "COH12 VV — composite quality metric (dB, 0 = flat terrain)",
+      "assets": [
+        "coh12_vv_qa_cqm"
+      ],
+      "expression": "10*log10(coh12_vv_qa_cqm_b1)",
+      "rescale": [
+        [
+          -6.0,
+          6.0
+        ]
+      ],
+      "colormap_name": "rdbu",
+      "resampling": "average",
+      "nodata": "nan"
+    }
+  },
+  "item_assets": {
+    "coh12_vv": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV — 12-day InSAR coherence, co-polarised",
+      "description": "Locally resolution weighted composite of 12-day repeat-pass coherence, VV. Dimensionless ratio in [0, 1].",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "coh12_vv",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH — 12-day InSAR coherence, cross-polarised",
+      "description": "Locally resolution weighted composite of 12-day repeat-pass coherence, VH. Dimensionless ratio in [0, 1].",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "coh12_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV — contributing observation count",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "num_obs",
+          "data_type": "uint16",
+          "nodata": 0
+        }
+      ]
+    },
+    "coh12_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV — composite quality metric",
+      "description": "Contributing-area ratio of the resolution weighting. A linear ratio where 1.0 (0 dB) is flat terrain; below 1 is layover, above 1 is shadow.",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH — contributing observation count",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "num_obs",
+          "data_type": "uint16",
+          "nodata": 0
+        }
+      ]
+    },
+    "coh12_vh_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV — terrain-corrected backscatter, co-polarised",
+      "description": "Locally resolution weighted composite of radiometrically terrain corrected gamma-nought backscatter, VV, in linear power. The decibel conversion is declared in the collection's render definitions, not applied to the stored pixels.",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "rtc_vv",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH — terrain-corrected backscatter, cross-polarised",
+      "description": "Locally resolution weighted composite of radiometrically terrain corrected gamma-nought backscatter, VH, in linear power.",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "rtc_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV — contributing observation count",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "num_obs",
+          "data_type": "uint16",
+          "nodata": 0
+        }
+      ]
+    },
+    "rtc_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vh_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH — contributing observation count",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "num_obs",
+          "data_type": "uint16",
+          "nodata": 0
+        }
+      ]
+    },
+    "rtc_vh_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 10,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    }
+  },
+  "assets": {
+    "items": {
+      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "STAC-GeoParquet item mirror",
+      "description": "Every tile item of every year, one row each. The query path for this collection: one range request returns the whole item index in place of one HTTP fetch per tile. The item JSON under each year sub-catalog remains the normative representation.",
+      "roles": [
+        "collection-mirror"
+      ],
+      "alternate": {
+        "s3": {
+          "href": "s3://us-west-2.opendata.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+          "alternate:name": "S3"
+        }
+      }
+    },
+    "glacier-fractions": {
+      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "Per-tile glacier cover fractions (RGI7)",
+      "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, pinned to one inventory version. Computed once per scope rather than per year, so the same tile cannot carry different fractions in 2021 and 2024. This is the lookup behind the glace:glacier_fraction properties on every item, published so that a property nobody can recompute is at least auditable.",
+      "roles": [
+        "metadata"
+      ],
+      "alternate": {
+        "s3": {
+          "href": "s3://us-west-2.opendata.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+          "alternate:name": "S3"
+        }
+      }
+    },
+    "thumbnail": {
+      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/thumbnail.png",
+      "type": "image/png",
+      "title": "GLACE tiles preview",
+      "roles": [
+        "thumbnail"
+      ]
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "GLACE Switzerland"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "GLACE Switzerland"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "GLACE tiles documentation"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "GLACE tiles agent guide"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html",
+      "title": "CC-BY-4.0"
+    }
+  ]
+}

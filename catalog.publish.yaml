@@ -1,0 +1,33 @@
+# What publishes, and where.
+#
+# Everything under publish_dir is synced 1:1 to write_prefix. Data files never
+# sit under publish_dir, so they cannot be published by accident; tools/upload_data.py
+# moves those from data_dir into the same bucket prefix.
+
+# The Source Cooperative repository uploads are written to.
+write_prefix: s3://us-west-2.opendata.source.coop/lqgentner/glace-ch
+
+# The public URL that serves write_prefix. Every absolute href the publish step
+# writes is built from this, so it is what ends up in the STAC JSON and
+# write_prefix is not.
+public_base: https://data.source.coop/lqgentner/glace-ch
+
+region: us-west-2
+
+# The named AWS profile the publisher uses. Source Cooperative issues
+# per-account credentials; store them under this profile in ~/.aws/credentials
+# (or wherever AWS_SHARED_CREDENTIALS_FILE points) rather than in the
+# environment, so no access key passes through a shell.
+profile: source-coop
+
+# The directory that IS the published catalog, synced 1:1 to write_prefix.
+# Nothing outside it is ever uploaded by tools/publish.py.
+publish_dir: catalog
+
+# Where the built store sits before publication: the private UZH bucket, or a
+# staging directory when the build runs somewhere with local disk. Set by
+# GLACE_STORE_ROOT for the build steps; repeated here because tools/upload_data.py
+# reads it and never imports glace_catalog.config. Keep the two in agreement.
+#
+#   data_dir: s3://s1-bursts/data/glace-ch
+data_dir: /mnt/glace/glace-ch

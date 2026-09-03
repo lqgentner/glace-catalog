@@ -1,0 +1,444 @@
+{
+  "type": "Collection",
+  "stac_version": "1.1.0",
+  "stac_extensions": [
+    "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
+    "https://stac-extensions.github.io/render/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
+    "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+    "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json"
+  ],
+  "id": "glace-ch-mosaics",
+  "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed WebMercator grid",
+  "description": "One mosaic per year of the GLACE Switzerland composites, warped from the 10 m MGRS tiles onto the WebMercatorQuad grid at zoom 13 (19.109 m, about 13.2 m on the ground at 46.5 degrees north). Every year sits on the same fixed grid, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Aligning to the tile matrix also means the COGs' internal overview levels land exactly on zoom 12, 11 and below: each file is itself a tile pyramid, and a browser reading it at low zoom fetches a decimated overview rather than full-resolution pixels it would discard. Twelve single-band analysis rasters per year in linear units, plus two false-colour renderings for display. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "Sentinel-1",
+    "SAR",
+    "InSAR coherence",
+    "backscatter",
+    "glaciers",
+    "Switzerland",
+    "Alps",
+    "mosaic",
+    "cryosphere"
+  ],
+  "version": "1.0",
+  "providers": [
+    {
+      "name": "University of Zurich, Department of Geography",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data, derived the annual mosaics, and maintains this catalog. Hosted on Source Cooperative storage; corrections go through the catalog's issue tracker.",
+      "roles": [
+        "producer",
+        "processor",
+        "licensor",
+        "host"
+      ],
+      "url": "https://www.geo.uzh.ch/en/units/gis.html"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          6.767578125,
+          45.9511496866,
+          10.458984375,
+          47.3983765871
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2021-07-11T00:00:00Z",
+          "2024-10-06T00:00:00Z"
+        ]
+      ]
+    }
+  },
+  "renders": {
+    "coh12_vv": {
+      "title": "COH12 VV — 12-day coherence, co-polarised",
+      "assets": [
+        "coh12_vv"
+      ],
+      "rescale": [
+        [
+          0.1,
+          0.8
+        ]
+      ],
+      "colormap_name": "magma",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vh": {
+      "title": "COH12 VH — 12-day coherence, cross-polarised",
+      "assets": [
+        "coh12_vh"
+      ],
+      "rescale": [
+        [
+          0.1,
+          0.6
+        ]
+      ],
+      "colormap_name": "magma",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vv": {
+      "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
+      "assets": [
+        "rtc_vv"
+      ],
+      "expression": "10*log10(rtc_vv_b1)",
+      "rescale": [
+        [
+          -18.5,
+          -5.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh": {
+      "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
+      "assets": [
+        "rtc_vh"
+      ],
+      "expression": "10*log10(rtc_vh_b1)",
+      "rescale": [
+        [
+          -26.0,
+          -11.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_rgb": {
+      "title": "COH12 false colour — R: VV, G: VH, B: VV/VH",
+      "assets": [
+        "coh12_rgb"
+      ],
+      "resampling": "average"
+    },
+    "rtc_rgb": {
+      "title": "RTC false colour — R: VV, G: VH, B: VV-VH (all dB)",
+      "assets": [
+        "rtc_rgb"
+      ],
+      "resampling": "average"
+    }
+  },
+  "item_assets": {
+    "coh12_vv": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV annual mosaic",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "coh12_vv",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH annual mosaic",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "coh12_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV annual mosaic",
+      "description": "Linear power. Warp averaging and the internal overviews both average in the linear domain, where the mean is physically meaningful; a decibel raster averaged the same way would give log-domain means below zoom 13 and silently a different quantity from the level above.",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "rtc_vv",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH annual mosaic",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "rtc_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV — mean contributing observations",
+      "description": "A mean rather than a count: the source counts are averaged over roughly 3.6 contributing 10 m pixels per output pixel, so the value is float32 and no longer the same quantity as the tile layer it derives from.",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VV — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH — mean contributing observations",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 VH — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV — mean contributing observations",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VV — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vh_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH — mean contributing observations",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vh_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC VH — composite quality metric",
+      "roles": [
+        "quality"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_rgb": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "COH12 false colour (display)",
+      "description": "A rendering, not a measurement. Eight-bit display codes under a fixed stretch, WEBP-compressed, with an alpha band marking absent data. R = COH12 VV over 0.10-0.80, G = COH12 VH over 0.10-0.60, B = VV/VH. The stretch is fixed rather than per-year so the year slider compares like with like. Its internal overviews average in display space, which is correct for a rendering and wrong for a measurement: read the float32 assets for anything but drawing.",
+      "roles": [
+        "visual",
+        "overview",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "red",
+          "data_type": "uint8"
+        },
+        {
+          "name": "green",
+          "data_type": "uint8"
+        },
+        {
+          "name": "blue",
+          "data_type": "uint8"
+        },
+        {
+          "name": "alpha",
+          "data_type": "uint8"
+        }
+      ]
+    },
+    "rtc_rgb": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "RTC false colour (display)",
+      "description": "A rendering, not a measurement. Eight-bit display codes under a fixed stretch, WEBP-compressed, with an alpha band marking absent data. Channels are in decibels, unlike every other raster in this catalog: R = RTC VV over -18.5 to -5 dB, G = RTC VH over -26 to -11 dB, B = VV-VH dB. Backscatter spans about two and a half decades of linear power, so a linear eight-bit stretch would collapse nearly all glacier ice into the darkest few codes. The conversion is applied here and only here; the float32 assets stay linear.",
+      "roles": [
+        "visual",
+        "overview",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 19.109257071294063,
+      "bands": [
+        {
+          "name": "red",
+          "data_type": "uint8"
+        },
+        {
+          "name": "green",
+          "data_type": "uint8"
+        },
+        {
+          "name": "blue",
+          "data_type": "uint8"
+        },
+        {
+          "name": "alpha",
+          "data_type": "uint8"
+        }
+      ]
+    }
+  },
+  "assets": {
+    "items": {
+      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/items.parquet",
+      "type": "application/vnd.apache.parquet",
+      "title": "STAC-GeoParquet item mirror",
+      "description": "One row per year. The item JSON under each year directory remains the normative representation.",
+      "roles": [
+        "collection-mirror"
+      ],
+      "alternate": {
+        "s3": {
+          "href": "s3://us-west-2.opendata.source.coop/lqgentner/glace-ch/mosaics/items.parquet",
+          "alternate:name": "S3"
+        }
+      }
+    },
+    "thumbnail": {
+      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.png",
+      "type": "image/png",
+      "title": "GLACE mosaics preview",
+      "description": "Rendered from the most recent year's rtc_rgb mosaic under the same fixed stretch the render definitions declare.",
+      "roles": [
+        "thumbnail"
+      ]
+    }
+  },
+  "links": [
+    {
+      "rel": "root",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "GLACE Switzerland"
+    },
+    {
+      "rel": "parent",
+      "href": "../catalog.json",
+      "type": "application/json",
+      "title": "GLACE Switzerland"
+    },
+    {
+      "rel": "describedby",
+      "href": "./README.md",
+      "type": "text/markdown",
+      "title": "GLACE mosaics documentation"
+    },
+    {
+      "rel": "agents",
+      "href": "./AGENTS.md",
+      "type": "text/markdown",
+      "title": "GLACE mosaics agent guide"
+    },
+    {
+      "rel": "license",
+      "href": "https://creativecommons.org/licenses/by/4.0/",
+      "type": "text/html",
+      "title": "CC-BY-4.0"
+    }
+  ]
+}

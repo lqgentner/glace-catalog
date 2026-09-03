@@ -1,0 +1,108 @@
+[project]
+name = "glace_catalog"
+description = "Builds and publishes the GLACE Portolan/STAC catalog"
+authors = [
+  { name = "Luis Gentner", email = "luis.gentner@geo.uzh.ch" },
+]
+readme = "README.md"
+requires-python = ">=3.13"
+license.file = "LICENSE"
+dynamic = ["version"]
+
+dependencies = [
+    "boto3>=1.42.84",
+    "cmcrameri>=1.9",
+    "freezebase[s3]>=0.6.1",
+    "fsspec>=2026.6.0",
+    "geopandas>=1.1",
+    "matplotlib>=3.7",
+    "numpy>=1.24",
+    "pandas>=2.3",
+    "pillow",
+    "pyarrow",
+    "pydantic-settings>=2.13.1",
+    "pyproj>=3.5",
+    "pystac[validation]>=1.14.3",
+    "pyyaml>=6.0",
+    "rasterio>=1.4.3",
+    "rio-cogeo>=5.4.2",
+    "rustac>=0.9",
+    # 2026.7.0 fixes fsspec/s3fs#1034: before it, one prefixed glob caches a
+    # partial listing under the directory key, so later globs and `exists()`
+    # report existing objects as missing.
+    "s3fs>=2026.7.0",
+    "shapely>=2",
+    "stac-geoparquet>=0.8.1",
+    "tqdm",
+    "universal-pathlib>=0.2.6",
+]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pandas-stubs",
+    "ruff",
+    "types-PyYAML",
+    "types-requests",
+    "types-tqdm",
+]
+# The conformance gate. Pinned as a floor, not a pin: a pin goes stale on the
+# next release and rashid's rule set is what this catalog claims to pass. 0.1.8
+# is the first release carrying the spec v0.2.0 rules — 0.1.5 through 0.1.7
+# report an error for a `self` link and for an absolute structural href, both of
+# which v0.2.0 allows.
+validate = [
+    "rashid>=0.1.8,<0.2.0",
+    "stac-check",
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glace_catalog"]
+
+[tool.uv]
+default-groups = ["dev", "validate"]
+
+[tool.uv.sources]
+# First-party. Editable while the store refactor lands changes on both sides:
+# freezebase gained the VRT/COG helpers the mosaic chain needs, and s1bursts is
+# the writer that must emit embedded band statistics before anything published
+# here can pass PTL-DAT-009. Cut releases and drop both overrides before the
+# Alps backfill — an editable path is not reproducible from a git checkout.
+freezebase = { path = "../freezebase", editable = true }
+s1bursts = { path = "../s1bursts", editable = true }
+
+[tool.ruff]
+line-length = 99
+src = ["src/glace_catalog"]
+include = ["pyproject.toml", "src/glace_catalog/**/*.py", "scripts/**/*.py", "tools/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = [
+    "E", "W", "C90", "I", "N", "UP", "YTT", "ASYNC", "BLE", "FBT", "B", "A",
+    "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "LOG", "G",
+    "INP", "PIE", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID",
+    "TC", "INT", "ARG", "PTH", "TD", "FIX", "PD", "PGH", "PL", "TRY", "FLY",
+    "NPY", "PERF", "FURB", "DOC", "RUF",
+]
+ignore = [
+    "PLR0913",  # Too many arguments
+    "INP001",   # scripts/ and tools/ are deliberately not packages
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = ["glace_catalog"]
+force-sort-within-sections = true
+
+[tool.mypy]
+ignore_missing_imports = true
