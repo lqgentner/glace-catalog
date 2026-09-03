@@ -27,15 +27,24 @@
   "version": "1.0",
   "providers": [
     {
+      "name": "European Space Agency / Copernicus",
+      "description": "Operates the Sentinel-1 mission and distributes the SLC data these composites are derived from, through the Copernicus Data Space Ecosystem.",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://sentinel.esa.int/web/sentinel/missions/sentinel-1"
+    },
+    {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data — burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing — and maintains this catalog. Hosted on Source Cooperative storage; corrections go through the catalog's issue tracker.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing. Maintains this catalog. The bytes are served from Source Cooperative storage; corrections go through the catalog's issue tracker.",
       "roles": [
         "producer",
         "processor",
         "licensor",
         "host"
       ],
-      "url": "https://www.geo.uzh.ch/en/units/gis.html"
+      "url": "https://www.geo.uzh.ch/en.html"
     }
   ],
   "extent": {

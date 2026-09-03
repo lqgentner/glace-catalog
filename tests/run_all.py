@@ -6,13 +6,16 @@ place and adding one is a deliberate edit. Run from anywhere:
 
     python3 tests/run_all.py
 """
+
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
 TESTS = [
+    "test_lint.py",
+    "test_data_format.py",
     "test_links.py",
     "test_publish.py",
     "test_upload_data.py",
@@ -26,7 +29,7 @@ for name in TESTS:
     if not path.exists():
         continue
     print(f"\n=== {name} " + "=" * (60 - len(name)), flush=True)
-    if subprocess.run([sys.executable, str(path)]).returncode != 0:
+    if subprocess.run([sys.executable, str(path)], check=False).returncode != 0:
         failed.append(name)
 
 print()

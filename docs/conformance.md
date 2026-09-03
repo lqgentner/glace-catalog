@@ -87,8 +87,9 @@ from the real bytes at publication.
 
 Portolan is explicit that a stale value is a conformance failure and that a
 publisher who cannot keep one current should omit it, so an absent field here is
-the correct state, not a shortcut. Item assets already carry both from the run
-manifest.
+the correct state, not a shortcut. Item assets carry both from the run manifest,
+whose `sha256` column is stored multihash-encoded so the value recorded and the
+value published are the same string.
 
 ## Advisory Gate
 

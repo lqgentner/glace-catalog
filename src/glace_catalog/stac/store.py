@@ -73,7 +73,7 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
     "composite_start",
     "composite_end",
     "size",
-    "etag",
+    "sha256",
     "valid_percent",
     "band_name",
     "band_unit",
@@ -87,6 +87,12 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
 
 The tag columns are SCREAMING_CASE and these are lowercase, so the two
 vocabularies cannot collide.
+
+``sha256`` holds the **multihash-encoded** digest — ``1220`` followed by the
+sha256 hex — because that is the form ``file:checksum`` requires, and a value
+stored one way and published another invites exactly one bug. It is computed at
+write time, where the encoded bytes are already in hand; computing it later
+means reading every object of a year back.
 """
 
 
@@ -269,8 +275,9 @@ def _tag_columns(tags: Mapping[str, str]) -> dict[str, str | None]:
 def build_manifest_frame(
     files: Sequence[CompositeFile],
     raster_info: Mapping[str, Mapping[str, RasterInfo]],
-    listing: Mapping[str, tuple[int, str]],
+    listing: Mapping[str, int],
     valid_percents: Mapping[str, Mapping[str, float]],
+    checksums: Mapping[str, str] | None = None,
 ) -> pd.DataFrame:
     """Assemble a run manifest from what a survey of the archive found.
 
@@ -281,9 +288,14 @@ def build_manifest_frame(
     raster_info
         Raster metadata per tile and asset key.
     listing
-        ``(size, etag)`` per filename, from one listing of the source prefix.
+        Size per filename, from one listing of the source prefix.
     valid_percents
         Valid-data percentage per tile and *data* asset key. QA rows carry none.
+    checksums
+        Multihash-encoded sha256 per filename, from the writer that produced the
+        bytes. Absent for an archive written before the writer emitted them; the
+        rows then carry ``None`` and no asset can publish a ``file:checksum``,
+        which Portolan permits — a fabricated value is worse than an absent one.
 
     Returns
     -------
@@ -295,10 +307,11 @@ def build_manifest_frame(
     KeyError
         If a file has no raster metadata or no listing entry.
     """
+    checksums = checksums or {}
     rows: list[dict[str, Any]] = []
     for file in sorted(files, key=lambda f: (f.tile, f.asset_key)):
         info = raster_info[file.tile][file.asset_key]
-        size, etag = listing[file.path.name]
+        size = listing[file.path.name]
         rows.append(
             {
                 "filename": file.path.name,
@@ -310,7 +323,7 @@ def build_manifest_frame(
                 "composite_start": file.start.date().isoformat(),
                 "composite_end": file.end.date().isoformat(),
                 "size": size,
-                "etag": etag,
+                "sha256": checksums.get(file.path.name),
                 "valid_percent": valid_percents.get(file.tile, {}).get(file.asset_key),
                 "band_name": info.band_name,
                 "band_unit": info.band_unit,
@@ -354,10 +367,10 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
 def manifest_digest(frame: pd.DataFrame) -> str:
     """Content digest of a manifest, as the fingerprint the copy step keys on.
 
-    Taken over the filenames, sizes and ETags rather than the whole frame, so a
+    Taken over the filenames, sizes and digests rather than the whole frame, so a
     rewritten but unchanged manifest does not invalidate a copy.
     """
-    payload = frame.loc[:, ["filename", "size", "etag"]].sort_values("filename")
+    payload = frame.loc[:, ["filename", "size", "sha256"]].sort_values("filename")
     digest = hashlib.sha256()
     for record in payload.to_dict("records"):
         digest.update(
@@ -366,22 +379,21 @@ def manifest_digest(frame: pd.DataFrame) -> str:
     return digest.hexdigest()
 
 
-def list_objects(directory: Path | UPath) -> dict[str, tuple[int, str]]:
-    """List one prefix as ``{filename: (size, etag)}``.
+def list_objects(directory: Path | UPath) -> dict[str, int]:
+    """List one prefix as ``{filename: size}``.
 
-    One listing replaces one remote open per file, which is the whole reason the
-    manifest keys on the ETag: verification has to work from what a listing
-    returns. For single-part uploads the ETag is the MD5, and a server-side copy
-    preserves it.
+    One listing replaces one remote open per file, which is what makes checking
+    a 26 500-object year affordable at all. Only the size is taken: an ETag is
+    the MD5 for a single-part upload and something else entirely for a multipart
+    one, so keying on it would silently constrain how every writer uploads.
     """
     directory = UPath(directory)
-    entries: dict[str, tuple[int, str]] = {}
+    entries: dict[str, int] = {}
     for info in directory.fs.ls(str(directory.path), detail=True):
         name = str(info["name"]).rsplit("/", 1)[-1]
         if not name:
             continue
-        etag = str(info.get("ETag") or info.get("etag") or "").strip('"')
-        entries[name] = (int(info.get("size") or info.get("Size") or 0), etag)
+        entries[name] = int(info.get("size") or info.get("Size") or 0)
     return entries
 
 
@@ -399,7 +411,7 @@ class ManifestMismatch:
 
 def verify_manifest(
     frame: pd.DataFrame,
-    listing: Mapping[str, tuple[int, str]],
+    listing: Mapping[str, int],
 ) -> list[ManifestMismatch]:
     """Compare a manifest against a listing of the archive it describes.
 
@@ -407,24 +419,23 @@ def verify_manifest(
     is a cache, not the source of truth — every tag it lists is also written into
     the file — so this is what stops a stale cache describing an archive that
     has moved on.
+
+    **This is a presence and size check, not an integrity check.** A listing
+    returns sizes; verifying content means reading bytes, and the manifest's
+    ``sha256`` is what does that — published as ``file:checksum`` on every asset
+    and verified by ``rashid check --data`` before publication. Catching a
+    substituted file of identical size is that pass's job, not this one's.
     """
     problems: list[ManifestMismatch] = []
-    for record in frame.loc[:, ["filename", "size", "etag"]].to_dict("records"):
+    for record in frame.loc[:, ["filename", "size"]].to_dict("records"):
         name = str(record["filename"])
-        recorded_size, recorded_etag = int(record["size"]), str(record["etag"] or "")
-        found = listing.get(name)
-        if found is None:
+        recorded_size = int(record["size"])
+        size = listing.get(name)
+        if size is None:
             problems.append(ManifestMismatch(name, "listed in the manifest but absent"))
-            continue
-        size, etag = found
-        if recorded_size != size:
+        elif recorded_size != size:
             problems.append(
                 ManifestMismatch(name, f"size {size} on the archive, {recorded_size} recorded"),
-            )
-        # An ETag the gateway did not return is not evidence of a mismatch.
-        elif recorded_etag and etag and recorded_etag != etag:
-            problems.append(
-                ManifestMismatch(name, f"etag {etag} on the archive, {recorded_etag} recorded"),
             )
     extra = sorted(set(listing) - set(frame["filename"]))
     problems.extend(
@@ -507,7 +518,7 @@ def copy_composites(
     files: Sequence[CompositeFile],
     layout: StoreLayout,
     year: int,
-    listing: Mapping[str, tuple[int, str]],
+    listing: Mapping[str, int],
     *,
     max_workers: int = 16,
 ) -> CopyResult:
@@ -526,7 +537,7 @@ def copy_composites(
     year
         Year directory the files belong to.
     listing
-        ``(size, etag)`` per source filename, used as the idempotency key.
+        Size per source filename, used as the idempotency key.
     max_workers
         Size of the copy thread pool.
 
@@ -536,7 +547,7 @@ def copy_composites(
         How many files were copied and how many were already in place.
     """
     root = UPath(layout.root)
-    destinations = list_objects_recursive(layout.year(year))
+    destinations = list_objects_recursive(layout.tile_year(year))
     # An object store needs no directory, but a local store does, and creating
     # them once up front keeps that out of the copy pool.
     for tile in sorted({file.tile for file in files}):
@@ -545,12 +556,14 @@ def copy_composites(
     def copy_one(file: CompositeFile) -> bool:
         target = layout.tile(year, file.tile) / file.published_name
         key = f"{file.tile}/{file.published_name}"
-        source_size, source_etag = listing[file.path.name]
         found = destinations.get(key)
-        # Skip only on an exact match of size and ETag: a same-size replacement
-        # is exactly the case a size-only check would wave through.
-        matches = found is not None and found[0] == source_size
-        if matches and (not source_etag or found[1] == source_etag):  # type: ignore[index]
+        # Size alone is a weak content check, and deliberately all this step
+        # does. It does not have to be strong: the copy below is a server-side
+        # CopyObject, which is byte-exact by construction, so a destination of
+        # the right size was produced by this same copy from this same source.
+        # A source replaced behind our back is caught one level up, where the
+        # build state reruns the whole step whenever the manifest digest moves.
+        if found is not None and found == listing[file.path.name]:
             return False
         root.fs.cp(str(UPath(file.path).path), str(UPath(target).path))
         return True
@@ -558,26 +571,22 @@ def copy_composites(
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         copied = sum(pool.map(copy_one, files))
     result = CopyResult(copied=copied, skipped=len(files) - copied)
-    logger.info("Copied %d composites into %s: %s", len(files), layout.year(year), result)
+    logger.info("Copied %d composites into %s: %s", len(files), layout.tile_year(year), result)
     return result
 
 
-def list_objects_recursive(directory: Path | UPath) -> dict[str, tuple[int, str]]:
-    """List one prefix and everything under it, keyed by path relative to it."""
+def list_objects_recursive(directory: Path | UPath) -> dict[str, int]:
+    """List one prefix and everything under it as ``{relative path: size}``."""
     directory = UPath(directory)
     prefix = str(directory.path).rstrip("/") + "/"
-    entries: dict[str, tuple[int, str]] = {}
+    entries: dict[str, int] = {}
     if not directory.fs.exists(str(directory.path)):
         return entries
     for info in directory.fs.find(str(directory.path), detail=True).values():
         name = str(info["name"])
         if not name.startswith(prefix):
             continue
-        etag = str(info.get("ETag") or info.get("etag") or "").strip('"')
-        entries[name[len(prefix) :]] = (
-            int(info.get("size") or info.get("Size") or 0),
-            etag,
-        )
+        entries[name[len(prefix) :]] = int(info.get("size") or info.get("Size") or 0)
     return entries
 
 

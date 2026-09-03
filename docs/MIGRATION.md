@@ -67,6 +67,14 @@ UZH as `producer` and Source Cooperative as `host`, and Portolan derives
 *official vs mirror* by comparing those two names — different names means mirror,
 and a mirror must link the source it copies.
 
+**FTW hits this too, and pays for it.** Every Fields of the World collection
+lists Source Cooperative as `host` against a different producer, so every one is
+classified a mirror and carries the `via` link that forces. On
+`predictions/confidence` that link points at `data.source.coop/ftw/global-data/`
+— its own catalog root. A self-referential `via` is a workaround for the
+classification, not provenance, which is the tell that the modelling is being
+bent rather than expressed.
+
 That was a modelling error, not a validator quirk. The spec says the host is
 *"the organization responsible for operating and maintaining this copy of the
 catalog and its data, **not the underlying cloud vendor** whose storage it
@@ -75,9 +83,17 @@ authority, so producer and host are both UZH, in one provider entry carrying
 every role. The catalog is official and carries no `via`.
 
 **Correction worth flagging:** the answer to "who is the host contact" was
-originally given as the Source Cooperative profile. Recorded here as UZH with
-its institutional URL; Source Cooperative is named in the provider description
-as the storage, and corrections route through the repository's `issues` link.
+originally given as the Source Cooperative profile. Recorded here as UZH at
+`https://www.geo.uzh.ch/en.html`; Source Cooperative is named in the provider
+description as the storage, and corrections route through the repository's
+`issues` link.
+
+**ESA / Copernicus is a second producer**, roles `["producer", "licensor"]`,
+listed first. It operates Sentinel-1 and distributes the SLC data these
+composites derive from, and Copernicus terms govern reuse of that input. FTW
+names it the same way. Adding it does not change the official classification:
+Portolan asks only whether *some* producer shares the host's name, and UZH is
+still both.
 
 ---
 
@@ -295,9 +311,9 @@ Ordered by what blocks what.
       `ResolutionWeighter._save`) but uncommitted and unreleased. The existing
       archive needs a restat pass — ~2 GB per Swiss year, cheap; impossible for
       the Alps at 31.5 GB × 11, which is why it moved upstream. **Order matters:
-      restat first, then rebuild the manifest**, because a rewrite changes every
-      ETag. This is the single largest gate between here and a conformant
-      publication.
+      restat first, then rebuild the manifest**, because a rewrite changes both
+      the sizes and the digests the manifest records. This is the single largest
+      gate between here and a conformant publication.
 - [ ] **P-2 — Item mirror under the GeoParquet rules.** `PTL-DAT-006/7/8` apply
       to an item mirror exactly as to a vector dataset: spatially ordered rows, a
       `bbox` covering column with per-row-group statistics, ≤150 000 rows per
@@ -352,6 +368,45 @@ Ordered by what blocks what.
       `webmap.py`, `gdal_s3.py`'s subprocess helper, and `scripts/stac/`. Until
       then both copies exist and only the old one works (§7).
 
+### Checksums: sha256 only
+
+The old plan carried **both** an ETag and a sha256 per file, for two different
+jobs (D-25): the ETag because it is what an S3 *listing* returns, so a whole
+prefix could be verified without reading a byte; the sha256 because that is what
+`file:checksum` publishes.
+
+Only sha256 survives. The reasoning:
+
+- **`file:checksum` requires it and rashid verifies it.** Portolan mandates
+  multihash encoding — `1220` followed by the sha256 hex — and `PTL-DAT-001`
+  reads the bytes back and hashes them. So sha256 is not optional, and it is
+  what makes a *content* claim.
+- **The ETag was never a freezebase change; it was a freezebase constraint.**
+  It is read from a listing after upload, so no writer code produces it. What it
+  imposed was "keep the upload single-part, so the ETag stays the MD5" — because
+  a multipart ETag is an MD5 of MD5s and compares to nothing computable locally.
+  Dropping it frees the writer to upload however it likes. That is the
+  simplification.
+- **It was gateway-specific.** Ceph RGW happens to preserve the ETag through a
+  server-side `CopyObject`, verified once on 1 716 objects. That is a property of
+  one gateway, not of S3.
+
+What is lost, stated plainly: verifying a whole prefix from one listing without
+reading bytes. `verify_manifest` is now a **presence and size check** and its
+docstring says so. Nothing that mattered goes with it:
+
+| what the ETag guarded | what guards it now |
+| --- | --- |
+| the source archive matching its manifest | size and presence from one listing; content by `rashid check --data` against the published `file:checksum` |
+| per-file copy idempotency | size. The copy is a server-side `CopyObject`, byte-exact by construction, so a destination of the right size came from this same copy |
+| a source replaced behind our back | the build-state fingerprint, which now keys on filenames, sizes and digests, and reruns the whole step when any move |
+
+`sha256` is stored in the manifest **already multihash-encoded**, not as bare
+hex, so the value written and the value published are the same string. It is
+`None` for an archive written before the writer emitted digests; those assets
+then publish no `file:checksum` at all, which Portolan permits and prefers — a
+fabricated value is worse than an absent one.
+
 ---
 
 ## 7. What moved, and what did not
@@ -393,13 +448,53 @@ only meant to read a composite.
 
 ```bash
 python3 tests/run_all.py                              # every gate
+python3 tests/test_lint.py                            # ruff format, ruff check, mypy
+python3 tests/test_data_format.py                     # JSON and YAML well-formedness
 uv run rashid check catalog/ --schema --no-data       # conformance, tracked tree
 uv run rashid check "$GLACE_STORE_ROOT" --schema --data   # the real claim
 uv run rashid check "$GLACE_STORE_ROOT" --live --live-base-url "$PUBLIC_BASE"
 ```
 
-The gate that matters is the third: it reads asset bytes and is what verifies
-`PTL-DAT-009`. The fourth probes range requests and CORS on the host.
+The gate that matters is `--data`: it reads asset bytes and is what verifies
+`PTL-DAT-009` and the published `file:checksum`. The `--live` pass probes range
+requests and CORS on the host.
+
+### Lint, types and data formats
+
+`tests/test_lint.py` runs `ruff format --check`, `ruff check` and `mypy` over
+`src/`, `scripts/`, `tools/` and `tests/`, with the same rule set
+deep-glacier-mapping uses, so code moving between the two repositories does not
+change shape on the way. One deliberate difference: `DOC` is not selected here,
+because ruff implements those rules only under `preview` and selecting it
+otherwise does nothing but print a warning on every run.
+
+A tool that is missing **fails** rather than skips. A skipped gate reports a
+green run for code that nothing read.
+
+The files vendored from the catalog template — both publishers and the four
+gates that came with them — are excluded from ruff and mypy. Reformatting them
+would turn every future template re-sync into a conflict, and enumerating
+per-rule ignores for code we do not own is a list that grows on someone else's
+schedule. They stay covered by upstream's own pyflakes pass in CI and by
+`test_publish.py` / `test_upload_data.py`, which assert their behaviour directly.
+
+`tests/test_data_format.py` covers what ruff cannot. There is no `ruff format`
+for JSON or YAML worth a dependency, so it checks directly:
+
+- **JSON** — every tracked document must already be in the canonical form the
+  generator writes (two-space indent, declaration order, one trailing newline,
+  non-ASCII kept as itself). Most of these are machine-written and the rest are
+  hand-edited beside them; without a canonical form, a hand edit and a
+  regeneration produce a diff full of reindentation that hides the one line that
+  actually changed.
+- **YAML** — must parse under `safe_load`, and must not indent with tabs, which
+  is the most common YAML error and reports far from its cause.
+
+Both run offline against git-tracked files only, so generated output is skipped.
+`yamllint` and `check-jsonschema` are the off-the-shelf alternatives; neither
+was worth a dependency for two YAML files and three JSON documents, and neither
+enforces the canonical-form property, which is the one that actually protects
+review.
 
 Do not read a green run as proof a validator read the catalog until you have
 seen the version it reports. `tests/test_conformance.py` refuses a rashid
@@ -430,6 +525,9 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-13 | Structural links relative, asset hrefs absolute https + `alternate` s3, `self` written by the publish step | 5 |
 | M-14 | Generated item tree is published but never committed | 5 |
 | M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement, not the optional nicety D-24 made it. It gates the CH rehearsal, not just the Alps | 6 |
+| M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 2 |
+| M-17 | **ETag is dropped from the manifest**; `sha256` alone, multihash-encoded. Supersedes D-25's "both, for different jobs" | 6 |
+| M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |
 
 ---
 
