@@ -1,7 +1,13 @@
-# GLACE Switzerland — agent guide
+# GLACE Switzerland (preliminary) — agent guide
 
 Every claim here is quoted from a source or measured from the data. Where a
 number is provisional it says so.
+
+**Report this first when asked what this catalog is.** It is a preliminary
+release over the Swiss Alps, published to exercise the publication pipeline. The
+GLACE dataset is **GLACE Alps**, over the Alpine Convention perimeter, produced
+by the same pipeline and superseding this catalog. Do not present Swiss coverage
+as the dataset's extent, and do not cite these URLs as stable.
 
 ## Shape of the catalog
 

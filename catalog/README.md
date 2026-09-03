@@ -1,4 +1,10 @@
-# GLACE Switzerland — Sentinel-1 Glacier Coherence and Backscatter
+# GLACE Switzerland (preliminary) — Sentinel-1 Glacier Coherence and Backscatter
+
+> **This is a preliminary release, not the GLACE dataset.** It covers the Swiss
+> Alps only and exists to exercise the publication pipeline while the full
+> dataset is produced. **The dataset is GLACE Alps**, over the Alpine Convention
+> perimeter, which uses this same pipeline and supersedes this catalog. These
+> URLs are provisional — do not cite them.
 
 Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence and
 radiometrically terrain-corrected backscatter over the glacierised Swiss Alps,

@@ -4,6 +4,14 @@ This is the **repository**, not the published catalog. The published catalog's
 own agent guides are `catalog/AGENTS.md` and one per collection; read those to
 *use* the data. Read this one to *change* it.
 
+## Scope
+
+`glace-ch` is a rehearsal over Switzerland. The dataset is `glace-alps`, and
+every mention of Switzerland in `catalog/` is placeholder text with a removal
+date. `src/glace_catalog/scopes.py` is the seam: it already carries both scopes
+as committed constants, so the swap is a scope change below it and a prose
+rewrite above it. `docs/MIGRATION.md` §11 is the checklist.
+
 ## The one rule
 
 **Edit the generator, not the generated output.** Everything under

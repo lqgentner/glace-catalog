@@ -1,5 +1,12 @@
 # GLACE → Portolan: the transition
 
+> **`glace-ch` is a rehearsal, not the dataset.** Everything in this repository
+> currently describes Switzerland, and none of it is the product that ships. It
+> exists to exercise publication — the layout, the gates, the Source Cooperative
+> upload — while GLACE Alps is still being produced. **The dataset is
+> `glace-alps`**, over the Alpine Convention perimeter, and every mention of
+> Switzerland here is placeholder text with a removal date. §11 is the checklist.
+
 **Living document.** Status as of **2026-09-03**. Update it in the same commit
 as the change it describes; a stale transition record is worse than none,
 because the next person trusts it.
@@ -25,6 +32,7 @@ been carried across; §10 lists what changed and why.
 | pipeline code | **copied** from `deep-glacier-mapping`, namespace rewritten, `StoreLayout` reworked. Originals still in place until P-3 (§7) |
 | generators | **not yet updated** to the new layout — this is the main remaining work (§6) |
 | published store | still the old flat tree at `s3://s1-bursts/data/glace-ch` |
+| scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps`; see §11 |
 
 ```
 0 error(s), 14 warning(s), 0 info(s) across 7 files      # fixture, 2-item year
@@ -576,3 +584,70 @@ For anyone holding the `stac-store-refactor` documents.
 | relative asset hrefs throughout | absolute https + `alternate` s3 | `PTL-AST-002`, and the Source Cooperative listing |
 | §14's COG-vs-PMTiles benchmark still open | settled by measurement | §4 |
 | branch B's LAEA 40 m grid | not taken | WebMercator z13 serves both roles; the false-colour COG closes the display gap |
+
+
+---
+
+## 11. `glace-ch` is a rehearsal; the dataset is `glace-alps`
+
+This repository publishes Switzerland. That is deliberate and temporary: the
+Swiss composites are complete, small enough to iterate on, and enough to prove
+that the layout, the gates and the Source Cooperative upload work end to end
+while the Alpine composites are still being produced.
+
+**Nothing published under `glace-ch` is the GLACE dataset.** The dataset is
+`glace-alps`, over the Alpine Convention perimeter, 2015–2025. Every mention of
+Switzerland in this repository is placeholder text, and the pipeline was built
+so that swapping them is a scope change and not a rewrite: `scopes.py` already
+carries both scopes as constants, with the Alpine grid, extent, perimeter tile
+count and coverage fraction already committed and already derived.
+
+### What actually has to change
+
+`scopes.py` is the seam. Everything below it takes the scope as an argument.
+Everything *above* it — the published prose and the publication target — is
+written by hand for Switzerland and has to be rewritten.
+
+| what | where | how it changes |
+| --- | --- | --- |
+| scope constants | `src/glace_catalog/scopes.py` | already there: `SCOPES["alps"]`, grid, extent, 2 209 perimeter tiles, 45.4 % coverage. Nothing to write |
+| collection ids | derived from the scope | `glace-ch-tiles` → `glace-alps-tiles`, automatic |
+| publication target | `catalog.publish.yaml` | `write_prefix`, `public_base` and `data_dir` all name `glace-ch` |
+| absolute asset hrefs | both `collection.json` | built from `public_base`; every `alternate` `s3://` href too |
+| root catalog identity | `catalog/catalog.json` | `id`, `title`, `description` |
+| collection prose | both `collection.json` | `title`, `description`, `keywords`, `extent` |
+| the documentation | 6 × `README.md` / `AGENTS.md` | written for Switzerland throughout: the perimeter, the coverage caveat, the tile counts, the worked examples' URLs |
+| the perimeter caveat | `catalog/tiles/README.md`, `AGENTS.md` | "coverage is the glacier perimeter, not the country … no data over the Mittelland" is a Swiss sentence and becomes an Alpine one |
+| the years | both `collection.json` extents | 2021–2024 → 2015–2025 |
+| this document | `docs/MIGRATION.md`, `docs/conformance.md` | the measured numbers are Swiss |
+
+Find them all with:
+
+```bash
+grep -rn 'Switzerland\|Swiss\|glace-ch' --include='*.json' --include='*.md' \
+     --include='*.yaml' --include='*.py' . | grep -v '^./.git'
+```
+
+Nineteen files as of 2026-09-03. The two collection documents and the six
+markdown files are the substantive ones; the rest are constants and comments.
+
+### Whether the two ship as one catalog or two
+
+Open, and worth deciding before publication rather than after. Two readings:
+
+- **Two catalogs.** `glace-ch` stays as a published rehearsal and `glace-alps`
+  is a separate root. Honest about their different status, and the Swiss data is
+  a strict subset of the Alpine data, so it is also pure duplication.
+- **One catalog, replaced.** `glace-alps` supersedes `glace-ch` at a new prefix,
+  and `glace-ch` is retired once the Alpine years are published. The rehearsal
+  was for exercising the pipeline, not for having an audience.
+
+The second is the default unless someone is already citing the Swiss URLs. It
+also avoids publishing two catalogs whose overlapping items carry different ids
+for the same pixels (`32TLR48-2024` in both, under different collections), which
+is the kind of thing that looks fine until someone joins them.
+
+Whichever is chosen, `DATASET_VERSION` in `stac/items.py` and the `version`
+field on both collections are the STAC version extension's, not the scope's:
+they say which edition of the pixels a value belongs to, and Switzerland and the
+Alps are not different editions of one thing.

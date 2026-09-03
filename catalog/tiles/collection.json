@@ -364,7 +364,7 @@
       ],
       "alternate": {
         "s3": {
-          "href": "s3://us-west-2.opendata.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/items.parquet",
           "alternate:name": "S3"
         }
       }
@@ -379,7 +379,7 @@
       ],
       "alternate": {
         "s3": {
-          "href": "s3://us-west-2.opendata.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
           "alternate:name": "S3"
         }
       }
@@ -398,13 +398,13 @@
       "rel": "root",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland"
+      "title": "GLACE Switzerland (preliminary)"
     },
     {
       "rel": "parent",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland"
+      "title": "GLACE Switzerland (preliminary)"
     },
     {
       "rel": "describedby",

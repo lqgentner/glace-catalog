@@ -5,6 +5,12 @@ annual Sentinel-1 coherence and backscatter composites over Alpine glaciers,
 published to [Source Cooperative](https://source.coop/lqgentner) as a
 [Portolan](https://www.portolan-sdi.org/) catalog.
 
+> **What is published today is `glace-ch`, a rehearsal.** It covers Switzerland
+> and exists to exercise publication while the Alpine composites are produced.
+> The dataset is **`glace-alps`**; every mention of Switzerland in this
+> repository is placeholder text. See [`docs/MIGRATION.md`](docs/MIGRATION.md)
+> §11 for the swap checklist.
+
 The catalog metadata lives in git so that it has a change history, a review
 step, and a way for someone who spots a wrong license or a bad description to
 open a pull request instead of finding an email address. The data does not: it
