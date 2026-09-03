@@ -226,6 +226,53 @@ is a pre-stretched 8-bit rendering, the backscatter ones in decibels. Two files
 one letter apart holding different quantities reads fine until someone compares
 them.
 
+#### Why not FTW's shape: two rasters in one item directory
+
+FTW's confidence item does what a reader would expect here — one directory, one
+item, two rasters distinguished by role and filename:
+
+| asset | roles | file | grid | dtype |
+| --- | --- | --- | --- | --- |
+| `data` | `data`, `cloud-optimized` | `prue_v1_confidence_global.tif` | EPSG:4326 | float32 |
+| `visual` | `visual`, `overview`, `cloud-optimized` | `prue_v1_confidence_global_uint8_3857.tif` | EPSG:3857 | uint8 |
+
+That pattern is open to us **only while the display product is a COG**, which is
+exactly the RGBA WEBP design M-20 dropped. It is not open to PMTiles: Portolan
+registers those through a *collection*-level `rel: "pmtiles"` link
+(`PORTO-FMT-011`), and where a PMTiles is additionally an asset it is a
+collection-level asset too — FTW's vectors collection does both, both at
+collection level. A per-year archive therefore cannot be an asset of the year
+item, and putting the file inside that item's directory while registering it one
+level up would be incoherent.
+
+So the directory split is a consequence of choosing PMTiles, not a principle. It
+is worth being clear about that, because it is the *cost* side of a decision the
+measurement otherwise won outright.
+
+**One genuine mismatch, worth naming.** Portolan's visualization model assumes
+one derivative per collection. FTW fits it: their confidence collection holds a
+single global item, so collection-level and item-level are nearly the same
+place. Ours does not — 14 layers × 11 years is 154 collection-level links
+describing products that each belong to one item. The registration is
+conformant and the links carry titles, but the collection document is doing
+bookkeeping the spec did not shape it for. If `PORTO-FMT-011` ever admits
+item-level registration, this is the catalog that wants it.
+
+#### A refinement on filenames
+
+FTW disambiguates its two same-directory rasters with `_uint8_3857` — dtype
+*and* EPSG code, in the filename. That is worth recording next to M-23, because
+it is a real counter-example used for a real reason.
+
+It does not overturn M-23, but it narrows it. Qualifying a **primary** asset is
+redundant: the path says which collection and grid, and `proj:code` says it
+authoritatively. Qualifying a **derivative that sits beside its primary** is not
+redundant at all — it is the only thing separating two files that describe the
+same measurement in different units on different grids. FTW needs the suffix
+because they kept both in one directory; we do not, because the directory does
+that work instead. If a COG display product ever returns to an item directory
+here, it takes FTW's naming with it.
+
 **Per-year run records are collection assets.** `PTL-AST-005` forbids assets on a
 catalog, so the year catalog cannot own the manifest that sits beside it. The
 files stay at `tiles/{year}/manifest.parquet` — under the collection whose data
