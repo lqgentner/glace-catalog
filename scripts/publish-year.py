@@ -1,4 +1,4 @@
-"""Publish one year of GLACE composites into a store: the whole per-year pipeline.
+r"""Publish one year of GLACE composites into a store: the whole per-year pipeline.
 
 Five steps, each taking its inputs as explicit paths from the one before, in
 process — no globbing, no filename parsing, no ordering hazard:
@@ -152,7 +152,7 @@ def published_files(
     layout: stac.StoreLayout,
     year: int,
 ) -> list[stac.CompositeFile]:
-    """The same composites, addressed at their published paths in the store.
+    """Readdress the composites at their published paths in the store.
 
     Everything downstream of ``copy`` reads the store rather than the staging
     tree, because the staging year is meant to be deleted once the copy is
@@ -252,7 +252,7 @@ def tiling_chain(
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
 ) -> mosaics.YearVrts:
-    """The chain the web-map tiler reads: the written mosaics where they exist.
+    """Choose the chain the web-map tiler reads: the written mosaics where they exist.
 
     A mosaic COG is the canonical-grid step already materialised, with its own
     overviews, so tiling from it opens one file per worker instead of the whole
@@ -327,7 +327,7 @@ def load_glacier_fractions(layout: stac.StoreLayout) -> dict[str, tuple[float, f
     }
 
 
-def step_items(  # noqa: PLR0917 -- one step, and every argument is one of its inputs
+def step_items(
     args: argparse.Namespace,
     scope: Scope,
     layout: stac.StoreLayout,
@@ -423,7 +423,7 @@ def mosaic_assets(
     *,
     has_config: bool,
 ) -> dict[str, stac.MosaicAsset]:
-    """The mosaic item's assets, from what the ``mosaics`` step recorded writing."""
+    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing."""
     written = state.details.get("mosaics", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for asset_key, detail in sorted(written.items()):
@@ -461,7 +461,7 @@ def mosaic_assets(
 
 
 def pmtiles_links(state: stac.BuildState) -> dict[str, str]:
-    """The mosaic item's PMTiles links, from what the ``pmtiles`` step recorded."""
+    """Assemble the mosaic item's PMTiles links from what the ``pmtiles`` step recorded."""
     return {
         layer_id: f"../pmtiles/{detail['url']}"
         for layer_id, detail in sorted(state.details.get("pmtiles", {}).items())
@@ -512,6 +512,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Publish one year into the store, resuming from whatever the build state already recorded."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 

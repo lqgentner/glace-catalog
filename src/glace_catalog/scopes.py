@@ -142,7 +142,7 @@ class Scope:
         return f"glace-{self.key}-mosaics"
 
     def mosaic_item_id(self, year: int) -> str:
-        """Identifier of one year's mosaic item, e.g. ``ch-mosaic-2024``."""
+        """Build the identifier of one year's mosaic item, e.g. ``ch-mosaic-2024``."""
         return f"{self.key}-mosaic-{year}"
 
 

@@ -1,4 +1,4 @@
-"""Write a run manifest for a composite archive that predates manifest emission.
+r"""Write a run manifest for a composite archive that predates manifest emission.
 
 The composite run is meant to emit ``manifest.parquet`` beside its output — one
 row per written file, carrying the provenance tags, the size and ETag, and the
@@ -85,6 +85,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Write a manifest for one composite archive that predates manifest emission."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 

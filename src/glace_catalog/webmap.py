@@ -495,7 +495,7 @@ def run_rio_pmtiles(
         command += ["--attribution", attribution]
     env = os.environ | (subprocess_s3_env(sources_at) if sources_at is not None else {})
     logger.debug("Running %s", " ".join(command))
-    subprocess.run(command, check=True, env=env)
+    subprocess.run(command, check=True, env=env)  # noqa: S603  # our own argv, no shell
 
 
 def build_pmtiles(
@@ -649,7 +649,7 @@ def _pmtiles_source(
     style: LayerStyle | RgbStyle,
     vrts: YearVrts,
 ) -> Path | UPath | None:
-    """The VRT a layer is tiled from: linear, decibel, or false-colour."""
+    """Select the VRT a layer is tiled from: linear, decibel, or false-colour."""
     if layer_id.endswith("_rgb"):
         return vrts.rgb.get(layer_id.removesuffix("_rgb"))
     if style.decibel:
@@ -961,7 +961,7 @@ def build_vector_pmtiles(
         str(geojson_path),
     ]
     logger.debug("running %s", " ".join(command))
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True)  # noqa: S603  # our own argv, no shell
     size = out_path.stat().st_size
     logger.info("Wrote %s: %.1f MB (z%d-%d)", out_path.name, size / 1e6, min_zoom, max_zoom)
     return size

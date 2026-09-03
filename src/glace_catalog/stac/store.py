@@ -211,7 +211,7 @@ class StoreLayout:
         return self.tile_year(year) / tile
 
     def manifest(self, year: int) -> Path | UPath:
-        """The year's copy of the composite run's manifest.
+        """Locate the year's copy of the composite run's manifest.
 
         Sits under the tiles collection because that is what it records, and is
         registered as a *collection* asset keyed ``manifest-{year}``: a catalog
@@ -221,7 +221,7 @@ class StoreLayout:
         return self.tile_year(year) / MANIFEST_NAME
 
     def config(self, year: int) -> Path | UPath:
-        """The year's copy of the composite run's configuration."""
+        """Locate the year's copy of the composite run's configuration."""
         return self.tile_year(year) / CONFIG_NAME
 
     def build_state(self, year: int) -> Path | UPath:
@@ -229,7 +229,7 @@ class StoreLayout:
         return self.tile_year(year) / BUILD_STATE_NAME
 
     def year_index(self, year: int) -> Path | UPath:
-        """The year's slice of the item mirror, with root-relative hrefs.
+        """Locate the year's slice of the item mirror, with root-relative hrefs.
 
         A build artefact: ``finalize-catalog`` concatenates every year's slice
         into :attr:`tiles_index` and rebases the hrefs onto the public base URL.

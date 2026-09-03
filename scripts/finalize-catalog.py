@@ -1,4 +1,4 @@
-"""Write the store's catalogue: its root, its two collections and its indexes.
+r"""Write the store's catalogue: its root, its two collections and its indexes.
 
 Everything that spans years lives here, and nothing else does. ``publish-year``
 writes one year and never touches another; this command reads what those years
@@ -374,6 +374,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Assemble the collection documents, indexes and thumbnails over every published year."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 

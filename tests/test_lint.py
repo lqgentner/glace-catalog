@@ -28,7 +28,7 @@ TARGETS = ("src", "scripts", "tools", "tests")
 
 
 def resolve(tool: str) -> list[str] | None:
-    """The command that runs ``tool``, preferring this interpreter's copy."""
+    """Resolve the command that runs ``tool``, preferring this interpreter's copy."""
     probe = subprocess.run(
         [sys.executable, "-m", tool, "--version"],
         capture_output=True,
@@ -40,12 +40,15 @@ def resolve(tool: str) -> list[str] | None:
     return [found] if found else None
 
 
-def run(name: str, tool: str, args: list[str]) -> str | None:
-    """Run one gate. Returns a failure description, or None when it passed."""
+def run(name: str, tool: str, args: list[str], *, targets: bool = True) -> str | None:
+    """Run one gate, returning a failure description or None when it passed."""
     command = resolve(tool)
     if command is None:
         return f"{tool} is not installed; install it with: uv sync --all-groups"
-    existing = [t for t in TARGETS if (ROOT / t).exists()]
+    # mypy reads its own `files` key from pyproject.toml. Handing it paths here
+    # would override that and drag in the vendored template code, which is
+    # deliberately out of scope.
+    existing = [t for t in TARGETS if (ROOT / t).exists()] if targets else []
     result = subprocess.run(
         [*command, *args, *existing],
         cwd=ROOT,
@@ -66,7 +69,7 @@ failures = [
     for problem in (
         run("ruff format", "ruff", ["format", "--check"]),
         run("ruff check", "ruff", ["check"]),
-        run("mypy", "mypy", []),
+        run("mypy", "mypy", [], targets=False),
     )
     if problem is not None
 ]

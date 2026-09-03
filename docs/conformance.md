@@ -66,12 +66,19 @@ subcatalogs."* Each `tiles/{year}/catalog.json` links that year's items
 directly: 143 for Switzerland, a projected ~2 209 for the Alps. The rule counts
 non-catalog children, so one warning fires per year.
 
-Grouping them would mean a third level — the MGRS 100 km square, which for
-Switzerland gives 9 groups of 1 to 56 tiles, so the largest groups would still
-warn, or a fourth level to get below twenty. Every one of those levels is a
-directory that Portolan requires to carry its own `catalog.json`, `README.md`
-and `AGENTS.md` (`PTL-FIL-001`). For the Alps that is roughly 330 generated
-Markdown files whose content would be a restatement of their own path.
+Grouping them would mean a third level. UTM zone does not work here — every
+Swiss tile is in 32T and the Alps span about three zones — so it would have to
+be the MGRS 100 km square, which for Switzerland gives 9 groups of 1 to 56
+tiles: the largest still warn, and a fourth level would be needed to get below
+twenty. Every one of those levels is a directory Portolan requires to carry its
+own `catalog.json`, `README.md` and `AGENTS.md` (`PTL-FIL-001`, `PTL-FIL-002`,
+`PTL-FIL-003`), which for the Alps is hundreds of generated Markdown files whose
+content would restate their own path.
+
+Fields of the World groups by UTM zone and *omits* those files; measured against
+the published tree, that is four rashid errors per sub-catalog. Their CI does not
+see it because the zone catalogs are generated and gitignored. Taking the warning
+is the better trade.
 
 The browse path this rule protects is served instead by `items.parquet`, which
 is registered on both collections and is what the documentation points every

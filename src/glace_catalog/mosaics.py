@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
+import defusedxml.ElementTree as DefusedET
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
 from freezebase.raster import get_utm_zone_string, rasterio_open
 from freezebase.s3 import s3_env
@@ -384,7 +385,7 @@ def tagged_vrt(
     pathlib.Path
         The tagged VRT.
     """
-    tree = ET.fromstring(UPath(src_vrt).read_text())
+    tree = DefusedET.fromstring(UPath(src_vrt).read_text())
     root = tree
     if tags:
         metadata = ET.Element("Metadata")

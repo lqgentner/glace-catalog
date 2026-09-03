@@ -139,13 +139,42 @@ a cross-year query becomes a concatenation. One collection with year
 sub-catalogs and one mirror covering the series is what a dataloader wants.
 
 **Year sub-catalogs only — no third grouping level.** `PTL-CAT-001` warns at
-twenty children, and a year holds 143 tiles for CH and ~2 209 for the Alps. The
-fix would be grouping by MGRS 100 km square, but for CH that gives 9 groups of
-1–56, so the big ones still warn, and a fourth level to get under twenty would
-add ~330 generated directories for the Alps — each one required by `PTL-FIL-001`
-to carry a `catalog.json`, a `README.md` and an `AGENTS.md` restating its own
-path. Taking one warning per year buys back 660 stub documents. Recorded in
-[`conformance.md`](conformance.md); revisit if browsing proves painful.
+twenty children, and a year holds 143 tiles for CH and ~2 209 for the Alps.
+
+FTW does group below the year: `features/2025/collection.json` carries 60
+`child` links, one per UTM zone, each zone catalog holding one child per MGRS
+latitude band. It looks like the answer, and it is worth being precise about
+what it costs, because the cost is invisible in their repository.
+
+**Those sub-catalogs carry no `README.md` and no `AGENTS.md`.** Verified against
+the published tree on 2026-09-03: `features/2025/32/catalog.json` has 16 links,
+none of them `agents` or `describedby`, and both markdown files return 404.
+`PTL-FIL-001` iterates *every* catalog and collection node and requires both
+files in its directory; `PTL-FIL-002` and `PTL-FIL-003` require the links.
+Reproducing FTW's exact shape in a fixture here gives **four errors per
+sub-catalog** — two for the missing files, one per missing link — plus a
+`PTL-SCH-001` schema failure. FTW's CI cannot see this: the zone catalogs are
+generated and gitignored, so rashid only ever runs over the tracked tree. It is
+the same blind spot recorded in [`conformance.md`](conformance.md), landing on a
+node that the tracked tree does not contain at all.
+
+So FTW's grouping is not a pattern to copy; it is non-conformance that their
+gate cannot reach. Generating the two documents per level would fix it, and for
+them that is 60 zones × ~10 bands × 2 years × 2 files.
+
+**And the grouping would not help GLACE regardless.** FTW gets its mileage from
+being global. Every Swiss tile is in zone 32T — measured, 143 of 143 — so a zone
+level is one child holding all 143 items and the warning does not move. The Alps
+span roughly three zones. The only level with real fan-out here is the MGRS
+100 km square, which for CH gives 9 groups of 1 to 56 tiles: the large ones still
+warn, and a fourth level to get under twenty would add hundreds of generated
+directories for the Alps, each owing a `catalog.json`, a `README.md` and an
+`AGENTS.md` whose content would restate its own path.
+
+Taking one warning per year avoids all of that. The browse path the rule protects
+is served by `items.parquet` instead, which is what every piece of documentation
+here points consumers at. Revisit if browsing proves painful — and if so, group
+*and* generate the markdown, rather than doing what FTW did.
 
 **The mosaics collection has no year catalogs.** Eleven items, under the
 threshold, so the collection links them directly and `mosaics/{year}/` is simply
