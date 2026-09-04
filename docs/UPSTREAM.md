@@ -15,15 +15,17 @@ change it describes.
 [`rashid`](https://github.com/portolan-sdi/rashid), not by reading the spec. Two
 of its rules are error-severity and cannot be satisfied from inside this
 repository, because they are properties of bytes written elsewhere. Those are
-items **S-1** and **S-2** below, and until they land nothing can be published.
+items **S-1** and **S-2** below. Both are now written; what remains is an
+s1bursts release and the restat pass over the composites that predate them.
 
 ---
 
 ## `s1bursts` — the composite writer
 
-Three items, all in `composites.py`, all cheap while the pixel array is still in
-memory and expensive afterwards. They belong in **one commit**, because each one
-alone forces a rewrite of the archive.
+Three items, all in `resolution_weighter.py`, all cheap while the pixel array is
+still in memory and expensive afterwards. S-1 and S-2 landed in **one commit**,
+because each one alone forces a rewrite of the archive; S-3 does not touch the
+pixels and is deferred, see below.
 
 ### S-1 — Embedded band statistics · **blocking**
 
@@ -63,9 +65,27 @@ write_cog(
   after the image data, the COG profile needs revisiting before 26 500 files are
   written with it.
 
-**State:** implemented 2026-09-03 as `s1bursts.product_tags.band_statistics`,
-merged into `ResolutionWeighter._save`. Uncommitted on
-`fix/checksum-review-findings`.
+**State:** done. `s1bursts.product_tags.band_statistics`, merged into
+`ResolutionWeighter._save`; committed 2026-09-04 as `fd928ef` on
+`feat/checksum-band-stats`, together with S-2. Needs an s1bursts release.
+
+**It also settles `valid_percent`.** `_save` writes QA-NUM as `uint16` with
+nodata `0`, so on that band "finite and unequal to nodata" *is* `count_nonzero`
+— the QA-NUM file's own `STATISTICS_VALID_PERCENT` is the number
+`valid_percent_from_qa` computes, and the publisher can take it from the header
+instead of reading every QA-NUM raster's pixels.
+
+The source stays the QA-NUM band either way, which is what
+`build-manifest.py` already does — it reads `valid_percent_from_qa` only for
+`file.qa == "NUM"` and keys it by the data asset. S-1 changes where that number
+is read from, not which band it describes.
+
+Worth stating for whoever writes S-3, because at write time the data band's own
+`STATISTICS_VALID_PERCENT` is right there and looks like the same number. It is
+not: it counts finite pixels of the *composite*. With `decibel=True`,
+`_to_decibel` turns every non-positive aggregate into NaN while QA-NUM still
+counts the observations that produced it, so filling `valid_percent` from the
+data band would quietly publish a smaller number than the archive's convention.
 
 ### S-2 — `sha256` at write time · **blocking**
 
@@ -79,10 +99,11 @@ It has to happen at write time. `write_cog` hands encoded bytes straight to GDAL
 which streams them to `/vsis3/`, so they never exist anywhere hashable
 afterwards; computing it later means reading every object of a year back.
 
-**State:** implemented 2026-09-03. `freezebase.write_cog` gained
-`checksum: bool = False`, and `ResolutionWeighter` a matching constructor
-argument that fills `ResolutionWeighter.checksums`, keyed by output path.
-Uncommitted.
+**State:** done. `freezebase.write_cog` gained `checksum: bool = False`,
+released in freezebase 0.7.0; `ResolutionWeighter` gained the matching
+constructor argument that fills `ResolutionWeighter.checksums`, keyed by output
+path, committed 2026-09-04 as `fd928ef` with S-1. s1bursts now floors
+`freezebase[s3]>=0.7,<0.8` with no path override. Needs an s1bursts release.
 
 **Changed since that was written:** the manifest no longer carries an ETag, only
 `sha256`. That **removes a constraint** rather than adding one — the old design
@@ -111,6 +132,43 @@ archive that predates emission, which is what the Swiss rehearsal uses. It costs
 1 716 header reads per Swiss year — seconds. It is **not** viable for the Alps at
 26 500 opens per year, which is the whole reason this moves upstream.
 
+**State: deferred 2026-09-04, ownership unsettled.** Unlike S-1 and S-2 this is
+not a property of the bytes, so nothing forces it into the writer, and the schema
+above is this repository's vocabulary throughout: `tile`, `asset_key`
+(`coh12_vv_qa_num`), `product` (`COH12`), `qa` (`NUM`). Emitting it from
+`s1bursts` means that package encoding a downstream catalog's naming convention
+it has no other use for, and duplicating `MANIFEST_COLUMNS` and
+`PROVENANCE_TAGS` across a repository boundary with nothing to keep them in step.
+
+Two questions to settle before writing any of it:
+
+- **Does it belong in `s1bursts` at all**, or in the caller that drives it — the
+  GLACE composite run, which already knows the scope, the year and the asset
+  keys, and could assemble the manifest from `ResolutionWeighter.checksums` plus
+  the metadata `_save` already wrote?
+- **What covers a resumed run.** `_save` skips a file that already exists, so a
+  writer-side manifest describes only this run's outputs and a resumed run emits
+  one the publisher cannot use. Either the writer header-reads the skipped files
+  (the retrofit cost, for a subset), or it refuses to write a partial manifest.
+
+Whichever way it goes, the two constraints above stand.
+
+### The pass-direction tag · **fixed here 2026-09-04**
+
+Nothing owed upstream — recorded because the mismatch was live and silent. This
+repository required `ORBIT_DIRECTION` on every pass composite
+(`_REQUIRED_PASS_TAGS`) and published it as `glace:orbit_direction`. `s1bursts`
+renamed that tag to `PASS_DIRECTION` to match the CEOS-ARD PFS SAR wording, so
+every pass composite would have come out of `survey_tags` missing a required
+tag. The values changed with it, `ASCENDING`/`DESCENDING` to
+`Ascending`/`Descending`; nothing here reads them, because the direction is
+taken from the `COMP_A`/`COMP_D` filename token instead.
+
+Fixed in `stac/tags.py`: the required tag is `PASS_DIRECTION` and the published
+field is `glace:pass_direction`. Not visible in the LRW assets published today —
+the twelve `ASSET_KEYS` are all LRW — which is exactly why it would have gone
+unnoticed until the first pass composite was published.
+
 ### The retrofit that S-1 forces
 
 The completed Swiss 2021–2024 composites have **empty band tags** — verified. So
@@ -126,7 +184,8 @@ both the sizes and the digests the manifest records.
 ### F-1 — `write_cog(checksum=True)`
 
 See S-2. Encode into a second `MemoryFile`, hash those exact bytes, upload them,
-return the multihash digest. **State:** implemented, uncommitted, on `dev`.
+return the multihash digest. **State: done 2026-09-04**, released in freezebase
+0.7.0 and consumed by s1bursts.
 
 ### F-2 — `subprocess_s3_env` · **done 2026-09-04**
 

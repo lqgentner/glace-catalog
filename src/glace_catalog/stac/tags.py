@@ -93,9 +93,9 @@ _REQUIRED_TAGS = (
     "LAYER_DESCRIPTION",
 )
 # A pass composite applies no weighting, so it cites no method reference; only
-# it carries an orbit direction, the LRW composites spanning both.
+# it carries a pass direction, the LRW composites spanning both.
 _REQUIRED_LRW_TAGS = ("COMPOSITING_METHOD_REFERENCE",)
-_REQUIRED_PASS_TAGS = ("ORBIT_DIRECTION",)
+_REQUIRED_PASS_TAGS = ("PASS_DIRECTION",)
 # Measurement vocabulary, on the data layers only: a QA layer describes the
 # composite rather than the quantity, and carries neither set.
 _REQUIRED_BACKSCATTER_TAGS = (
@@ -134,8 +134,10 @@ _TAG_FIELDS: dict[str, str] = {
     # The sat extension's `sat:orbit_state` would be the standard home for
     # this, but its schema requires at least one `sat:` field in the item
     # properties, and a GLACE item mixes LRW composites (both directions) with
-    # per-pass ones. An asset-level-only declaration is schema-invalid.
-    "ORBIT_DIRECTION": "glace:orbit_direction",
+    # per-pass ones. An asset-level-only declaration is schema-invalid. The
+    # tag follows CEOS-ARD PFS SAR, which says "pass direction"; `s1bursts`
+    # renamed it from `ORBIT_DIRECTION` for that reason.
+    "PASS_DIRECTION": "glace:pass_direction",
     "PRODUCT_TYPE": "glace:product_type",
     "SOURCE_DATA_PRODUCT_LEVEL": "glace:source_data_product_level",
     "PIPELINE_SOFTWARE_URL": "glace:pipeline_software_url",
