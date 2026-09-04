@@ -54,6 +54,7 @@ python3 tools/upload_data.py --confirm  # the rasters and parquet
 | --- | --- |
 | what publishes, and to which bucket | `catalog.publish.yaml` |
 | where the build reads and writes | `GLACE_SOURCE_ROOT`, `GLACE_STORE_ROOT` in `.env` |
+| what other repos must change | [`docs/UPSTREAM.md`](docs/UPSTREAM.md) |
 | the transition from the old flat store | [`docs/MIGRATION.md`](docs/MIGRATION.md) |
 | accepted validator findings | [`docs/conformance.md`](docs/conformance.md) |
 

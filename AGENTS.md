@@ -78,6 +78,11 @@ findings are structural consequences of that and are recorded in
 
 ## Related repositories
 
+**If you are working in one of them, read [`docs/UPSTREAM.md`](docs/UPSTREAM.md),
+not this file and not MIGRATION.md.** It is the per-repository work order: what
+to change, why, and how to know it worked.
+
+
 - `../deep-glacier-mapping` — composite production, labels, ML. Produces what
   this catalog publishes.
 - `../s1bursts` — the Sentinel-1 pipeline. Its COG writer must emit embedded

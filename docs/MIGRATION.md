@@ -16,6 +16,10 @@ to a **Portolan-conformant, git-backed catalog** published on Source
 Cooperative. The metadata lives here and is versioned; the data stays on the
 private bucket or on `/mnt` staging and is uploaded separately.
 
+**Working in `s1bursts`, `freezebase` or `deep-glacier-mapping`?** Read
+[`UPSTREAM.md`](UPSTREAM.md) instead — it is the per-repository work order.
+This document is the design record.
+
 Prior art this replaces: `deep-glacier-mapping/cache/stac-store-refactor/`
 (`PLAN.md`, `IMPLEMENTATION.md`, `FTW-COMPARISON.md`). Everything still true has
 been carried across; §10 lists what changed and why.
@@ -519,6 +523,7 @@ Ordered by what blocks what.
 
 - [ ] **P-6 — Release freezebase and s1bursts, drop the editable overrides.** An
       editable path in `[tool.uv.sources]` is not reproducible from a checkout.
+      Now also carries `subprocess_s3_env` (F-2). See [`UPSTREAM.md`](UPSTREAM.md).
 - [ ] **P-7 — Overview-depth assertion.** `PTL-DAT-011` wants overviews down to
       one tile; the Alps mosaic at 41 984 × 69 120 needs 9 levels and the CH test
       COG stopped at 7.

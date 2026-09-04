@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import cmcrameri.cm  # noqa: F401  (imported for its side effect: registers cmc.* ramps)
 from freezebase.raster import rasterio_open
+from freezebase.s3 import subprocess_s3_env
 from freezebase.vrt import create_rgba_vrt
 from matplotlib import colormaps
 from matplotlib.colors import to_hex
@@ -43,8 +44,8 @@ import numpy as np
 import rasterio
 from rasterio.enums import ColorInterp, Resampling
 from rasterio.warp import transform_bounds
+from upath import UPath
 
-from glace_catalog.gdal_s3 import subprocess_s3_env
 from glace_catalog.mosaics import chain_env
 from glace_catalog.scopes import MOSAIC_ZOOM
 
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
 
     import geopandas as gpd
     from matplotlib.colors import Colormap
-    from upath import UPath
 
     from glace_catalog.mosaics import YearVrts
 
@@ -493,7 +493,7 @@ def run_rio_pmtiles(
         command += ["--name", title]
     if attribution:
         command += ["--attribution", attribution]
-    env = os.environ | (subprocess_s3_env(sources_at) if sources_at is not None else {})
+    env = os.environ | (subprocess_s3_env(UPath(sources_at)) if sources_at is not None else {})
     logger.debug("Running %s", " ".join(command))
     subprocess.run(command, check=True, env=env)  # noqa: S603  # our own argv, no shell
 
