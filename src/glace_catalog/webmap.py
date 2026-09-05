@@ -641,6 +641,37 @@ def build_layers(
     return built
 
 
+INVENTORY_OVERLAYS: dict[str, dict[str, Any]] = {
+    "pauletal2020": {
+        "title": "Alpine Glacier Inventory",
+        "color": "#ff2d95",
+        "name_column": None,
+        "year_column": "date",
+        # The inventory ships no names, so its own identifier is what a reader
+        # can look a feature up by.
+        "extra_columns": {"glacier_nr": "glacier_nr"},
+    },
+    "sgi2016": {
+        "title": None,  # taken from the dataset's own metadata
+        "color": "#22d3ee",
+        "name_column": "name",
+        "year_column": "year_acq",
+    },
+    "sgi2023": {
+        "title": None,
+        "color": "#facc15",
+        "name_column": "name",
+        "year_column": "year_acq",
+    },
+}
+"""How each glacier inventory is drawn as a vector overlay, keyed by dataset.
+
+Not part of the catalog: the inventories are third-party datasets a viewer shows
+*beside* GLACE, and this is the presentation each one is given. It travels with
+:func:`export_inventory` because that is what consumes it.
+"""
+
+
 def build_vector_pmtiles(
     geojson_path: Path,
     out_path: Path,
