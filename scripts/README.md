@@ -6,32 +6,47 @@ and the STAC catalogue describing all of it. It is relocatable — every link in
 relative, so moving the bucket means re-running one command, not rewriting the store.
 
 Two regions are defined, `ch` (Switzerland) and `alps` (the European Alps). Each has a
-fixed target grid and a default root, both in `glacier_mapping/scopes.py`.
+fixed target grid and a default root, both in `src/glace_catalog/scopes.py`.
+
+> **The mosaic grid is changing.** M-24 moves the annual analysis mosaics to
+> ETRS89-LAEA 40 m; the web-map archives stay on WebMercator z13, resampled
+> straight from the UTM composites. `scopes.py` currently carries one grid per
+> scope and will carry two. Until that lands, what is described below is the
+> single WebMercator grid.
 
 ## Layout
 
+**A collection owns its subtree** (M-1): items live under the collection that
+describes them, never under a shared year directory.
+
 ```
 {root}/
-├── catalog.json               entry point
-├── tiles/collection.json      one item per (tile, year)
-├── mosaics/collection.json    one item per year
-├── tiles.parquet              searchable index of every tile item
-├── mosaics.parquet            searchable index of every mosaic item
-├── glacier-fractions.parquet  per-tile glacier cover
-├── layers.json                web-map viewer manifest
+├── catalog.json                     entry point
+├── glacier-fractions.parquet        per-tile glacier cover
 ├── thumbnail.png
-└── 2024/
-    ├── manifest.parquet       what the composite run produced
-    ├── config.yaml            how it was configured
-    ├── items.parquet
-    ├── 32TPS05/               one directory per tile
+├── tiles/
+│   ├── collection.json              one item per (tile, year)
+│   ├── items.parquet                searchable index of every tile item
+│   └── 2024/
+│       ├── manifest.parquet         what the composite run produced
+│       ├── config.yaml              how it was configured
+│       └── 32TPS05/                 one directory per tile
+│           ├── item.json
+│           └── coh12_vv.tif  rtc_vh.tif  coh12_vv_qa_num.tif  … (12 files)
+└── mosaics/
+    ├── collection.json              one item per year
+    ├── items.parquet                searchable index of every mosaic item
+    ├── styles/default.json          MapLibre style; **source of truth** for
+    │                                the display ramps and ranges (M-27)
+    ├── 2024/
     │   ├── item.json
-    │   └── coh12_vv.tif  rtc_vh.tif  coh12_vv_qa_num.tif  … (12 files)
-    ├── mosaics/
-    │   ├── item.json
-    │   └── coh12_vv.tif  …    the same 12 layers, region-wide
-    └── pmtiles/               14 web-map archives
+    │   └── coh12_vv.tif  …          the same 12 layers, region-wide
+    └── pmtiles/2024/                14 web-map archives
 ```
+
+The per-year `manifest.parquet` and `config.yaml` are **tiles-collection assets**
+keyed `manifest-{year}` / `config-{year}`, not assets of the year directory that
+holds them: `PTL-AST-005` forbids assets on a catalog (M-4).
 
 Every file is named after what it holds, so nothing needs to be parsed to be
 understood. The twelve layers are `{coh12,rtc}_{vv,vh}` plus a `_qa_num` (observation
@@ -48,7 +63,7 @@ Compute the per-tile glacier cover. It is measured once and reused by every year
 tile cannot end up with different values in different years.
 
 ```bash
-uv run --env-file .env python scripts/stac/derive-glacier-fractions.py \
+uv run --env-file .env python ../deep-glacier-mapping/scripts/stac/derive-glacier-fractions.py \
     --scope ch --out s3://s1-bursts/data/glace-ch/glacier-fractions.parquet
 ```
 
@@ -58,7 +73,7 @@ Each composite run should leave a `manifest.parquet` beside its output, listing 
 file it wrote. For older runs that have none, build one first:
 
 ```bash
-uv run --env-file .env python scripts/stac/build-manifest.py \
+uv run --env-file .env python scripts/build-manifest.py \
     --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch
 ```
 
@@ -68,7 +83,7 @@ replace it, or `--out` to write a copy elsewhere and compare.
 Then publish the year:
 
 ```bash
-uv run --env-file .env python scripts/stac/publish-year.py 2024 \
+uv run --env-file .env python scripts/publish-year.py 2024 \
     --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch --scope ch
 ```
 
@@ -102,7 +117,7 @@ rebuilds rather than leaving a stale result behind.
 ### 3. After adding or changing any year
 
 ```bash
-uv run --env-file .env python scripts/stac/finalize-catalog.py \
+uv run --env-file .env python scripts/finalize-catalog.py \
     --scope ch --base-url https://<host>/glace-ch
 ```
 
@@ -122,7 +137,7 @@ indexes. Both come from `--base-url`, so re-run step 3 pointing at where the dat
 actually be served *before* copying anything:
 
 ```bash
-uv run --env-file .env python scripts/stac/finalize-catalog.py \
+uv run --env-file .env python scripts/finalize-catalog.py \
     --scope ch --base-url https://data.source.coop/<account>/glace-ch
 ```
 
@@ -201,8 +216,8 @@ Asset values are stored as measured, without display scaling — backscatter and
 quality layers are linear power, not decibels. Convert on read if you want decibels.
 Missing data is `NaN`, except in the per-tile observation counts where it is `0`.
 
-`notebooks/stac/accessing-the-catalog.ipynb` walks through searching, previewing and
-reading pixels.
+The collection `AGENTS.md` files walk through searching, previewing and reading
+pixels.
 
 ## Labels
 

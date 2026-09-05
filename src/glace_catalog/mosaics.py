@@ -2,18 +2,30 @@
 
 Every mosaicking and reprojection step is a **VRT** rather than an in-memory
 merge: the 10 m tiles of one UTM zone become a virtual mosaic, that mosaic is
-warped virtually onto the canonical WebMercator grid, and the zones are
-mosaicked virtually again onto the scope's fixed extent. Only the last step
+warped virtually onto the target grid, and the zones are mosaicked virtually
+again onto the scope's fixed extent.
+
+**The chain is built twice, against two grids** (M-24). The annual mosaics go on
+the scope's equal-area ETRS89-LAEA 40 m grid, because WebMercator is not
+equal-area and an area statistic taken on it needs a correction the catalog does
+not declare. The web-map archives go on the WebMercatorQuad grid at z13. Both
+start from the same UTM composites; neither is warped out of the other, so the
+display path never pays a second resampling and the analysis path never carries
+a non-equal-area grid. Only the last step
 materialises anything, and it does so as a streaming windowed copy rather than a
 gigabyte-scale in-RAM merge.
 
 The chain, per year, per band ``B``, per UTM zone ``Z``::
 
     1  {B}_{Z}.vrt            10 m UTM mosaic of that zone's tiles
-    2  {B}_{Z}_webm13.vrt     (1) warped onto the canonical z13 grid, average
+    2  {B}_{Z}_webm13.vrt     (1) warped onto the target grid, average
     3  {B}_webm13.vrt         (2) for every zone, on the canonical extent
     4  {B}_webm13_db.vrt      (3) in decibels; RTC and QA-CQM only
     5  {P}_rgb_webm13.vrt     R=VV, G=VH, B=VV-VH (RTC) or VV/VH (COH12)
+
+(The ``webm13`` token is historical: the same filenames are used for whichever
+grid the chain was asked for, and the two chains are kept in separate cache
+directories rather than distinguished by name.)
 
 (3) feeds the mosaic COGs, (3) or (4) the single-band web-map tiles, and (5) the
 false-colour ones. The VRTs are **local and ephemeral**: they hold absolute
@@ -21,9 +33,10 @@ false-colour ones. The VRTs are **local and ephemeral**: they hold absolute
 so the reproducibility record is the manifest, the config snapshot and the
 products, not 1 700 XML files in a public listing.
 
-Because the target is the WebMercatorQuad grid at z13, a mosaic COG's internal
-overview levels land exactly on z12, z11, …: the file *is* a tile pyramid on the
-web-map grid.
+On the **display** grid the target is WebMercatorQuad at z13, so a COG's
+internal overview levels land exactly on z12, z11, …: the file *is* a tile
+pyramid. On the **analysis** grid that property is neither available nor wanted
+— nothing tiles an equal-area mosaic.
 """
 
 from __future__ import annotations
@@ -47,12 +60,12 @@ import rasterio.shutil
 from rasterio.warp import transform_bounds
 from upath import UPath
 
-from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, snap_to_tiles
+from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
 
-    from glace_catalog.scopes import Scope
+    from glace_catalog.scopes import Grid, Scope
     from glace_catalog.stac.naming import CompositeFile
 
 logger = logging.getLogger(__name__)
@@ -130,8 +143,8 @@ def zone_token(tile: str) -> str:
     return f"utm{get_utm_zone_string(mgrs_to_crs(tile))}".lower()
 
 
-def zone_bounds(tiles: Sequence[str], dst_crs: str) -> tuple[float, float, float, float]:
-    """Snapped target extent covering every tile of one zone, in ``dst_crs``.
+def zone_bounds(tiles: Sequence[str], grid: Grid) -> tuple[float, float, float, float]:
+    """Snapped target extent covering every tile of one zone, on ``grid``.
 
     Computed once per (year, zone) and shared by **every band**, not per band.
     Where one product's tile set differs from another's — an RTC-only tile, say —
@@ -144,13 +157,13 @@ def zone_bounds(tiles: Sequence[str], dst_crs: str) -> tuple[float, float, float
         geobox = MGRSGeoBox.from_mgrs(tile)
         bounds = transform_bounds(
             geobox.crs,
-            dst_crs,
+            grid.crs,
             *geobox.boundingbox,
             densify_pts=DENSIFY_PTS,
         )
         left, bottom = min(left, bounds[0]), min(bottom, bounds[1])
         right, top = max(right, bounds[2]), max(top, bounds[3])
-    return snap_to_tiles((left, bottom, right, top))
+    return grid.snap((left, bottom, right, top))
 
 
 @dataclass(frozen=True)
@@ -188,6 +201,7 @@ def build_year_vrts(
     scope: Scope,
     vrt_dir: Path,
     *,
+    grid: Grid | None = None,
     decibel: bool = True,
     rgb: bool = True,
 ) -> YearVrts:
@@ -199,7 +213,12 @@ def build_year_vrts(
         Every composite of the year, already verified against the manifest.
         Their paths are absolute, typically ``s3://``.
     scope
-        Scope being published; supplies the canonical grid.
+        Scope being published.
+    grid
+        Target grid to warp onto. Defaults to the scope's **analysis** grid;
+        the web-map branch passes ``scope.display_grid`` instead. Both are
+        warped straight from the UTM tiles, so neither is derived from the
+        other (M-24, M-25).
     vrt_dir
         Local directory the chain is written into. Ephemeral.
     decibel
@@ -213,9 +232,9 @@ def build_year_vrts(
         The chain's outputs, keyed by asset key.
     """
     vrt_dir.mkdir(parents=True, exist_ok=True)
-    grid = scope.grid
 
     by_band: dict[str, dict[str, list[CompositeFile]]] = defaultdict(lambda: defaultdict(list))
+    grid = grid or scope.analysis_grid
     tiles_per_zone: dict[str, set[str]] = defaultdict(set)
     for file in files:
         zone = zone_token(file.tile)
@@ -223,9 +242,7 @@ def build_year_vrts(
         tiles_per_zone[zone].add(file.tile)
 
     # One extent per (year, zone), shared by every band.
-    extents = {
-        zone: zone_bounds(sorted(tiles), grid.crs) for zone, tiles in tiles_per_zone.items()
-    }
+    extents = {zone: zone_bounds(sorted(tiles), grid) for zone, tiles in tiles_per_zone.items()}
 
     linear: dict[str, Path | UPath] = {}
     for asset_key, zones in sorted(by_band.items()):

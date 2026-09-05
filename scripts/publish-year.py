@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     import pystac
 
-    from glace_catalog.scopes import Scope
+    from glace_catalog.scopes import Grid, Scope
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -170,14 +170,28 @@ def step_vrt(
     scope: Scope,
     layout: stac.StoreLayout,
     files: Sequence[stac.CompositeFile],
+    *,
+    grid: Grid | None = None,
+    name: str = "vrt",
 ) -> mosaics.YearVrts:
-    """Build the year's VRT chain in the local cache.
+    """Build one of the year's VRT chains in the local cache.
+
+    There are two, and they do not share a step: the mosaics are warped onto the
+    scope's equal-area analysis grid, the web-map archives onto its
+    WebMercatorQuad display grid, and **both start from the UTM composites**
+    (M-24, M-25). Warping one out of the other would resample twice and put a
+    non-equal-area grid back in the analysis path.
 
     Always rebuilt: the VRTs are local and ephemeral, so a remote "done" can be
     true while the cache is empty, and they take seconds.
     """
-    vrt_dir = args.cache / "glace-store" / str(args.year) / "vrt"
-    chain = mosaics.build_year_vrts(published_files(files, layout, args.year), scope, vrt_dir)
+    vrt_dir = args.cache / "glace-store" / str(args.year) / name
+    chain = mosaics.build_year_vrts(
+        published_files(files, layout, args.year),
+        scope,
+        vrt_dir,
+        grid=grid,
+    )
     logger.info(
         "vrt: %d linear, %d decibel, %d false-colour",
         len(chain.linear),
@@ -248,36 +262,6 @@ def step_mosaics(
     return written
 
 
-def tiling_chain(
-    args: argparse.Namespace,
-    layout: stac.StoreLayout,
-    chain: mosaics.YearVrts,
-) -> mosaics.YearVrts:
-    """Choose the chain the web-map tiler reads: the written mosaics where they exist.
-
-    A mosaic COG is the canonical-grid step already materialised, with its own
-    overviews, so tiling from it opens one file per worker instead of the whole
-    tile chain — which is where the tiler's memory goes, and the reason a
-    false-colour layer (two chains at once) is the first thing to fall over.
-
-    Falls back to the tile chain when the mosaics are absent, so ``--steps
-    pmtiles`` still works on its own.
-    """
-    published = {key: layout.mosaic_year(args.year) / f"{key}.tif" for key in chain.linear}
-    if not all(path.exists() for path in published.values()):
-        logger.warning(
-            "Not every mosaic is published for %d; tiling from the tile chain instead, "
-            "which needs far more memory. Run the mosaics step first.",
-            args.year,
-        )
-        return chain
-    logger.info("Tiling from the %d published mosaics", len(published))
-    return mosaics.build_cog_chain(
-        published,
-        args.cache / "glace-store" / str(args.year) / "vrt-cog",
-    )
-
-
 def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
@@ -288,8 +272,9 @@ def step_pmtiles(
     staged = args.cache / "glace-store" / str(args.year) / "pmtiles"
     staged.mkdir(parents=True, exist_ok=True)
     layers = webmap.build_layers(
-        tiling_chain(args, layout, chain),
+        chain,
         staged,
+        style_path=args.style,
         year=args.year,
         start_date=window[0].date().isoformat(),
         end_date=window[1].date().isoformat(),
@@ -490,6 +475,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
+    parser.add_argument(
+        "--style",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/default.json",
+        help="MapLibre style holding the published stretches and ramps (M-27)",
+    )
     return parser.parse_args()
 
 
@@ -526,22 +517,25 @@ def main() -> None:
         "vrt": copy_print,
         "mosaics": stac.fingerprint(
             copy_print,
-            scope.grid,
+            scope.analysis_grid,
             mosaics.MAX_Z_ERROR,
             mosaics.COG_CREATION,
             args.layers,
         ),
+        # The committed style is the source of the stretches and ramps (M-27),
+        # so its bytes are what a rebuild has to notice: edit a range and every
+        # archive that baked the old one is stale.
         "pmtiles": stac.fingerprint(
             copy_print,
-            scope.grid,
-            webmap.DEFAULT_STYLES,
-            webmap.RGB_STYLES,
+            scope.display_grid,
+            args.style.read_bytes().decode() if args.style.exists() else None,
             args.layers,
         ),
     }
     prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION)
 
-    chain: mosaics.YearVrts | None = None
+    analysis_chain: mosaics.YearVrts | None = None
+    display_chain: mosaics.YearVrts | None = None
     for step in steps:
         if state.is_current(step, prints[step]):
             logger.info("%s: up to date, skipping", step)
@@ -551,21 +545,31 @@ def main() -> None:
             step_copy(args, layout, files, src)
             state.record(step, prints[step])
         elif step == "vrt":
-            chain = step_vrt(args, scope, layout, files)
+            analysis_chain = step_vrt(args, scope, layout, files)
         elif step == "mosaics":
-            chain = chain or step_vrt(args, scope, layout, files)
-            written = step_mosaics(args, layout, chain, frame)
+            analysis_chain = analysis_chain or step_vrt(args, scope, layout, files)
+            written = step_mosaics(args, layout, analysis_chain, frame)
             state.record(
                 step,
                 prints[step],
                 {
-                    key: {"size": path.stat().st_size, "resolution": scope.grid.resolution}
+                    key: {
+                        "size": path.stat().st_size,
+                        "resolution": scope.analysis_grid.resolution,
+                    }
                     for key, path in written.items()
                 },
             )
         elif step == "pmtiles":
-            chain = chain or step_vrt(args, scope, layout, files)
-            built = step_pmtiles(args, layout, chain, composite_window(frame))
+            display_chain = display_chain or step_vrt(
+                args,
+                scope,
+                layout,
+                files,
+                grid=scope.display_grid,
+                name="vrt-display",
+            )
+            built = step_pmtiles(args, layout, display_chain, composite_window(frame))
             state.record(
                 step,
                 prints[step],

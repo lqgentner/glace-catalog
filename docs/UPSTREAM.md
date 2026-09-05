@@ -237,6 +237,19 @@ different values in 2021 and 2025.
 the port landed. The port is done; delete them once a real year has been
 published from here. Tracked as P-17.
 
+> **Do not delete the copies yet — one of them is still the live producer.**
+> The published store's `layers.json` at
+> `data.source.coop/lqgentner/glace-ch/layers.json` was generated **2026-09-02**,
+> before the port commit, and carries all 56 layers. It is written by *your*
+> copy of the writer, which still has a caller; this repository's copy has none.
+> `glace-viewer` reads that file at runtime.
+>
+> So deleting the originals today stops `layers.json` production and the viewer
+> degrades to whatever is cached. The safe order is: this repository lands the
+> style-generation work (M-26 / M-27) and `glace-viewer` switches to reading the
+> catalog, **then** the originals go. Until then both copies exist and only the
+> old one runs.
+
 `cache/stac-store-refactor/SUPERSEDED.md` already redirects readers.
 
 ### D-3 — The labels catalog is unclaimed
@@ -254,7 +267,7 @@ Recorded so the next person does not re-derive them.
 | what | why |
 | --- | --- |
 | **`gdal_s3.py` deleted** | Of its three functions only `subprocess_s3_env` had a caller, and it has no GDAL in it. `to_gdal_uri` and `gdal_s3_env` were dead code that imported `osgeo` — a dependency this repository does not declare and never installed, so `gdal_s3_env` could not have run. Moved the one live function to `freezebase`, dropped the rest. |
-| **`layers.json` and its writer deleted** | The render extension and the MapLibre styles are the standard homes for what it carried. |
+| **`layers.json` retired by design (M-26), not yet by code** | M-9 moved raster *styling* to `renders`; it did not move the viewer manifest, and `build_viewer_manifest` / `write_manifest` / `publish_tiles` are still in `webmap.py` — with no caller **here**. See the warning under D-2 before deleting anything upstream. |
 | **ETag dropped from the manifest** | It was never writer code — it is read from a listing — it was a writer *constraint*: keep the upload single-part or it stops being an MD5. `sha256` is what gets published, so the ETag bought only a listing-based check. |
 | **`build_tiles_collection` / `build_mosaics_collection` deleted** | The collection documents are hand-written source now, patched at publication rather than regenerated. Their prose was in Python string literals; it is in reviewable JSON instead. |
 | **The RGBA WEBP display COGs dropped** | PMTiles serve that view at a quarter of the bytes. Removing them also took every decibel pixel out of the `data` role. |
@@ -266,7 +279,14 @@ Recorded so the next person does not re-derive them.
   which is fine, but the two-import shape invites someone to use the wrong one.
 - **`webmap.py` is 1 100 lines** covering LUTs, stretch estimation, the tiler
   subprocess and inventory export. `export_inventory` in particular has nothing
-  to do with web-map tiles and is the natural first split.
+  to do with web-map tiles and is the natural first split. Do **not** split on
+  `build_viewer_manifest` / `write_manifest` / `publish_tiles`: they look dead
+  here but are the interface `glace-viewer` still consumes — see D-2.
+
+- **`rio-pmtiles` is declared nowhere.** It is in neither `pyproject.toml` nor
+  `uv.lock`, and `webmap.py` resolves the `rio` CLI at runtime, so `--steps
+  pmtiles` cannot run from a clean `uv sync`. Now that M-25 makes PMTiles the
+  only display product, this is on the critical path rather than a nicety.
 - **`RasterInfo.statistics` is a bare dict.** Once S-1 lands and the values are
   guaranteed, it could carry the five fields explicitly so a missing one is a
   type error rather than a `KeyError` at publication.

@@ -348,35 +348,11 @@
     "style-default": {
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
-      "title": "COH12 false colour",
-      "description": "The default view: coherence VV, VH and their ratio as R, G and B.",
+      "title": "GLACE web-map style",
+      "description": "Every published web-map layer of the most recent year, the first visible and the rest hidden. Each layer's metadata.portolan:legend carries the colour ramp and value range baked into its archive, which is where those constants live.",
       "roles": [
         "style",
         "default"
-      ]
-    },
-    "style-coherence-vv": {
-      "href": "./styles/coherence-vv.json",
-      "type": "application/vnd.mapbox.style+json",
-      "title": "COH12 VV",
-      "roles": [
-        "style"
-      ]
-    },
-    "style-backscatter-rgb": {
-      "href": "./styles/backscatter-rgb.json",
-      "type": "application/vnd.mapbox.style+json",
-      "title": "RTC false colour",
-      "roles": [
-        "style"
-      ]
-    },
-    "style-backscatter-vv": {
-      "href": "./styles/backscatter-vv.json",
-      "type": "application/vnd.mapbox.style+json",
-      "title": "RTC VV",
-      "roles": [
-        "style"
       ]
     }
   },

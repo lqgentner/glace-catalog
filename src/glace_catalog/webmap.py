@@ -1,8 +1,11 @@
-"""Web-map tiling of the annual mosaics, and the viewer manifest beside it.
+"""Web-map tiling of the annual mosaics into PMTiles archives.
 
-Colour-maps a canonical-grid mosaic into RGBA and packs it into one PMTiles
-archive per layer, plus the ``layers.json`` manifest the MapLibre viewer in the
-glace-viewer repository reads.
+Colour-maps a display-grid mosaic into RGBA and packs it into one PMTiles
+archive per layer. Nothing is written beside them: what a reader needs in order
+to draw a legend lives in the committed MapLibre style (M-27), and what it needs
+in order to find an archive is a ``rel="pmtiles"`` link on the mosaics
+collection (M-26). The ``layers.json`` manifest both used to travel in is
+retired.
 
 Tiling goes through ``rio-pmtiles``, the rasterio plugin Protomaps recommends for
 raster PMTiles (tippecanoe, its counterpart for vector data, cannot produce
@@ -22,7 +25,6 @@ needed.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 import json
 import logging
 import math
@@ -34,12 +36,9 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
 
-import cmcrameri.cm  # noqa: F401  (imported for its side effect: registers cmc.* ramps)
 from freezebase.raster import rasterio_open
 from freezebase.s3 import subprocess_s3_env
 from freezebase.vrt import create_rgba_vrt
-from matplotlib import colormaps
-from matplotlib.colors import to_hex
 import numpy as np
 import rasterio
 from rasterio.enums import ColorInterp, Resampling
@@ -48,12 +47,20 @@ from upath import UPath
 
 from glace_catalog.mosaics import chain_env
 from glace_catalog.scopes import MOSAIC_ZOOM
+from glace_catalog.styles import (
+    DEFAULT_STYLE_PATH,
+    LayerStyle,
+    RgbStyle,
+    load_attribution,
+    load_styles,
+    ramp_colors,
+    resolve_cmap,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
 
     import geopandas as gpd
-    from matplotlib.colors import Colormap
 
     from glace_catalog.mosaics import YearVrts
 
@@ -64,10 +71,6 @@ WEB_MERCATOR = "EPSG:3857"
 MERCATOR_SPAN_M = 2 * 20037508.342789244
 TILE_SIZE = 256
 
-#: Number of colour stops recorded for the viewer's legend gradient. The page
-#: interpolates linearly in sRGB between them, which at nine stops drifts up to
-#: 8/255 from a perceptually uniform ramp; seventeen keeps it under 4/255.
-LEGEND_STOPS = 17
 # Layer name inside tile-grid.pmtiles. Fixed rather than recorded in the
 # manifest: unlike the inventories there is only ever one, and the viewer needs
 # it as `source-layer` -- a vector layer with the wrong one renders nothing and
@@ -75,121 +78,14 @@ LEGEND_STOPS = 17
 TILE_GRID_LAYER = "grid"
 
 
-@dataclass(frozen=True)
-class LayerStyle:
-    """Colour ramp and value range a single-band product is rendered with.
-
-    Parameters
-    ----------
-    cmap
-        Name of a colormap registered with matplotlib, including Crameri's
-        ``cmc.*`` scientific ramps.
-    vmin, vmax
-        Value range the ramp is stretched over. ``None`` triggers a percentile
-        stretch measured on the source raster.
-    units
-        Unit label shown on the viewer's legend.
-    decibel
-        Whether the range is quoted in decibels, so the tiler must read the
-        chain's decibel VRT rather than its linear one.
-    measured
-        Whether the range was measured on the published archive. A provisional
-        range still renders; it is flagged so a build can report which layers
-        have not been checked at native resolution yet.
-    """
-
-    cmap: str
-    vmin: float | None = None
-    vmax: float | None = None
-    units: str = ""
-    decibel: bool = False
-    measured: bool = False
-
-
-@dataclass(frozen=True)
-class RgbStyle:
-    """Value ranges of a false-colour layer, one per band.
-
-    False colour exists only on the PMTiles branch: a browser COG protocol
-    cannot join two files, since one ``cog://`` URL is one GeoTIFF and geotiff.js
-    parses TIFF IFDs rather than VRT XML.
-
-    Parameters
-    ----------
-    ranges
-        ``(vmin, vmax)`` for red, green and blue.
-    units
-        Unit label shown on the viewer's legend.
-    decibel
-        Whether the ranges are quoted in decibels.
-    measured
-        Whether the ranges were measured on the published archive.
-    """
-
-    ranges: tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-    units: str = ""
-    decibel: bool = False
-    measured: bool = False
-
-
-#: Rendering of every published layer, keyed by layer id.
-#:
-#: The ranges are **fixed per layer and hard-coded**, never a percentile stretch.
-#: The viewer's year slider has to compare like with like: a per-layer stretch
-#: would give every year its own scale and turn a real change in coherence into
-#: no visible change at all.
-#:
-#: Under the plan's open decision this table is a build-time commitment only on
-#: the PMTiles branch — the stretch is baked into 8-bit RGBA there, and a bad
-#: choice can only be fixed by re-tiling. If the mosaic COGs are adopted for the
-#: web map instead, rendering moves client-side and these become the viewer's own
-#: configuration, iterated there without touching the store.
-DEFAULT_STYLES: dict[str, LayerStyle] = {
-    "coh12_vv": LayerStyle(cmap="cmc.lipari", vmin=0.10, vmax=0.80, measured=True),
-    "coh12_vh": LayerStyle(cmap="cmc.lipari", vmin=0.10, vmax=0.60, measured=True),
-    # Carried over from the superseded archive, so re-verify against the first
-    # published year before the tiles are considered final.
-    "rtc_vv": LayerStyle(cmap="cmc.navia", vmin=-18.5, vmax=-5.0, units="dB", decibel=True),
-    "rtc_vh": LayerStyle(cmap="cmc.navia", vmin=-26.0, vmax=-11.0, units="dB", decibel=True),
-    # A count-mean rather than an integer count once mosaicked, so the old
-    # integer range no longer describes it.
-    "coh12_vv_qa_num": LayerStyle(cmap="cmc.batlow", vmin=0.0, vmax=30.0),
-    "coh12_vh_qa_num": LayerStyle(cmap="cmc.batlow", vmin=0.0, vmax=30.0),
-    "rtc_vv_qa_num": LayerStyle(cmap="cmc.batlow", vmin=0.0, vmax=30.0),
-    "rtc_vh_qa_num": LayerStyle(cmap="cmc.batlow", vmin=0.0, vmax=30.0),
-    # CQM is a contributing-area ratio where 1.0 (0 dB) is flat terrain, so a
-    # diverging ramp centred there separates layover from shadow; a sequential
-    # one would hide the sign.
-    "coh12_vv_qa_cqm": LayerStyle(cmap="cmc.vik", vmin=-6.0, vmax=6.0, units="dB", decibel=True),
-    "coh12_vh_qa_cqm": LayerStyle(cmap="cmc.vik", vmin=-6.0, vmax=6.0, units="dB", decibel=True),
-    "rtc_vv_qa_cqm": LayerStyle(cmap="cmc.vik", vmin=-6.0, vmax=6.0, units="dB", decibel=True),
-    "rtc_vh_qa_cqm": LayerStyle(cmap="cmc.vik", vmin=-6.0, vmax=6.0, units="dB", decibel=True),
-}
-
-#: Per-band ranges of the two false-colour layers, as ``(vmin, vmax)`` triples.
-#:
-#: Red and green repeat the single-band ranges above; only blue — the co- to
-#: cross-polarized contrast — is its own quantity and still has to be measured.
-RGB_STYLES: dict[str, RgbStyle] = {
-    "rtc_rgb": RgbStyle(
-        ranges=((-18.5, -5.0), (-26.0, -11.0), (4.0, 14.0)),
-        units="dB",
-        decibel=True,
-    ),
-    "coh12_rgb": RgbStyle(ranges=((0.10, 0.80), (0.10, 0.60), (0.8, 2.5))),
-}
-
-#: Rendering for a layer with no entry in :data:`DEFAULT_STYLES`.
-FALLBACK_STYLE = LayerStyle(cmap="cmc.navia")
-
-
 @dataclass
 class LayerInfo:
-    """One built PMTiles archive, as recorded in the viewer manifest.
+    """One built PMTiles archive, as the build reports it.
 
-    None of this describes a measurement, which is why it lives in
-    ``layers.json`` rather than in the catalogue: the mosaic item's
-    ``rel="pmtiles"`` links carry hrefs and nothing else, deliberately.
+    A build-time record, not a published document: ``publish-year`` writes it
+    into the year's build state so a later run can tell what changed. What a
+    reader sees instead is the archive's own header, the collection's
+    ``rel="pmtiles"`` link, and the style's legend.
     """
 
     id: str
@@ -226,21 +122,6 @@ def native_max_zoom(res_m: float, lat_deg: float) -> int:
     """
     scale = math.cos(math.radians(lat_deg))
     return max(0, math.ceil(math.log2(MERCATOR_SPAN_M * scale / (TILE_SIZE * res_m))))
-
-
-def resolve_cmap(name: str) -> Colormap:
-    """Look up a colormap by name.
-
-    Crameri's scientific colour maps are registered under ``cmc.*`` by importing
-    :mod:`cmcrameri.cm`, which this module does at import time.
-    """
-    return colormaps[name]
-
-
-def ramp_colors(cmap: str, n: int = LEGEND_STOPS) -> list[str]:
-    """Sample ``n`` evenly spaced hex colours from a colormap, for the legend."""
-    colormap = resolve_cmap(cmap)
-    return [to_hex(colormap(i / (n - 1))) for i in range(n)]
 
 
 def color_lookup_table(cmap: str, size: int = 256) -> np.ndarray:
@@ -515,8 +396,9 @@ def build_pmtiles(
     workers: int | None = None,
     materialize_rgba: bool = False,
     sources_at: Path | UPath | None = None,
+    attribution: str = "",
 ) -> LayerInfo:
-    """Colour-map and tile one canonical-grid mosaic into a PMTiles archive.
+    """Colour-map and tile one display-grid mosaic into a PMTiles archive.
 
     Parameters
     ----------
@@ -533,7 +415,8 @@ def build_pmtiles(
         Composite year, for the manifest entry.
     style
         Colour ramp and value range, or the per-band ranges of a false-colour
-        layer. Never a percentile stretch: see :data:`DEFAULT_STYLES`.
+        layer. Never a percentile stretch: the published ranges are fixed per
+        layer so that a year slider compares like with like.
     start_date, end_date
         Composite window the layer covers.
     min_zoom, max_zoom
@@ -610,7 +493,7 @@ def build_pmtiles(
             resampling=resampling,
             workers=workers,
             title=layer_id,
-            attribution="GLACE / Copernicus Sentinel-1",
+            attribution=attribution,
             sources_at=sources_at,
         )
 
@@ -666,6 +549,7 @@ def build_layers(
     end_date: str,
     styles: Mapping[str, LayerStyle] | None = None,
     rgb_styles: Mapping[str, RgbStyle] | None = None,
+    style_path: Path | None = None,
     layers: Collection[str] | None = None,
     min_zoom: int = 5,
     max_zoom: int = MOSAIC_ZOOM,
@@ -687,8 +571,11 @@ def build_layers(
     year, start_date, end_date
         The year being published and the composite window it covers.
     styles, rgb_styles
-        Rendering per layer, defaulting to :data:`DEFAULT_STYLES` and
-        :data:`RGB_STYLES`.
+        Rendering per layer. Both default to the committed style at
+        ``style_path``, which is where the published constants live (M-27).
+    style_path
+        The MapLibre style to read them from. Defaults to this repository's
+        ``catalog/mosaics/styles/default.json``.
     layers
         Restrict to these layer ids. ``None`` builds all fourteen.
     min_zoom, max_zoom, tile_format, quality, resampling, workers,
@@ -700,8 +587,14 @@ def build_layers(
     list[LayerInfo]
         Manifest entries for the archives written.
     """
-    styles = dict(styles if styles is not None else DEFAULT_STYLES)
-    rgb_styles = dict(rgb_styles if rgb_styles is not None else RGB_STYLES)
+    path = style_path or DEFAULT_STYLE_PATH
+    attribution = load_attribution(path, year)
+    if styles is None or rgb_styles is None:
+        read_single, read_rgb = load_styles(path)
+        styles = dict(read_single if styles is None else styles)
+        rgb_styles = dict(read_rgb if rgb_styles is None else rgb_styles)
+    else:
+        styles, rgb_styles = dict(styles), dict(rgb_styles)
     wanted: dict[str, LayerStyle | RgbStyle] = {**styles, **rgb_styles}
     if layers is not None:
         wanted = {key: value for key, value in wanted.items() if key in layers}
@@ -742,156 +635,10 @@ def build_layers(
                     workers=workers,
                     materialize_rgba=materialize_rgba,
                     sources_at=vrts.sources_at,
+                    attribution=attribution,
                 ),
             )
     return built
-
-
-def build_viewer_manifest(
-    layers: Sequence[Mapping[str, Any]],
-    *,
-    title: str = "GLACE — Sentinel-1 composites",
-) -> dict[str, Any]:
-    """Assemble the ``layers.json`` payload from the recorded layer entries.
-
-    Nothing here describes a measurement — a layer id, a colour map, a value
-    range, a zoom range, a size and the legend stops — which is why it is written
-    beside the catalogue rather than into it, and why the mosaic items' PMTiles
-    links carry hrefs and nothing else.
-
-    The legend colours are recomputed from each entry's colour map, so a ramp
-    change reaches the viewer without re-tiling.
-    """
-    # `colors` is always present, empty for a false-colour layer that has no
-    # single ramp, so a consumer never has to branch on the key existing.
-    entries = [
-        dict(layer) | {"colors": ramp_colors(layer["cmap"]) if layer.get("cmap") else []}
-        for layer in layers
-    ]
-    ordered = sorted(
-        entries,
-        key=lambda layer: (layer["product"], layer["polarization"], layer["year"]),
-    )
-    return {
-        "title": title,
-        "generated": datetime.now(UTC).isoformat(timespec="seconds"),
-        "years": sorted({layer["year"] for layer in ordered}),
-        "products": sorted({layer["product"] for layer in ordered}),
-        "polarizations": sorted({layer["polarization"] for layer in ordered}),
-        "layers": ordered,
-    }
-
-
-def write_manifest(
-    out_path: Path | UPath,
-    layers: Sequence[LayerInfo],
-    *,
-    title: str = "GLACE — Sentinel-1 composites",
-) -> Path | UPath:
-    """Write the ``layers.json`` manifest the MapLibre viewer reads."""
-    manifest = build_viewer_manifest([_as_json(layer) for layer in layers], title=title)
-    out_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    logger.info("Wrote %s with %d layers", out_path, len(manifest["layers"]))
-    return out_path
-
-
-def _as_json(layer: LayerInfo) -> dict[str, Any]:
-    return {
-        "id": layer.id,
-        "product": layer.product,
-        "polarization": layer.polarization,
-        "year": layer.year,
-        "url": layer.url,
-        "bounds": layer.bounds,
-        "min_zoom": layer.min_zoom,
-        "max_zoom": layer.max_zoom,
-        "cmap": layer.cmap,
-        "vmin": layer.vmin,
-        "vmax": layer.vmax,
-        "units": layer.units,
-        "source": layer.source,
-        "size_bytes": layer.size_bytes,
-        "colors": layer.colors,
-        "start_date": layer.start_date,
-        "end_date": layer.end_date,
-    }
-
-
-def publish_tiles(
-    out_dir: Path,
-    dest: Path | UPath,
-    *,
-    include: Sequence[str] = ("*.pmtiles", "layers.json"),
-) -> list[Path | UPath]:
-    """Copy a built tile directory to its hosting location.
-
-    The archives have to be built locally -- packing a PMTiles file needs random
-    writes -- so publishing is a separate copy step. Point the viewer at the
-    destination with ``index.html?tiles=<base-url>``; nothing but the manifest
-    URL changes.
-
-    Parameters
-    ----------
-    out_dir
-        Local directory holding the archives and the manifest.
-    dest
-        Destination directory, typically an ``s3://`` URI next to the overview
-        mosaics.
-    include
-        Glob patterns to copy.
-
-    Returns
-    -------
-    list[Path | UPath]
-        The paths written.
-    """
-    dest.mkdir(parents=True, exist_ok=True)
-    written: list[Path | UPath] = []
-    for pattern in include:
-        for source in sorted(out_dir.glob(pattern)):
-            target = dest / source.name
-            size = source.stat().st_size
-            logger.info("Publishing %s (%.1f MB) -> %s", source.name, size / 1e6, target)
-            with source.open("rb") as handle:
-                target.write_bytes(handle.read())
-            written.append(target)
-    if not written:
-        msg = f"Nothing matched {include} in {out_dir}"
-        raise FileNotFoundError(msg)
-    logger.info("Published %d files to %s", len(written), dest)
-    return written
-
-
-#: Glacier inventories offered as vector overlays.
-#:
-#: ``year_column`` is the attribute the year tag is taken from -- a plain year
-#: for the Swiss inventories, an acquisition date for Paul et al., which is
-#: reduced to its year. ``name_column`` is ``None`` where the inventory ships no
-#: glacier names: Paul et al. (2020) carries only a running ``glacier_nr``, and
-#: its ``sec_names`` column is an aspect sector (N, NE, ...), not a name.
-INVENTORY_OVERLAYS: dict[str, dict[str, Any]] = {
-    "pauletal2020": {
-        "title": "Alpine Glacier Inventory",
-        "color": "#ff2d95",
-        "name_column": None,
-        "year_column": "date",
-        # The inventory ships no names, so its own identifier is what a reader
-        # can look a feature up by.
-        "extra_columns": {"glacier_nr": "glacier_nr"},
-    },
-    "sgi2016": {
-        "title": None,  # taken from the dataset's own metadata
-        "color": "#22d3ee",
-        "name_column": "name",
-        "year_column": "year_acq",
-    },
-    "sgi2023": {
-        "title": None,
-        "color": "#facc15",
-        "name_column": "name",
-        "year_column": "year_acq",
-    },
-}
 
 
 def build_vector_pmtiles(

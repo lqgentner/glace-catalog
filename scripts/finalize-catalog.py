@@ -11,7 +11,6 @@ left behind and assembles the documents over them:
 - ``tiles.parquet``, the per-year indexes concatenated with their hrefs rebased
   onto ``--base-url``, and ``mosaics.parquet``, built straight from the mosaic
   items because one row per year leaves nothing to concatenate;
-- ``layers.json``, the viewer's manifest, merged from every year's build state.
   None of it describes a measurement, which is why it sits beside the catalogue
   rather than inside it.
 
@@ -246,10 +245,12 @@ def patch_collections(
 def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
     """Point every MapLibre style at the most recent published year.
 
-    The styles are tracked source — their colours, opacity and legend stops are
-    reviewed — but the year in each ``pmtiles://`` source is the one part that
-    follows from the run rather than from a design decision, so it is the one
-    part rewritten here.
+    The styles are tracked source — their colours, opacity and legend blocks are
+    reviewed, and under M-27 they are what the *build* reads to bake an archive —
+    but the year in each ``pmtiles://`` source is the one part that follows from
+    the run rather than from a design decision, so it is the one part rewritten
+    here. The stretch is per product and does not vary by year, which is what
+    lets one style describe every published year.
 
     Returns
     -------
@@ -261,8 +262,11 @@ def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
     written = 0
     for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json")):
         style = json.loads(path.read_text())
-        source = style["sources"]["data"]
-        source["url"] = re.sub(r"/\d{4}/", f"/{latest}/", source["url"])
+        # Every source, not just one: `default.json` declares one per published
+        # layer so that a client switches by visibility rather than by loading
+        # another style.
+        for source in style.get("sources", {}).values():
+            source["url"] = re.sub(r"/\d{4}/", f"/{latest}/", source["url"])
         style["name"] = re.sub(r"\(\d{4}\)", f"({latest})", style["name"])
         for layer in style.get("layers", []):
             layer["id"] = re.sub(r"-\d{4}$", f"-{latest}", layer["id"])

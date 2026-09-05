@@ -511,7 +511,7 @@ def build_mosaic_item(
     version
         Published edition; see :data:`DATASET_VERSION`.
     """
-    grid = scope.grid
+    grid = scope.analysis_grid
     item = pystac.Item(
         id=scope.mosaic_item_id(year),
         geometry=geometry,

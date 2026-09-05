@@ -546,6 +546,79 @@ Ordered by what blocks what.
       (raster styling).** This catalog is the first Portolan raster PMTiles case;
       the four style files and the `renders` blocks are both candidate inputs to
       that discussion, and both may need changing when it settles.
+- [x] **P-18 — Publish the false colour's three channel stretches.**
+      **Done 2026-09-05.** `catalog/mosaics/styles/default.json` carries all
+      fourteen layers, the two false-colour ones with `type: "channels"`;
+      `glace_catalog.styles.load_styles` reads them and `webmap.py` holds no
+      copy. Gated by `tests/test_styles.py`, which also pins the values against
+      what they were before the move. The numbers
+      exist in exactly one place, `RGB_STYLES` in `webmap.py` — coherence
+      `(0.10, 0.80) (0.10, 0.60) (0.8, 2.5)`, backscatter
+      `(-18.5, -5) (-26, -11) (4, 14)` dB — and no consumer can reach them.
+      `LayerInfo` carries one scalar `vmin`/`vmax` pair, so the writer records
+      `ranges[0]` and drops green and blue; `backscatter-rgb.json`'s
+      `portolan:legend` is a `ramp` over `-18.5 … -5`, which is the red channel
+      alone, drawn in greys the archive does not use.
+
+      Closed by M-27: `default.json` carries the ranges under
+      `metadata.portolan:legend`, with a `type: "channels"` shape for the
+      false-colour case (M-26), and the build **reads** them rather than holding
+      its own copy. That removes the transcription rather than adding a third
+      place to keep in step — which is what the bug always was.
+      `glace-viewer` already reads the stretches where they are published
+      (`falseColourChannels`, commit `b99d140`) and holds no copy of its own; the
+      copy it used to hold disagreed with the build, `0.75–2.75` and `3.5–11`
+      against `0.8–2.5` and `4–14`, and was deleted rather than corrected.
+
+      Note also that only `backscatter-rgb.json` exists: `coh12_rgb.pmtiles` is
+      published with no style file at all. The single `default.json` fixes that
+      by construction.
+
+- [x] **P-19 — Re-derive the QA display ranges.** **Done 2026-09-05**, against the published 2021-2024 mosaics.
+
+      **QA-CQM: `-6 … +6 dB` becomes `-3 … +3 dB`.** The measured 2-98 %
+      envelope is `-2.9 … 3.1`, stable across years — 2021, 2022 and 2024 agree
+      to within 0.25 dB — because CQM is normalised. Rounded to an even `-3 … 3`,
+      which clips 0.14 dB off 2021's upper tail and is worth the legible axis.
+
+      **QA-NUM: `0 … 30` becomes `0 … 70`, shared by both products.** It is
+      *not* stable across years: 2021 reaches 49 (COH12) and 58 (RTC) against 26
+      and 30 from 2022 on, because S1B was still flying until December 2021. The
+      old 0-30 ceiling clipped 2021 to a flat saturated block — a live rendering
+      fault, and exactly what a fixed range is supposed to prevent.
+
+      **One range for both products rather than one each.** RTC sees more
+      acquisitions than COH12, which needs pairs; per-product ranges would
+      normalise that difference away and draw the two identically. A shared
+      ceiling is what makes it visible, which is the point of showing a count.
+
+      **Still open for the Alps:** these are Swiss-perimeter numbers over
+      2021-2024. `glace-alps` covers 2015-2025, which includes more of the
+      S1A+S1B era, so QA-NUM in particular needs re-checking before the backfill.
+      The mosaics carry no embedded band statistics yet (S-1), so the maxima had
+      to be read from pixels rather than headers.
+
+      Superseded reasoning, kept because it was wrong in an instructive way: the old range
+      centred a **diverging**
+      ramp on 0 dB, on the reading that CQM is a contributing-area ratio whose
+      1.0 is flat terrain. **That reading is wrong.** In Small et al. (2022),
+      which `s1bursts/resolution_weighter.py` implements, `A = 1` is the flat
+      reference facet of the per-scene *weight input*; CQM is the weighted
+      aggregate over acquisitions, in which 1.0 means nothing. It is a composite
+      quality indicator where higher is better.
+
+      The ramp is fixed (M-28: `cmc.glasgow`, sequential). **The range is not** —
+      it is carried over unchanged and its justification is gone. Measure it
+      against a published year before the Alps.
+
+      **The sign is not part of it.** `s1bursts` documents an optional decibel
+      form as `-10·log10(…)` while this repository converts with `+10·log10`
+      (`decibel=True`), and the two are not in conflict: that form expresses
+      *resolution* where this one expresses *area*, and resolution is the
+      reciprocal, so the minus is the reciprocal and nothing else. This
+      repository reads the stored linear CQM and converts it; no negation is
+      wanted. Recorded so it is not filed as a bug twice.
+
 - [ ] **P-13 — Register in the Portolan registry** once published
       (`portolan:register-catalog`).
 - [ ] **P-14 — Test `@developmentseed/deck.gl-geotiff`** against a LERC_ZSTD
@@ -725,6 +798,12 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-22 | Web-map archives live at `mosaics/pmtiles/{year}/`, not beside the COGs they render: they are collection-level products, and the stems would otherwise collide across two different quantities | 3 |
 | M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem | 3 |
 | M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year | 4 |
+| M-24 | **The annual analysis mosaic moves to ETRS89-LAEA 40 m.** WebMercator is not equal-area; a nominal 19.109 m pixel is 13.2 m on the ground at 46.5° N, and the factor varies across the perimeter, so any area statistic needs an undeclared correction. Reverses §10's "not taken" | 4 |
+| M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites; LAEA is never in the display path. Measured: the 4x COG-vs-PMTiles gap is the *dtype*, not the container — an 8-bit WebP COG at the same quality costs 1.37x at z11, a float LERC one 4.00x, and no LERC bound closes it | 4 |
+| M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header carries bounds and zoom range, the `rel:"pmtiles"` link carries the href, the item carries the dates, and the display constants go in the MapLibre style's `metadata`. `renders` is *not* their home — its `colormap_name` deliberately names a different ramp than the one baked (M-10), and it covers 4 of 14 layer types | 4 |
+| M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** `catalog/mosaics/styles/default.json` carries each layer's ramp, range and units under `metadata.portolan:legend`; `webmap.py` reads them to build its LUTs instead of holding `DEFAULT_STYLES` / `RGB_STYLES`. **Upholds M-21** rather than narrowing it — the numbers are colour decisions, they belong in a reviewed file, and the file that is reviewed should be the file that is used. The cost is a build-time dependency on a catalog file, accepted because the alternative is two copies and two copies is what P-18 is | 4 |
+| M-29 | **One credit line, read from the style.** `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header. It was written three times before — the style's sources, the tiler call, and again at runtime in `glace-viewer` — and the three disagreed. The comma rather than a full stop keeps it one credit list, which is what a map attribution is | 4 |
+| M-28 | QA ramps are **sequential**: `cmc.turku` for QA-NUM, `cmc.glasgow` for QA-CQM. The diverging `cmc.vik` encoded a wrong reading of CQM — see P-19 | 4 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |
 
 ---
@@ -744,7 +823,7 @@ For anyone holding the `stac-store-refactor` documents.
 | no prose in the store | README + AGENTS at every level | `PTL-FIL-001/002/003` |
 | relative asset hrefs throughout | absolute https + `alternate` s3 | `PTL-AST-002`, and the Source Cooperative listing |
 | §14's COG-vs-PMTiles benchmark still open | settled by measurement | §4 |
-| branch B's LAEA 40 m grid | not taken | WebMercator z13 serves both roles; the false-colour COG closes the display gap |
+| branch B's LAEA 40 m grid | **taken, 2026-09-05** | WebMercator is not equal-area, and a nominal 19.109 m pixel is 13.2 m on the ground at 46.5° N. "Serves both roles" was the objection; the equal-area argument overturns it, and the clause about the false-colour COG had already died with M-20. See M-24 |
 
 
 ---
