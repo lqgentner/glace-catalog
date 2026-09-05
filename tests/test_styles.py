@@ -45,8 +45,8 @@ STYLE_PATH = Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/de
 EXPECTED_SINGLE = {
     "coh12_vv": ("cmc.lipari", 0.10, 0.80, "", False),
     "coh12_vh": ("cmc.lipari", 0.10, 0.60, "", False),
-    "rtc_vv": ("cmc.navia", -18.5, -5.0, "dB", True),
-    "rtc_vh": ("cmc.navia", -26.0, -11.0, "dB", True),
+    "rtc_vv": ("cmc.grayC", -18.5, -5.0, "dB", True),
+    "rtc_vh": ("cmc.grayC", -26.0, -11.0, "dB", True),
     # Re-derived 2026-09-05 against the published 2021-2024 mosaics; see P-19.
     # QA-NUM is an acquisition count, so its ceiling moves with the
     # constellation: 2021 reaches 49 (COH12) and 58 (RTC) because S1B was still

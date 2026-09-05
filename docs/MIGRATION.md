@@ -420,7 +420,7 @@ into `properties`). It carries per-layer `rescale`, `colormap_name`,
 than only implemented in the viewer.
 
 `colormap_name` names portable matplotlib maps (`magma`, `gray`, `viridis`,
-`rdbu`) rather than the designed cmcrameri maps (`cmc.lipari`, `cmc.navia`),
+`rdbu`) rather than the designed cmcrameri maps (`cmc.lipari`, `cmc.grayC`),
 because a generic client will not have cmcrameri registered. The designed maps
 are named in each collection's `AGENTS.md`.
 

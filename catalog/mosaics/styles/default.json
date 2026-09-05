@@ -426,7 +426,7 @@
         "portolan:legend": {
           "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
           "type": "ramp",
-          "cmap": "cmc.navia",
+          "cmap": "cmc.grayC",
           "vmin": -18.5,
           "vmax": -5.0,
           "unit": "dB",
@@ -435,87 +435,87 @@
           "stops": [
             {
               "value": -18.5,
-              "color": "#031327",
+              "color": "#000000",
               "label": "-18.5"
             },
             {
               "value": -17.65625,
-              "color": "#052546",
+              "color": "#171717",
               "label": ""
             },
             {
               "value": -16.8125,
-              "color": "#073966",
+              "color": "#262626",
               "label": ""
             },
             {
               "value": -15.96875,
-              "color": "#0e4d81",
+              "color": "#353535",
               "label": ""
             },
             {
               "value": -15.125,
-              "color": "#1b608f",
+              "color": "#444444",
               "label": ""
             },
             {
               "value": -14.28125,
-              "color": "#266f90",
+              "color": "#515151",
               "label": ""
             },
             {
               "value": -13.4375,
-              "color": "#2f798b",
+              "color": "#5f5f5f",
               "label": ""
             },
             {
               "value": -12.59375,
-              "color": "#378186",
+              "color": "#6b6b6b",
               "label": ""
             },
             {
               "value": -11.75,
-              "color": "#418a80",
+              "color": "#777777",
               "label": ""
             },
             {
               "value": -10.90625,
-              "color": "#4c9579",
+              "color": "#848484",
               "label": ""
             },
             {
               "value": -10.0625,
-              "color": "#5aa171",
+              "color": "#919191",
               "label": ""
             },
             {
               "value": -9.21875,
-              "color": "#6db169",
+              "color": "#a0a0a0",
               "label": ""
             },
             {
               "value": -8.375,
-              "color": "#89c36a",
+              "color": "#b0b0b0",
               "label": ""
             },
             {
               "value": -7.53125,
-              "color": "#b1d67f",
+              "color": "#c1c1c1",
               "label": ""
             },
             {
               "value": -6.6875,
-              "color": "#d3e3a1",
+              "color": "#d5d5d5",
               "label": ""
             },
             {
               "value": -5.84375,
-              "color": "#ebedc1",
+              "color": "#eaeaea",
               "label": ""
             },
             {
               "value": -5.0,
-              "color": "#fcf4d9",
+              "color": "#ffffff",
               "label": "-5"
             }
           ]
@@ -537,7 +537,7 @@
         "portolan:legend": {
           "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
           "type": "ramp",
-          "cmap": "cmc.navia",
+          "cmap": "cmc.grayC",
           "vmin": -26.0,
           "vmax": -11.0,
           "unit": "dB",
@@ -546,87 +546,87 @@
           "stops": [
             {
               "value": -26.0,
-              "color": "#031327",
+              "color": "#000000",
               "label": "-26"
             },
             {
               "value": -25.0625,
-              "color": "#052546",
+              "color": "#171717",
               "label": ""
             },
             {
               "value": -24.125,
-              "color": "#073966",
+              "color": "#262626",
               "label": ""
             },
             {
               "value": -23.1875,
-              "color": "#0e4d81",
+              "color": "#353535",
               "label": ""
             },
             {
               "value": -22.25,
-              "color": "#1b608f",
+              "color": "#444444",
               "label": ""
             },
             {
               "value": -21.3125,
-              "color": "#266f90",
+              "color": "#515151",
               "label": ""
             },
             {
               "value": -20.375,
-              "color": "#2f798b",
+              "color": "#5f5f5f",
               "label": ""
             },
             {
               "value": -19.4375,
-              "color": "#378186",
+              "color": "#6b6b6b",
               "label": ""
             },
             {
               "value": -18.5,
-              "color": "#418a80",
+              "color": "#777777",
               "label": ""
             },
             {
               "value": -17.5625,
-              "color": "#4c9579",
+              "color": "#848484",
               "label": ""
             },
             {
               "value": -16.625,
-              "color": "#5aa171",
+              "color": "#919191",
               "label": ""
             },
             {
               "value": -15.6875,
-              "color": "#6db169",
+              "color": "#a0a0a0",
               "label": ""
             },
             {
               "value": -14.75,
-              "color": "#89c36a",
+              "color": "#b0b0b0",
               "label": ""
             },
             {
               "value": -13.8125,
-              "color": "#b1d67f",
+              "color": "#c1c1c1",
               "label": ""
             },
             {
               "value": -12.875,
-              "color": "#d3e3a1",
+              "color": "#d5d5d5",
               "label": ""
             },
             {
               "value": -11.9375,
-              "color": "#ebedc1",
+              "color": "#eaeaea",
               "label": ""
             },
             {
               "value": -11.0,
-              "color": "#fcf4d9",
+              "color": "#ffffff",
               "label": "-11"
             }
           ]

@@ -83,7 +83,7 @@ https://titiler.xyz/cog/preview.png
   collection are pre-stretched 8-bit tiles. For any value, read the COGs.
 - **nodata is NaN** on every float32 raster and **0** on the uint16 counts.
 - **Colormap names in `renders` are portable stand-ins.** The designed maps are
-  `cmc.lipari` for coherence and `cmc.navia` for backscatter (cmcrameri,
+  `cmc.lipari` for coherence and `cmc.grayC` for backscatter (cmcrameri,
   perceptually uniform); the block names `magma` and `gray` so that a client
   without cmcrameri still renders something correct.
 
