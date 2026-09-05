@@ -625,14 +625,40 @@ Ordered by what blocks what.
       NaN-nodata mosaic before hardening the viewer's zero-sentinel workaround.
       The Portolan browser uses it, not geotiff.js, and it depends on `lerc`
       directly — if it preserves the validity mask the workaround disappears.
-- [ ] **P-15 — Labels catalog.** Left in `deep-glacier-mapping` for now
-      (`build-labels-catalog.py`, `rasterize-labels.py`). It is STAC creation and
-      belongs here eventually, as a third collection or a sibling catalog.
+- [x] **P-15 — ~~Labels catalog~~. Dropped 2026-09-05: the labels are not a
+      catalog.** They are MGRS-tiled masks used to train models alongside GLACE,
+      read by tile code from a known prefix — the shape the composites
+      themselves had before the STAC conversion. Nothing discovers them, so a
+      catalog bought nothing and cost a dependency between two repositories that
+      should not have one.
+
+      `build-labels-catalog.py` is deleted. `rasterize-labels.py` stays in
+      `deep-glacier-mapping`, which owns the inventories it rasterizes, and
+      carries its own `IGNORE_VALUE` and rasterization table — everything the
+      old `LabelSource` held beyond that (`title`, `description`, `start`,
+      `end`, `collection_id`) existed only to build the collection. The label
+      machinery is deleted from here: `IGNORE_VALUE`, `LabelSource`,
+      `LABEL_SOURCES`, `LabelFile`, `discover_labels` from `stac/naming.py` and
+      `build_label_item` / `build_label_collection` from `stac/items.py`, none
+      of which this repository ever called.
+
+      Verified before deleting the builder: `s3://s1-bursts/data/labels` holds
+      785 masks in three flat directories and **no catalog, collection or item
+      document**. Nothing was ever published to orphan.
 - [ ] **P-16 — ~~Rename `webmap.py`~~.** Dropped: it builds web maps after all.
-- [ ] **P-17 — Delete the originals from `deep-glacier-mapping`** once P-3 lands
-      and this repository can build a store: `scopes.py`, `stac/`, `mosaics.py`,
-      `webmap.py`, `gdal_s3.py`'s subprocess helper, and `scripts/stac/`. Until
-      then both copies exist and only the old one works (§7).
+- [x] **P-17 — Delete the originals from `deep-glacier-mapping`. Done
+      2026-09-05.** `scopes.py`, `stac/`, `mosaics.py`, `webmap.py`, `gdal_s3.py`
+      and the publish/finalize/manifest scripts are gone from there.
+
+      Three scripts stayed, because they need that repository's dataset classes
+      rather than this one's pipeline: `rasterize-labels.py`,
+      `derive-glacier-fractions.py` and `export-inventories.py`. They now live
+      in `scripts/inventories/`, since all three read glacier inventories and
+      none of them touches STAC.
+
+      **The two repositories import nothing from each other** (M-30). Making
+      that true also moved the inventory-overlay export *out* of here — see
+      M-30 — and settled P-15.
 
 ### Checksums: sha256 only
 
@@ -802,6 +828,7 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites; LAEA is never in the display path. Measured: the 4x COG-vs-PMTiles gap is the *dtype*, not the container — an 8-bit WebP COG at the same quality costs 1.37x at z11, a float LERC one 4.00x, and no LERC bound closes it | 4 |
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header carries bounds and zoom range, the `rel:"pmtiles"` link carries the href, the item carries the dates, and the display constants go in the MapLibre style's `metadata`. `renders` is *not* their home — its `colormap_name` deliberately names a different ramp than the one baked (M-10), and it covers 4 of 14 layer types | 4 |
 | M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** `catalog/mosaics/styles/default.json` carries each layer's ramp, range and units under `metadata.portolan:legend`; `webmap.py` reads them to build its LUTs instead of holding `DEFAULT_STYLES` / `RGB_STYLES`. **Upholds M-21** rather than narrowing it — the numbers are colour decisions, they belong in a reviewed file, and the file that is reviewed should be the file that is used. The cost is a build-time dependency on a catalog file, accepted because the alternative is two copies and two copies is what P-18 is | 4 |
+| M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` — a shared library is the right place for a grid contract, a sibling repository is not. Making it true moved `INVENTORY_OVERLAYS`, `export_inventory`, `export_tile_grid` and `build_vector_pmtiles` to `deep-glacier-mapping` (dead code here; its inventory export was the only caller), replaced `get_scope` in the fraction script with a `--perimeter-tiles` argument, and dropped the labels catalog (P-15) | 7 |
 | M-29 | **One credit line, read from the style.** `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header. It was written three times before — the style's sources, the tiler call, and again at runtime in `glace-viewer` — and the three disagreed. The comma rather than a full stop keeps it one credit list, which is what a map attribution is | 4 |
 | M-28 | QA ramps are **sequential**: `cmc.turku` for QA-NUM, `cmc.glasgow` for QA-CQM. The diverging `cmc.vik` encoded a wrong reading of CQM — see P-19 | 4 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |

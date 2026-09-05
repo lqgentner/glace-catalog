@@ -237,26 +237,39 @@ different values in 2021 and 2025.
 the port landed. The port is done; delete them once a real year has been
 published from here. Tracked as P-17.
 
-> **Do not delete the copies yet — one of them is still the live producer.**
-> The published store's `layers.json` at
-> `data.source.coop/lqgentner/glace-ch/layers.json` was generated **2026-09-02**,
-> before the port commit, and carries all 56 layers. It is written by *your*
-> copy of the writer, which still has a caller; this repository's copy has none.
-> `glace-viewer` reads that file at runtime.
->
-> So deleting the originals today stops `layers.json` production and the viewer
-> degrades to whatever is cached. The safe order is: this repository lands the
-> style-generation work (M-26 / M-27) and `glace-viewer` switches to reading the
-> catalog, **then** the originals go. Until then both copies exist and only the
-> old one runs.
+**Done 2026-09-05.** The copies are gone. Three scripts stayed because they need
+that repository's dataset classes, not this one's pipeline —
+`rasterize-labels.py`, `derive-glacier-fractions.py` and
+`export-inventories.py` — and moved to `scripts/inventories/`, since all three
+read glacier inventories and none touches STAC.
 
-`cache/stac-store-refactor/SUPERSEDED.md` already redirects readers.
+`layers.json` production stopped with them, which is intended: M-26 retires the
+manifest, and `glace-viewer` has its migration recorded in its own `AGENTS.md`.
 
-### D-3 — The labels catalog is unclaimed
+### D-3 — The labels are yours, and are not a catalog
 
-`rasterize-labels.py` and `build-labels-catalog.py` stayed behind. The labels are
-STAC creation and belong here eventually, as a third collection or a sibling
-catalog. Nothing depends on the decision yet. Tracked as P-15.
+**Settled 2026-09-05, reversing "belongs here eventually".** The masks are MGRS
+tiles used to train models alongside GLACE, read by tile code from a known
+prefix. Nothing discovers them, so a STAC catalog bought nothing and cost an
+import between two repositories that should not have one.
+
+`build-labels-catalog.py` is deleted and the label machinery is gone from here.
+`rasterize-labels.py` keeps its own `IGNORE_VALUE` and rasterization table;
+everything the old `LabelSource` carried beyond that described a collection that
+no longer exists.
+
+**The contract is on disk, not in an import**, the same way
+`glacier-fractions.parquet` is:
+
+```
+{labels_root}/{source}/LABELS_{SOURCE}_{year}_{tile}.tif
+```
+
+`1` glacier, `0` background, `255` *ignore* — a glacier surveyed in a different
+year, which must be excluded from training and evaluation rather than treated as
+background. Masks land on the same MGRS tile and UTM zone as the composites
+because both sides ask `freezebase.mgrs`, which is where a grid contract
+belongs. Write this down in a README beside the data; nothing validates it now.
 
 ---
 
@@ -267,7 +280,8 @@ Recorded so the next person does not re-derive them.
 | what | why |
 | --- | --- |
 | **`gdal_s3.py` deleted** | Of its three functions only `subprocess_s3_env` had a caller, and it has no GDAL in it. `to_gdal_uri` and `gdal_s3_env` were dead code that imported `osgeo` — a dependency this repository does not declare and never installed, so `gdal_s3_env` could not have run. Moved the one live function to `freezebase`, dropped the rest. |
-| **`layers.json` retired by design (M-26), not yet by code** | M-9 moved raster *styling* to `renders`; it did not move the viewer manifest, and `build_viewer_manifest` / `write_manifest` / `publish_tiles` are still in `webmap.py` — with no caller **here**. See the warning under D-2 before deleting anything upstream. |
+| **`layers.json` retired, in design and in code (M-26)** | M-9 moved raster *styling* to `renders`; retiring the viewer manifest was a separate decision, and its writer is now deleted. `glace-viewer` reads the published file until it migrates; see its `AGENTS.md`. |
+| **The inventory overlay export moved out** | `INVENTORY_OVERLAYS`, `export_inventory`, `export_tile_grid` and `build_vector_pmtiles` were dead here — nothing in this repository called them, and `deep-glacier-mapping`'s inventory export was their only consumer. They live there now, which is also what M-30 required. |
 | **ETag dropped from the manifest** | It was never writer code — it is read from a listing — it was a writer *constraint*: keep the upload single-part or it stops being an MD5. `sha256` is what gets published, so the ETag bought only a listing-based check. |
 | **`build_tiles_collection` / `build_mosaics_collection` deleted** | The collection documents are hand-written source now, patched at publication rather than regenerated. Their prose was in Python string literals; it is in reviewable JSON instead. |
 | **The RGBA WEBP display COGs dropped** | PMTiles serve that view at a quarter of the bytes. Removing them also took every decibel pixel out of the `data` role. |
@@ -277,12 +291,6 @@ Recorded so the next person does not re-derive them.
 - **`mosaics.py` imports both `xml.etree` and `defusedxml`.** Only the defused
   parser is used for reading; the `ET` import remains for element construction,
   which is fine, but the two-import shape invites someone to use the wrong one.
-- **`webmap.py` is 1 100 lines** covering LUTs, stretch estimation, the tiler
-  subprocess and inventory export. `export_inventory` in particular has nothing
-  to do with web-map tiles and is the natural first split. Do **not** split on
-  `build_viewer_manifest` / `write_manifest` / `publish_tiles`: they look dead
-  here but are the interface `glace-viewer` still consumes — see D-2.
-
 - **`rio-pmtiles` is declared nowhere.** It is in neither `pyproject.toml` nor
   `uv.lock`, and `webmap.py` resolves the `rio` CLI at runtime, so `--steps
   pmtiles` cannot run from a clean `uv sync`. Now that M-25 makes PMTiles the

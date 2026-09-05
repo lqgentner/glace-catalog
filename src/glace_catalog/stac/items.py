@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dc_field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -21,8 +21,6 @@ import pystac
 from pystac.utils import datetime_to_str
 
 from glace_catalog.stac.naming import (
-    IGNORE_VALUE,
-    LABEL_SOURCES,
     POLARIZATIONS,
     PRODUCTS,
 )
@@ -37,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from glace_catalog.scopes import Scope
-    from glace_catalog.stac.naming import CompositeFile, LabelFile, LabelSource
+    from glace_catalog.stac.naming import CompositeFile
     from glace_catalog.stac.tags import RasterInfo
 
 GEOMETRY_SIMPLIFY_DEG = 1e-4  # ~11 m at the equator
@@ -354,69 +352,6 @@ def build_tile_item(
     return item
 
 
-def build_label_item(label: LabelFile) -> pystac.Item:
-    """Build a label item (glacier mask) for one tile.
-
-    The item datetime range is the acquisition year for year-split sources, and
-    the inventory's overall source imagery window otherwise.
-    """
-    source = LABEL_SOURCES[label.source]
-    geobox = MGRSGeoBox.from_mgrs(label.tile)
-    geometry, bbox = _tile_geometry(geobox)
-    if label.year is None:
-        start, end = source.start, source.end
-    else:
-        start = datetime(label.year, 1, 1, tzinfo=UTC)
-        end = datetime(label.year, 12, 31, tzinfo=UTC)
-
-    item = pystac.Item(
-        id=label.item_id,
-        geometry=geometry,
-        bbox=bbox,
-        datetime=start + (end - start) / 2,
-        properties={
-            "start_datetime": datetime_to_str(start),
-            "end_datetime": datetime_to_str(end),
-            "glace:label_source": source.key,
-        },
-    )
-    if label.year is not None:
-        item.properties["glace:year_acq"] = label.year
-    _apply_common_metadata(item, geobox, label.tile)
-
-    asset = pystac.Asset(
-        href=str(label.path),
-        title=f"Glacier mask: {source.title}",
-        media_type=pystac.MediaType.COG,
-        roles=["labels", "data"],
-    )
-    band: dict[str, Any] = {"name": "glacier_mask", "data_type": "uint8"}
-    classes = [
-        {"value": 0, "name": "background", "description": "No glacier"},
-        {"value": 1, "name": "glacier", "description": f"Glacier per {source.title}"},
-    ]
-    if source.year_split:
-        band["nodata"] = IGNORE_VALUE
-        classes.append(
-            {
-                "value": IGNORE_VALUE,
-                "name": "ignore",
-                "description": (
-                    "Glacier mapped in a different acquisition year, buffered; "
-                    "exclude from training and evaluation"
-                ),
-                "nodata": True,
-            },
-        )
-    asset.extra_fields["bands"] = [band]
-    asset.extra_fields["raster:spatial_resolution"] = 10.0
-    asset.extra_fields["raster:bits_per_sample"] = 8
-    asset.extra_fields["classification:classes"] = classes
-    item.add_asset("labels", asset)
-    item.stac_extensions.extend([CLASSIFICATION_EXTENSION_URI, RASTER_EXTENSION_URI])
-    return item
-
-
 @dataclass(frozen=True)
 class MosaicAsset:
     """One file published under an annual mosaic item.
@@ -582,33 +517,3 @@ _PRODUCERS = [
     ),
 ]
 _KEYWORDS = ["Sentinel-1", "SAR", "InSAR coherence", "backscatter", "glaciers"]
-
-
-def build_label_collection(
-    items: Sequence[pystac.Item],
-    source: LabelSource,
-) -> pystac.Collection:
-    """Assemble label items of one inventory into a project-internal collection.
-
-    ``items`` gives the extent; their links are added by the caller through
-    :func:`~glace_catalog.stac.save.add_item_links`.
-    """
-    split_note = (
-        " Masks are split by acquisition year: each holds the glaciers mapped in that "
-        f"year, with the other years' outlines buffered and burned as {IGNORE_VALUE} "
-        "(ignore)."
-        if source.year_split
-        else ""
-    )
-    return pystac.Collection(
-        id=source.collection_id,
-        title=f"Glacier masks from the {source.title}",
-        description=(
-            f"Per-tile glacier masks rasterized from the {source.title} onto the 10 km "
-            f"MGRS grid at 10 m resolution. {source.description}{split_note} "
-            "Project-internal training and validation labels; not part of the "
-            "published GLACE dataset."
-        ),
-        extent=extent_from_items(items),
-        keywords=["glacier inventory", "labels", "Alps"],
-    )

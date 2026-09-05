@@ -29,7 +29,6 @@ POLARIZATIONS = ("VV", "VH")
 PRODUCTS = ("COH12", "RTC")
 QA_METRICS = ("NUM", "CQM")
 
-IGNORE_VALUE = 255
 """Label value for a pixel that must be excluded from loss and metrics."""
 
 ASSET_KEYS: tuple[str, ...] = tuple(
@@ -55,85 +54,7 @@ _LABEL_RE = re.compile(
 )
 
 
-@dataclass(frozen=True)
-class LabelSource:
-    """A glacier inventory published as a collection of label masks.
-
-    ``year_split`` sources are rasterized once per acquisition year: each mask
-    holds only the glaciers mapped in that year, with the other years' outlines
-    burned as :data:`IGNORE_VALUE` so every glacier is seen exactly once across
-    the years. ``year_column`` names the outline attribute the acquisition year
-    is drawn from; it may hold a year directly or a full acquisition date.
-    """
-
-    key: str
-    title: str
-    description: str
-    start: datetime
-    end: datetime
-    year_split: bool = False
-    year_column: str = "year_acq"
-
-    @property
-    def collection_id(self) -> str:
-        """STAC collection id, e.g. ``labels-sgi2016``."""
-        return f"labels-{self.key.lower()}"
-
-
-LABEL_SOURCES: dict[str, LabelSource] = {
-    "PAULETAL2020": LabelSource(
-        key="PAULETAL2020",
-        title="Paul et al. (2020) Alpine glacier inventory",
-        description=(
-            "Glacier outlines of the European Alps derived from Sentinel-2 imagery "
-            "acquired 2015-2017 (https://doi.org/10.5194/essd-12-1805-2020)."
-        ),
-        # Source imagery window of the inventory
-        start=datetime(2015, 8, 1, tzinfo=UTC),
-        end=datetime(2017, 10, 31, tzinfo=UTC),
-        year_split=True,
-        year_column="date",
-    ),
-    "SGI2016": LabelSource(
-        key="SGI2016",
-        title="Swiss Glacier Inventory 2016 (SGI2016-R2020)",
-        description=(
-            "Glacier outlines of Switzerland from aerial imagery acquired 2013-2018 "
-            "(https://doi.org/10.3389/feart.2021.704189)."
-        ),
-        start=datetime(2013, 1, 1, tzinfo=UTC),
-        end=datetime(2018, 12, 31, tzinfo=UTC),
-        year_split=True,
-    ),
-    "SGI2023": LabelSource(
-        key="SGI2023",
-        title="Swiss Glacier Inventory 2023 (SGI2023-R2026)",
-        description=(
-            "Glacier outlines of Switzerland from aerial imagery acquired 2021-2024. "
-            "Work in progress, for internal use only."
-        ),
-        start=datetime(2021, 1, 1, tzinfo=UTC),
-        end=datetime(2024, 12, 31, tzinfo=UTC),
-        year_split=True,
-    ),
-}
 """Glacier inventories available as label collections, keyed by filename token."""
-
-
-@dataclass(frozen=True)
-class LabelFile:
-    """A parsed per-tile label mask raster."""
-
-    path: Path | UPath
-    source: str  # key into LABEL_SOURCES
-    tile: str
-    year: int | None  # acquisition year for year-split sources, else None
-
-    @property
-    def item_id(self) -> str:
-        """STAC item id, e.g. ``32TMS25-sgi2016-2016``."""
-        stem = f"{self.tile}-{self.source.lower()}"
-        return stem if self.year is None else f"{stem}-{self.year}"
 
 
 @dataclass(frozen=True)
@@ -240,34 +161,6 @@ def require_unique_composites(by_tile: Mapping[str, Sequence[CompositeFile]]) ->
         f"explicitly before publishing:\n{details}"
     )
     raise ValueError(msg)
-
-
-def discover_labels(labels_dir: Path | UPath) -> list[LabelFile]:
-    """Discover and parse all label mask COGs in a directory, sorted by item id.
-
-    Raises
-    ------
-    KeyError
-        If a mask names an inventory absent from :data:`LABEL_SOURCES`.
-    """
-    labels: list[LabelFile] = []
-    for path in labels_dir.glob("LABELS_*.tif"):
-        match = _LABEL_RE.match(path.name)
-        if match is None:
-            continue
-        if match["source"] not in LABEL_SOURCES:
-            msg = f"Unknown label source {match['source']!r} in {path.name}"
-            raise KeyError(msg)
-        labels.append(
-            LabelFile(
-                path=path,
-                source=match["source"],
-                tile=match["tile"],
-                year=int(match["year"]) if match["year"] else None,
-            ),
-        )
-    logger.info("Discovered %d label masks in %s", len(labels), labels_dir)
-    return sorted(labels, key=lambda label: label.item_id)
 
 
 def check_completeness(

@@ -25,7 +25,6 @@ needed.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import json
 import logging
 import math
 import os
@@ -34,7 +33,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from freezebase.raster import rasterio_open
 from freezebase.s3 import subprocess_s3_env
@@ -60,8 +59,6 @@ from glace_catalog.styles import (
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
 
-    import geopandas as gpd
-
     from glace_catalog.mosaics import YearVrts
 
 logger = logging.getLogger(__name__)
@@ -75,7 +72,6 @@ TILE_SIZE = 256
 # manifest: unlike the inventories there is only ever one, and the viewer needs
 # it as `source-layer` -- a vector layer with the wrong one renders nothing and
 # reports no error.
-TILE_GRID_LAYER = "grid"
 
 
 @dataclass
@@ -641,279 +637,9 @@ def build_layers(
     return built
 
 
-INVENTORY_OVERLAYS: dict[str, dict[str, Any]] = {
-    "pauletal2020": {
-        "title": "Alpine Glacier Inventory",
-        "color": "#ff2d95",
-        "name_column": None,
-        "year_column": "date",
-        # The inventory ships no names, so its own identifier is what a reader
-        # can look a feature up by.
-        "extra_columns": {"glacier_nr": "glacier_nr"},
-    },
-    "sgi2016": {
-        "title": None,  # taken from the dataset's own metadata
-        "color": "#22d3ee",
-        "name_column": "name",
-        "year_column": "year_acq",
-    },
-    "sgi2023": {
-        "title": None,
-        "color": "#facc15",
-        "name_column": "name",
-        "year_column": "year_acq",
-    },
-}
 """How each glacier inventory is drawn as a vector overlay, keyed by dataset.
 
 Not part of the catalog: the inventories are third-party datasets a viewer shows
 *beside* GLACE, and this is the presentation each one is given. It travels with
 :func:`export_inventory` because that is what consumes it.
 """
-
-
-def build_vector_pmtiles(
-    geojson_path: Path,
-    out_path: Path,
-    *,
-    layer: str,
-    min_zoom: int = 4,
-    max_zoom: int = 14,
-    tippecanoe: str = "tippecanoe",
-    extra_args: Sequence[str] = (),
-) -> int:
-    """Convert a GeoJSON overlay to a vector PMTiles archive with tippecanoe.
-
-    The archive is larger on disk than the gzipped GeoJSON -- the pyramid stores
-    each geometry once per zoom level -- but a view only pulls the tiles it
-    covers, so the opening view transfers roughly a sixteenth as much and nothing
-    is parsed up front.
-
-    Parameters
-    ----------
-    geojson_path
-        Overlay written by :func:`export_inventory`.
-    out_path
-        Destination ``.pmtiles`` archive; overwritten if it exists.
-    layer
-        Name of the layer inside the archive, which is what the viewer's
-        ``source-layer`` must match.
-    min_zoom, max_zoom
-        Zoom range to build. Lowering ``max_zoom`` is the main lever on size.
-    tippecanoe
-        Path to the tippecanoe binary.
-    extra_args
-        Further tippecanoe flags, appended before the input path.
-
-    Returns
-    -------
-    int
-        Size of the written archive in bytes.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the tippecanoe binary cannot be found.
-    """
-    if shutil.which(tippecanoe) is None and not Path(tippecanoe).is_file():
-        msg = (
-            f"tippecanoe not found at {tippecanoe!r}. Run under "
-            "`uv run --with tippecanoe` for the pre-built wheel, build it from "
-            "https://github.com/felt/tippecanoe, or pass --tippecanoe."
-        )
-        raise FileNotFoundError(msg)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        tippecanoe,
-        "-o",
-        str(out_path),
-        "-Z",
-        str(min_zoom),
-        "-z",
-        str(max_zoom),
-        "-l",
-        layer,
-        "--force",
-        "--quiet",
-        *extra_args,
-        str(geojson_path),
-    ]
-    logger.debug("running %s", " ".join(command))
-    subprocess.run(command, check=True)  # noqa: S603  # our own argv, no shell
-    size = out_path.stat().st_size
-    logger.info("Wrote %s: %.1f MB (z%d-%d)", out_path.name, size / 1e6, min_zoom, max_zoom)
-    return size
-
-
-def export_inventory(
-    frame: gpd.GeoDataFrame,
-    out_path: Path,
-    *,
-    name_column: str | None,
-    year_column: str,
-    extra_columns: Mapping[str, str] | None = None,
-    simplify: float = 10.0,
-    precision: int = 5,
-) -> tuple[int, int, int]:
-    """Write a glacier inventory as a trimmed, simplified GeoJSON overlay.
-
-    Each feature keeps ``name`` and ``year`` plus whatever ``extra_columns``
-    names; everything else is dropped, since the overlay exists only to be
-    looked at. Geometries
-    are simplified in a metric CRS and coordinates rounded. The default 10 m
-    tolerance is finer than the 26.5 m the raster layers resolve at their
-    maximum zoom, so the outlines stay crisper than the imagery underneath.
-
-    Parameters
-    ----------
-    frame
-        Inventory as a :class:`geopandas.GeoDataFrame`.
-    out_path
-        Destination ``.geojson`` file.
-    name_column
-        Column holding the glacier name, or ``None`` for an inventory that
-        ships none, in which case ``name`` is written as null.
-    year_column
-        Column holding the acquisition year or date; dates are reduced to
-        their year.
-    extra_columns
-        Further attributes to carry through, as ``{property: column}``. Missing
-        columns are written as null rather than raising, so an inventory that
-        lacks one still exports.
-    simplify
-        Douglas-Peucker tolerance in metres, applied in EPSG:3035. Zero keeps
-        the full geometry.
-    precision
-        Decimal places kept in the output coordinates; 5 is about a metre.
-
-    Returns
-    -------
-    tuple[int, int, int]
-        Feature count, and the first and last acquisition year present.
-    """
-    from pandas.api.types import is_datetime64_any_dtype  # noqa: PLC0415
-
-    export = frame.copy()
-    years = export[year_column]
-    export["year"] = (years.dt.year if is_datetime64_any_dtype(years) else years).astype("int32")
-    if name_column is None:
-        export["name"] = None
-    else:
-        export["name"] = export[name_column].astype("object").where(export[name_column].notna())
-
-    kept = ["name", "year"]
-    for prop, column in (extra_columns or {}).items():
-        export[prop] = export[column].where(export[column].notna()) if column in export else None
-        kept.append(prop)
-    export = export[[*kept, "geometry"]]
-    if simplify > 0:
-        export["geometry"] = (
-            export.to_crs("EPSG:3035").geometry.simplify(simplify).to_crs("EPSG:4326")
-        )
-    else:
-        export = export.to_crs("EPSG:4326")
-
-    payload = json.loads(export.to_json(drop_id=True))
-    for feature in payload["features"]:
-        feature["geometry"]["coordinates"] = _round_coords(
-            feature["geometry"]["coordinates"],
-            precision,
-        )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, separators=(",", ":")))
-    # Debug, not info: for the web map this file is a staging step on the way to
-    # a PMTiles archive and is deleted straight after, so announcing it as
-    # written is misleading.
-    logger.debug(
-        "Wrote %s: %d features, %.1f MB",
-        out_path.name,
-        len(export),
-        out_path.stat().st_size / 1e6,
-    )
-    return len(export), int(export["year"].min()), int(export["year"].max())
-
-
-def _round_coords(coords: Any, precision: int) -> Any:
-    """Round a GeoJSON coordinate tree to ``precision`` decimals."""
-    if coords and isinstance(coords[0], (int, float)):
-        return [round(coords[0], precision), round(coords[1], precision)]
-    return [_round_coords(part, precision) for part in coords]
-
-
-def export_tile_grid(
-    items_parquet: Path | UPath,
-    out_path: Path,
-    *,
-    simplify: float = 1e-3,
-    max_zoom: int = 10,
-    tippecanoe: str = "tippecanoe",
-) -> Path:
-    """Export the catalog's MGRS tile footprints as a vector PMTiles overlay.
-
-    Reads the stac-geoparquet item table, dedupes it to one polygon per MGRS
-    tile and writes an archive holding the tile code, its glacier fraction and
-    the number of catalogued years, under the layer name
-    :data:`TILE_GRID_LAYER`.
-
-    Parameters
-    ----------
-    items_parquet
-        stac-geoparquet export of the composite collection.
-    out_path
-        Destination ``.pmtiles`` file.
-    simplify
-        Douglas-Peucker tolerance in degrees applied to the footprints.
-    max_zoom
-        Highest zoom to build. The footprints are 110 km squares, so a low
-        maximum is plenty -- MapLibre overzooms a vector source past it, for
-        rendering and for hit-testing alike.
-    tippecanoe
-        Path to the tippecanoe binary.
-    """
-    import geopandas as gpd  # noqa: PLC0415
-    import pyarrow.parquet as pq  # noqa: PLC0415
-
-    columns = ["geometry", "glace:mgrs_tile", "glace:glacier_fraction", "datetime"]
-    with items_parquet.open("rb") as handle:
-        table = pq.read_table(handle, columns=columns)
-    frame = gpd.GeoDataFrame.from_arrow(table).rename(
-        columns={"glace:mgrs_tile": "tile", "glace:glacier_fraction": "glacier_fraction"},
-    )
-    # The index this reads is the tiles collection's, so every row must name a
-    # tile. Dropping the null ones and then checking the count is what turns a
-    # mosaic row leaking in from a silent `drop_duplicates` no-op into a failure.
-    tiled = frame.dropna(subset=["tile"])
-    years = tiled.groupby("tile")["datetime"].nunique().rename("years")
-    grid = (
-        tiled.drop_duplicates("tile")
-        .set_index("tile")[["geometry", "glacier_fraction"]]
-        .join(years)
-        .reset_index()
-    )
-    if len(grid) != tiled["tile"].nunique():
-        msg = (
-            f"{items_parquet} yielded {len(grid)} footprints for "
-            f"{tiled['tile'].nunique()} distinct tiles."
-        )
-        raise ValueError(msg)
-    grid["geometry"] = grid.geometry.simplify(simplify)
-    grid = gpd.GeoDataFrame(grid, geometry="geometry", crs="EPSG:4326")
-    with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp) / "tile-grid.geojson"
-        grid.to_file(staged, driver="GeoJSON")
-        # -r1 disables tippecanoe's density-based feature dropping: the grid is a
-        # complete index of the catalog, so a footprint missing at low zoom would
-        # read as a gap in coverage rather than as decluttering. All 2209 survive
-        # from z2 up; at z0 the whole world is one tile and 110 km squares fall
-        # below its coordinate resolution, which no flag can help.
-        build_vector_pmtiles(
-            staged,
-            out_path,
-            layer=TILE_GRID_LAYER,
-            min_zoom=0,
-            max_zoom=max_zoom,
-            tippecanoe=tippecanoe,
-            extra_args=("-r1",),
-        )
-    logger.info("Wrote %s with %d tile footprints", out_path, len(grid))
-    return out_path
