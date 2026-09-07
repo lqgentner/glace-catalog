@@ -71,14 +71,10 @@ write_cog(
 
 **It also settles `valid_percent`.** `_save` writes QA-NUM as `uint16` with
 nodata `0`, so on that band "finite and unequal to nodata" *is* `count_nonzero`
-— the QA-NUM file's own `STATISTICS_VALID_PERCENT` is the number
-`valid_percent_from_qa` computes, and the publisher can take it from the header
-instead of reading every QA-NUM raster's pixels.
-
-The source stays the QA-NUM band either way, which is what
-`build-manifest.py` already does — it reads `valid_percent_from_qa` only for
-`file.qa == "NUM"` and keys it by the data asset. S-1 changes where that number
-is read from, not which band it describes.
+— the QA-NUM file's own `STATISTICS_VALID_PERCENT` is the valid percentage
+the catalog publishes, and the manifest takes it from the header instead of
+reading every QA-NUM raster's pixels. It is keyed by the *data* asset the count
+describes.
 
 Worth stating for whoever writes D-4, because at write time the data band's own
 `STATISTICS_VALID_PERCENT` is right there and looks like the same number. It is
@@ -146,13 +142,16 @@ field is `glace:pass_direction`. Not visible in the LRW assets published today �
 the twelve `ASSET_KEYS` are all LRW — which is exactly why it would have gone
 unnoticed until the first pass composite was published.
 
-### The retrofit that S-1 forces
+### ~~The retrofit that S-1 forces~~ · **superseded 2026-09-07: regenerate**
 
-The completed Swiss 2021–2024 composites have **empty band tags** — verified. So
-before anything publishes they need a `restat` pass, roughly 2 GB per year.
-
-**Order matters: restat first, then rebuild the manifest.** A rewrite changes
-both the sizes and the digests the manifest records.
+The completed Swiss 2021–2024 composites had **empty band tags**, and the plan
+was a `restat` pass. That plan is dead for a better reason than cost: s1bursts
+0.4.0 fixed median and quantile aggregation and QA-CQM generation, both marked
+breaking, and every Swiss config uses median. Patching statistics onto pixels
+the current package considers wrong would have published the wrong pixels with
+correct-looking metadata. The `s1-comp-ch` prefixes were cleared and the four
+years are being recomposed with 0.4.0, which writes statistics, digests and the
+manifest as it goes.
 
 ---
 
@@ -292,10 +291,12 @@ Three constraints:
   previous process died — is read once and hashed, so a resume costs at most
   one tile's worth of full reads and every row ends up with a digest.
 - **A cache, not the source of truth.** Every value the manifest lists is also
-  in the file; a published COG must be self-describing. `scripts/build-manifest.py`
-  here rebuilds one from the archive and is the retrofit for years that predate
-  emission; with `--out` it is also the check that the run's manifest agrees
-  with the bytes.
+  in the file, or is the digest of its bytes; a published COG must be
+  self-describing. There is no separate retrofit tool: an archive without a
+  manifest gets one by rerunning its year, which skips every complete tile and
+  describes and hashes every file. `scripts/build-manifest.py` was deleted
+  2026-09-07 for that reason — it could not recover digests, and the years it
+  existed for are being regenerated.
 
 **State:** `glacier_mapping/manifest.py` and the wiring in `run_composite`,
 with `tests/test_manifest.py` writing real COGs through `freezebase.write_cog`
@@ -304,12 +305,10 @@ On this side, `manifest_raster_info` now consumes `sha256` and the `stat_*`
 columns — it silently dropped both before, so no manifest could ever have put a
 `file:checksum` on an item — and `tests/test_manifest_contract.py` holds the
 producer's column list verbatim and round-trips a manifest in that layout.
-`build-manifest.py` writes the same columns, so a retrofitted Swiss manifest
-and an emitted Alpine one look alike.
 
-Verified when: `publish-year.py --steps copy` on an Alpine year runs with no
-`build-manifest.py` beforehand, reports zero mismatches, and the
-`file:checksum` of a published item verifies under `rashid check --data`.
+Verified when: `publish-year.py --steps copy` on an Alpine year reports zero
+mismatches and the `file:checksum` of a published item verifies under
+`rashid check --data`.
 
 ---
 

@@ -75,21 +75,12 @@ uv run --env-file .env python ../deep-glacier-mapping/scripts/inventories/derive
 
 Every year needs a `manifest.parquet` beside its composites — one row per
 file, listing what the run wrote. **The composite run emits it**, in
-`deep-glacier-mapping`; see [`docs/UPSTREAM.md`](docs/UPSTREAM.md) S-3 for the
-contract. For an archive that predates that, build one first:
+`deep-glacier-mapping`; see [`docs/UPSTREAM.md`](docs/UPSTREAM.md) D-4 for the
+contract. Nothing here writes one: an archive without a manifest gets one by
+rerunning its year, which skips every complete tile and describes and hashes
+every file.
 
-```bash
-uv run --env-file .env python scripts/build-manifest.py \
-    --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch
-```
-
-This refuses to overwrite an existing manifest, because a rebuilt one describes
-the archive as it is *now* and would hide any drift from how it was written.
-Pass `--force` to replace it anyway, or `--out` to write a copy and compare.
-A retrofitted manifest carries no digests, so those assets publish no
-`file:checksum`.
-
-Then publish the year:
+Publish the year:
 
 ```bash
 uv run --env-file .env python scripts/publish-year.py 2024 \

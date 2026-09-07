@@ -7,7 +7,8 @@ and this gate is where a change on either side has to show up: it writes a
 manifest in **exactly the producer's column layout** and checks that everything
 the publisher needs survives the round trip -- including the digest and the
 band statistics, which are the two values that cannot be recovered from a
-header read at publication.
+header read at publication. A header read is checked too, since the publisher
+reads the mosaics it writes itself the same way.
 
 The column list below is copied verbatim from
 ``glacier_mapping/manifest.py::COLUMNS``. Keep it that way.
@@ -28,16 +29,14 @@ import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
 
-from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.store import (
     MANIFEST_COLUMNS,
-    build_manifest_frame,
     manifest_composites,
     manifest_raster_info,
     manifest_valid_percents,
     read_manifest,
 )
-from glace_catalog.stac.tags import RasterInfo, read_raster_info
+from glace_catalog.stac.tags import read_raster_info
 
 PRODUCER_COLUMNS = (
     "filename",
@@ -129,39 +128,6 @@ def producer_manifest() -> pd.DataFrame:
     return frame
 
 
-def retrofit_checks() -> dict[str, bool]:
-    """Check the retrofit builder writes the producer's columns, digest and statistics included."""
-    name = "S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif"
-    file = parse_composite_name(Path("/archive") / name)
-    assert file is not None
-    info = RasterInfo(
-        tags={"PASS_DIRECTION": "Ascending"},
-        band_name="coherence",
-        data_type="float32",
-        nodata=float("nan"),
-        statistics={
-            "minimum": 0.01,
-            "maximum": 0.99,
-            "mean": 0.5,
-            "stddev": 0.2,
-            "valid_percent": 87.5,
-        },
-    )
-    frame = build_manifest_frame(
-        [file],
-        {"32TPS05": {"coh12_vv": info}},
-        {name: 1234},
-        {"32TPS05": {"coh12_vv": 84.375}},
-        checksums={name: DIGEST},
-    )
-    back = manifest_raster_info(frame)["32TPS05"]["coh12_vv"]
-    return {
-        "retrofit writes every producer column": set(PRODUCER_COLUMNS) <= set(frame.columns),
-        "retrofit round-trips the statistics": back.statistics == info.statistics,
-        "retrofit round-trips the digest": back.checksum == DIGEST,
-    }
-
-
 def header_checks(tmp: Path) -> dict[str, bool]:
     """Check the header reader picks up the band statistics the writer embeds."""
     path = tmp / "S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif"
@@ -222,7 +188,6 @@ def main() -> int:
         "tags carried": data.tags.get("PASS_DIRECTION") == "Ascending",
         "valid percent keyed by the data asset": percents == {"32TPS05": {"coh12_vv": 84.375}},
     }
-    checks.update(retrofit_checks())
     checks.update(header)
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

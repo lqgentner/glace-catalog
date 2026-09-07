@@ -14,8 +14,6 @@ declared rather than applied.
 
 from __future__ import annotations
 
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import logging
 from typing import TYPE_CHECKING, Any
@@ -283,35 +281,6 @@ def read_raster_info(path: Path | UPath) -> RasterInfo:
     )
 
 
-def collect_raster_info(
-    by_tile: dict[str, list[CompositeFile]],
-    *,
-    max_workers: int = 8,
-) -> dict[str, dict[str, RasterInfo]]:
-    """Read :func:`read_raster_info` for every discovered composite, in parallel.
-
-    Parameters
-    ----------
-    by_tile
-        Output of :func:`discover_composites`.
-    max_workers
-        Size of the reader thread pool.
-
-    Returns
-    -------
-    dict[str, dict[str, RasterInfo]]
-        Raster metadata per tile and asset key.
-    """
-    jobs = [(tile, file) for tile, files in by_tile.items() for file in files]
-    results: dict[str, dict[str, RasterInfo]] = defaultdict(dict)
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        infos = pool.map(lambda job: read_raster_info(job[1].path), jobs)
-        for (tile, file), info in zip(jobs, infos, strict=True):
-            results[tile][file.asset_key] = info
-    logger.info("Read metadata from %d rasters", len(jobs))
-    return dict(results)
-
-
 @dataclass(frozen=True)
 class RasterProblems:
     """One raster that the catalogue refuses to describe, and why."""
@@ -358,13 +327,6 @@ def survey_tags(
             if problems:
                 found.append(RasterProblems(file=file, problems=problems))
     return found
-
-
-def valid_percent_from_qa(qa_num_path: Path | UPath) -> float:
-    """Valid-data percentage of a composite, from its QA-NUM raster."""
-    with rasterio_open(qa_num_path) as src:
-        num_obs = src.read(1)
-    return float(np.count_nonzero(num_obs) / num_obs.size * 100.0)
 
 
 def required_tags(file: CompositeFile) -> tuple[str, ...]:

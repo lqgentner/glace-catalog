@@ -466,14 +466,13 @@ Ordered by what blocks what.
 ### Blocking publication
 
 - [ ] **P-1 — Embedded band statistics.** `PTL-DAT-009` and `PTL-DAT-010` are
-      errors, and the completed Swiss 2021–2024 composites have **empty band
-      tags**. Implemented upstream (`s1bursts.product_tags.band_statistics`,
-      `ResolutionWeighter._save`) but uncommitted and unreleased. The existing
-      archive needs a restat pass — ~2 GB per Swiss year, cheap; impossible for
-      the Alps at 31.5 GB × 11, which is why it moved upstream. **Order matters:
-      restat first, then rebuild the manifest**, because a rewrite changes both
-      the sizes and the digests the manifest records. This is the single largest
-      gate between here and a conformant publication.
+      errors. Written by s1bursts 0.4.0 (`product_tags.band_statistics`, in
+      `ResolutionWeighter._save`), released 2026-09-07. The Swiss 2021–2024
+      composites that predate it are **not restatted but regenerated**: 0.4.0
+      also fixed median aggregation and QA-CQM, both breaking, so the old pixels
+      are not publishable regardless of their tags. Runs deployed 2026-09-07;
+      closes when the four years are complete and their manifests carry
+      statistics on every row.
 - [ ] **P-2 — Item mirror under the GeoParquet rules.** `PTL-DAT-006/7/8` apply
       to an item mirror exactly as to a vector dataset: spatially ordered rows, a
       `bbox` covering column with per-row-group statistics, ≤150 000 rows per
@@ -530,8 +529,10 @@ Ordered by what blocks what.
       the driver passing `checksum=True`; the reader here now consumes the
       digest and the band statistics it used to drop. Column contract in
       [`UPSTREAM.md`](UPSTREAM.md) D-4, gated by
-      `tests/test_manifest_contract.py`. Open until a real Alpine year has run
-      through `publish-year --steps copy` without `build-manifest.py`.
+      `tests/test_manifest_contract.py`. `build-manifest.py`, the retrofit for
+      archives predating emission, is deleted: it could not recover digests and
+      a rerun of the year now builds a better manifest. Open until a real
+      Alpine year has run through `publish-year --steps copy`.
 - [ ] **P-7 — Overview-depth assertion.** `PTL-DAT-011` wants overviews down to
       one tile; the Alps mosaic at 41 984 × 69 120 needs 9 levels and the CH test
       COG stopped at 7.
@@ -727,7 +728,7 @@ src/glace_catalog/mosaics.py       VRT chain + mosaic COGs
 src/glace_catalog/webmap.py        LUT machinery (P-16 renames it)
 src/glace_catalog/gdal_s3.py       subprocess S3 environment
 src/glace_catalog/config.py        rewritten for this repo's three locations
-scripts/publish-year.py  finalize-catalog.py  build-manifest.py
+scripts/publish-year.py  finalize-catalog.py  build-manifest.py   (the last deleted 2026-09-07)
 ```
 
 Stayed in `deep-glacier-mapping`, because they depend on `datasets.py` and

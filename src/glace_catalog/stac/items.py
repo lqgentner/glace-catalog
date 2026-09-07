@@ -283,7 +283,7 @@ def build_tile_item(
     files
         Parsed composites of this tile (data + QA).
     raster_info
-        Raster metadata per asset key, from :func:`collect_raster_info`. Every
+        Raster metadata per asset key, from the run manifest. Every
         statement the item makes about pixels comes from here.
     glacier_fraction, glacier_fraction_buffered
         RGI7 area fractions (plain and buffered), looked up in the scope's

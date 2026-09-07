@@ -60,9 +60,6 @@ directory stays unprefixed: the scope is already the store root, so repeating it
 one level down would only make every href longer.
 """
 
-MANIFEST_VERSION = 1
-"""Schema version of :data:`MANIFEST_NAME`, written into its parquet metadata."""
-
 STATISTICS_COLUMNS: dict[str, str] = {
     "minimum": "stat_minimum",
     "maximum": "stat_maximum",
@@ -97,20 +94,20 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
     "byte_order",
     *STATISTICS_COLUMNS.values(),
 )
-"""Fixed columns of the manifest, before the one column per provenance tag.
+"""The columns :func:`read_manifest` requires, before the one column per tag.
 
-The composite driver in ``deep-glacier-mapping`` writes these and, after them,
-one column per GeoTIFF tag; ``tests/test_manifest_contract.py`` holds its
-column list verbatim and is where drift on either side surfaces.
+The composite driver in ``deep-glacier-mapping`` writes the manifest — these
+columns and, after them, one column per GeoTIFF tag. Nothing here writes one:
+an archive without a manifest gets one by rerunning its year, which skips every
+complete tile and describes and hashes every file. ``tests/test_manifest_contract.py``
+holds the driver's column list verbatim and is where drift on either side surfaces.
 
 The tag columns are SCREAMING_CASE and these are lowercase, so the two
 vocabularies cannot collide.
 
 ``sha256`` holds the **multihash-encoded** digest — ``1220`` followed by the
 sha256 hex — because that is the form ``file:checksum`` requires, and a value
-stored one way and published another invites exactly one bug. It is computed at
-write time, where the encoded bytes are already in hand; computing it later
-means reading every object of a year back.
+stored one way and published another invites exactly one bug.
 """
 
 
@@ -306,90 +303,6 @@ class StoreLayout:
         ``coh12_vv.pmtiles`` sitting beside the ``coh12_vv.tif`` it renders.
         """
         return self.mosaics / "pmtiles" / str(year)
-
-
-def _tag_columns(tags: Mapping[str, str]) -> dict[str, str | None]:
-    """One entry per provenance tag, absent ones as ``None``."""
-    return {tag: tags.get(tag) for tag in PROVENANCE_TAGS}
-
-
-def build_manifest_frame(
-    files: Sequence[CompositeFile],
-    raster_info: Mapping[str, Mapping[str, RasterInfo]],
-    listing: Mapping[str, int],
-    valid_percents: Mapping[str, Mapping[str, float]],
-    checksums: Mapping[str, str] | None = None,
-) -> pd.DataFrame:
-    """Assemble a run manifest from what a survey of the archive found.
-
-    Parameters
-    ----------
-    files
-        Every parsed composite of the year.
-    raster_info
-        Raster metadata per tile and asset key.
-    listing
-        Size per filename, from one listing of the source prefix.
-    valid_percents
-        Valid-data percentage per tile and *data* asset key. QA rows carry none.
-    checksums
-        Multihash-encoded sha256 per filename, from the writer that produced the
-        bytes. Absent for an archive written before the writer emitted them; the
-        rows then carry ``None`` and no asset can publish a ``file:checksum``,
-        which Portolan permits — a fabricated value is worse than an absent one.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per file, in ``(tile, asset_key)`` order.
-
-    Raises
-    ------
-    KeyError
-        If a file has no raster metadata or no listing entry.
-    """
-    checksums = checksums or {}
-    rows: list[dict[str, Any]] = []
-    for file in sorted(files, key=lambda f: (f.tile, f.asset_key)):
-        info = raster_info[file.tile][file.asset_key]
-        size = listing[file.path.name]
-        rows.append(
-            {
-                "filename": file.path.name,
-                "tile": file.tile,
-                "asset_key": file.asset_key,
-                "product": file.product,
-                "qa": file.qa,
-                "polarization": file.polarization,
-                "composite_start": file.start.date().isoformat(),
-                "composite_end": file.end.date().isoformat(),
-                "size": size,
-                "sha256": checksums.get(file.path.name),
-                "valid_percent": valid_percents.get(file.tile, {}).get(file.asset_key),
-                "band_name": info.band_name,
-                "band_unit": info.band_unit,
-                "data_type": info.data_type,
-                "nodata": info.nodata,
-                "spatial_resolution": info.spatial_resolution,
-                "bits_per_sample": info.bits_per_sample,
-                "byte_order": info.byte_order,
-                **{
-                    column: info.statistics.get(name)
-                    for name, column in STATISTICS_COLUMNS.items()
-                },
-                **_tag_columns(info.tags),
-            },
-        )
-    frame = pd.DataFrame(rows, columns=[*MANIFEST_COLUMNS, *PROVENANCE_TAGS])
-    frame.attrs["manifest_version"] = MANIFEST_VERSION
-    return frame
-
-
-def write_manifest(frame: pd.DataFrame, path: Path | UPath) -> None:
-    """Write a run manifest to parquet."""
-    with UPath(path).open("wb") as handle:
-        frame.to_parquet(handle, index=False)
-    logger.info("Wrote %s with %d rows", path, len(frame))
 
 
 def read_manifest(path: Path | UPath) -> pd.DataFrame:
