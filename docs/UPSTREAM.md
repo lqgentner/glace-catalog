@@ -22,10 +22,10 @@ s1bursts release and the restat pass over the composites that predate them.
 
 ## `s1bursts` — the composite writer
 
-Three items, all in `resolution_weighter.py`, all cheap while the pixel array is
-still in memory and expensive afterwards. S-1 and S-2 landed in **one commit**,
-because each one alone forces a rewrite of the archive; S-3 does not touch the
-pixels and is deferred, see below.
+Two items, both in `resolution_weighter.py`, both cheap while the pixel array
+is still in memory and expensive afterwards. They landed in **one commit**,
+because each one alone forces a rewrite of the archive. S-3 is recorded below
+only to say where it went.
 
 ### S-1 — Embedded band statistics · **blocking**
 
@@ -80,7 +80,7 @@ The source stays the QA-NUM band either way, which is what
 `file.qa == "NUM"` and keys it by the data asset. S-1 changes where that number
 is read from, not which band it describes.
 
-Worth stating for whoever writes S-3, because at write time the data band's own
+Worth stating for whoever writes D-4, because at write time the data band's own
 `STATISTICS_VALID_PERCENT` is right there and looks like the same number. It is
 not: it counts finite pixels of the *composite*. With `decibel=True`,
 `_to_decibel` turns every non-positive aggregate into NaN while QA-NUM still
@@ -110,48 +110,25 @@ path, committed 2026-09-04 as `fd928ef` with S-1. s1bursts now floors
 required the upload to stay single-part so the ETag stayed an MD5, and nothing
 now depends on that. Upload however is convenient.
 
-### S-3 — Emit `manifest.parquet` beside the composites
+### S-3 — `manifest.parquet` · **settled 2026-09-07: not here**
 
-One row per written file, so the publisher reads one file instead of 26 500
-remote opens. Schema: `glace_catalog.stac.store.MANIFEST_COLUMNS` plus one column
-per `glace_catalog.stac.PROVENANCE_TAGS` entry;
-`glace_catalog.stac.store.build_manifest_frame` is the reference implementation.
+The run manifest is emitted by the composite driver in `deep-glacier-mapping`,
+not by `s1bursts`. See D-4 under `deep-glacier-mapping`
+for the work order. Nothing is owed here beyond the release.
 
-Two constraints:
+Why it is not writer code: everything the manifest needs that is a property of
+the bytes already lands in the right place — the statistics and provenance tags
+in the COG header (S-1), the digest in `ResolutionWeighter.checksums` (S-2).
+What remains is arranging rows in this catalog's vocabulary — `tile`,
+`asset_key`, `product`, `qa`, parsed from the filename convention — which a
+general-purpose SAR package has no second use for. And the one hard case, a
+resumed run whose `_save` skipped files a previous run wrote, is a property of
+the run loop, which the driver owns and the writer cannot see.
 
-- **Written last.** Sizes come from a listing of what was actually written.
-- **A cache, not the source of truth.** Every tag it lists is also written into
-  the file; a published COG must be self-describing.
-
-Add the five `stat_*` columns and `sha256`. Now that S-1 is implemented, the
-statistics can be read straight off each COG's own band tags rather than
-recomputed.
-
-**Not blocking:** `scripts/build-manifest.py` here retrofits a manifest onto an
-archive that predates emission, which is what the Swiss rehearsal uses. It costs
-1 716 header reads per Swiss year — seconds. It is **not** viable for the Alps at
-26 500 opens per year, which is the whole reason this moves upstream.
-
-**State: deferred 2026-09-04, ownership unsettled.** Unlike S-1 and S-2 this is
-not a property of the bytes, so nothing forces it into the writer, and the schema
-above is this repository's vocabulary throughout: `tile`, `asset_key`
-(`coh12_vv_qa_num`), `product` (`COH12`), `qa` (`NUM`). Emitting it from
-`s1bursts` means that package encoding a downstream catalog's naming convention
-it has no other use for, and duplicating `MANIFEST_COLUMNS` and
-`PROVENANCE_TAGS` across a repository boundary with nothing to keep them in step.
-
-Two questions to settle before writing any of it:
-
-- **Does it belong in `s1bursts` at all**, or in the caller that drives it — the
-  GLACE composite run, which already knows the scope, the year and the asset
-  keys, and could assemble the manifest from `ResolutionWeighter.checksums` plus
-  the metadata `_save` already wrote?
-- **What covers a resumed run.** `_save` skips a file that already exists, so a
-  writer-side manifest describes only this run's outputs and a resumed run emits
-  one the publisher cannot use. Either the writer header-reads the skipped files
-  (the retrofit cost, for a subset), or it refuses to write a partial manifest.
-
-Whichever way it goes, the two constraints above stand.
+**Optional, later:** a generic per-file ledger on `ResolutionWeighter` — path
+to size, digest, tags and band tags — would let the driver skip the header
+reads. It carries no catalog schema, so it would be legitimate here, but it is
+not on the release path.
 
 ### The pass-direction tag · **fixed here 2026-09-04**
 
@@ -219,7 +196,7 @@ version floor instead of a path override. Same for `s1bursts`.
 
 ### D-1 — `glacier-fractions.parquet` stays yours
 
-`scripts/stac/derive-glacier-fractions.py` produces it and depends on
+`scripts/inventories/derive-glacier-fractions.py` produces it and depends on
 `datasets.py` and `geo.py`, which did not move. This catalog consumes it as a
 file, not an import: it publishes it as a collection asset of the tiles
 collection and **fails loudly on a missing tile** rather than computing a
@@ -270,6 +247,57 @@ year, which must be excluded from training and evaluation rather than treated as
 background. Masks land on the same MGRS tile and UTM zone as the composites
 because both sides ask `freezebase.mgrs`, which is where a grid contract
 belongs. Write this down in a README beside the data; nothing validates it now.
+
+### D-4 — Emit `manifest.parquet` beside the composites · **blocks the Alps**
+
+One row per written file, so the publisher reads one file instead of opening
+every composite: 1 716 header reads on a Swiss year is seconds, 26 500 on an
+Alpine year is not a path. Settled 2026-09-07 as driver work, not writer work —
+see S-3 for why. It goes at the end of `run_composite`, where `config.yaml` is
+already written, and moves to the pipeline repository with it.
+
+**The contract is on disk**, like `glacier-fractions.parquet` and the label
+masks: no import between the two repositories in either direction (M-30). This
+repository's `read_manifest` checks the required columns and `survey_tags`
+checks the required tags, so a manifest that drifts fails loudly at the
+publisher rather than silently at the reader.
+
+Columns, one row per file:
+
+| column | from |
+| --- | --- |
+| `filename`, `tile`, `asset_key`, `product`, `qa`, `polarization`, `composite_start`, `composite_end` | the filename, by the same parse `glace_catalog.stac.naming` does. `asset_key` is the published stem, `coh12_vv_qa_num`; `product` is `COH12`; `qa` is `NUM`, `CQM` or `None` |
+| `size` | a listing of the output prefix, taken **last** |
+| `sha256` | `ResolutionWeighter.checksums`, already multihash-encoded, keyed by output path. `None` where unknown — never fabricated |
+| `valid_percent` | the QA-NUM raster's own `STATISTICS_VALID_PERCENT`, keyed by the *data* asset it counts for; QA rows carry `None` (see S-1) |
+| `band_name`, `band_unit`, `data_type`, `nodata`, `spatial_resolution`, `bits_per_sample`, `byte_order` | the raster header |
+| one column per GeoTIFF tag, SCREAMING_CASE | the raster header, every tag it carries. Do not curate the list: the publisher picks the ones it knows and ignores the rest, so an extra column costs nothing and a missing one is caught |
+
+Parquet metadata: `manifest_version = 1`. Bump it when a column changes
+meaning, not when one is added.
+
+Three constraints:
+
+- **The driver passes `checksum=True`.** `run_composite` constructs
+  `ResolutionWeighter(fm, rasterio_profile=…)` today with no checksum argument,
+  so nothing records a digest. Without it every `sha256` is `None` and the
+  Alps publish no `file:checksum`.
+- **A resumed run must describe the whole year, not this run.** `_save` skips
+  a file that already exists, so its digest is not in memory. Load the previous
+  manifest at the start, carry every row whose filename and size still match,
+  header-read the files this run wrote or that carried no row, and **flush after
+  every geobox**, so a crash loses at most one tile's digests. A file with no
+  previous row and no in-memory digest gets `sha256 = None`, which is honest;
+  rewrite it with `overwrite=True` if a digest is wanted.
+- **A cache, not the source of truth.** Every value the manifest lists is also
+  in the file; a published COG must be self-describing. `scripts/build-manifest.py`
+  here rebuilds one from the archive and is the retrofit for years that predate
+  emission; with `--out` it is also the check that the run's manifest agrees
+  with the bytes.
+
+Verified when: `publish-year.py --steps copy` on an Alpine year runs with no
+`build-manifest.py` beforehand, reports zero mismatches, and the
+`file:checksum` of a published item verifies under `rashid check --data`.
 
 ---
 

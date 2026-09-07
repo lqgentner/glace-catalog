@@ -15,7 +15,7 @@ left behind and assembles the documents over them:
   rather than inside it.
 
 Usage:
-    uv run --env-file .env python scripts/stac/finalize-catalog.py \\
+    uv run --env-file .env python scripts/finalize-catalog.py \\
         --scope ch --base-url https://<host>/glace-ch
 """
 

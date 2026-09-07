@@ -7,7 +7,7 @@
 > `glace-alps`**, over the Alpine Convention perimeter, and every mention of
 > Switzerland here is placeholder text with a removal date. §11 is the checklist.
 
-**Living document.** Status as of **2026-09-03**. Update it in the same commit
+**Living document.** Status as of **2026-09-07**. Update it in the same commit
 as the change it describes; a stale transition record is worse than none,
 because the next person trusts it.
 
@@ -524,6 +524,12 @@ Ordered by what blocks what.
 - [ ] **P-6 — Release freezebase and s1bursts, drop the editable overrides.** An
       editable path in `[tool.uv.sources]` is not reproducible from a checkout.
       Now also carries `subprocess_s3_env` (F-2). See [`UPSTREAM.md`](UPSTREAM.md).
+- [ ] **P-20 — Manifest emission in the composite driver.** Settled 2026-09-07:
+      `manifest.parquet` is written by `run_composite` in `deep-glacier-mapping`,
+      not by `s1bursts` (M-31). The driver also has to pass `checksum=True`,
+      which it does not today, or every `sha256` is `None`. Work order and
+      column contract in [`UPSTREAM.md`](UPSTREAM.md) D-4. `build-manifest.py`
+      stays as the retrofit for the Swiss years and as the cross-check.
 - [ ] **P-7 — Overview-depth assertion.** `PTL-DAT-011` wants overviews down to
       one tile; the Alps mosaic at 41 984 × 69 120 needs 9 levels and the CH test
       COG stopped at 7.
@@ -829,6 +835,7 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header carries bounds and zoom range, the `rel:"pmtiles"` link carries the href, the item carries the dates, and the display constants go in the MapLibre style's `metadata`. `renders` is *not* their home — its `colormap_name` deliberately names a different ramp than the one baked (M-10), and it covers 4 of 14 layer types | 4 |
 | M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** `catalog/mosaics/styles/default.json` carries each layer's ramp, range and units under `metadata.portolan:legend`; `webmap.py` reads them to build its LUTs instead of holding `DEFAULT_STYLES` / `RGB_STYLES`. **Upholds M-21** rather than narrowing it — the numbers are colour decisions, they belong in a reviewed file, and the file that is reviewed should be the file that is used. The cost is a build-time dependency on a catalog file, accepted because the alternative is two copies and two copies is what P-18 is | 4 |
 | M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` — a shared library is the right place for a grid contract, a sibling repository is not. Making it true moved `INVENTORY_OVERLAYS`, `export_inventory`, `export_tile_grid` and `build_vector_pmtiles` to `deep-glacier-mapping` (dead code here; its inventory export was the only caller), replaced `get_scope` in the fraction script with a `--perimeter-tiles` argument, and dropped the labels catalog (P-15) | 7 |
+| M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes — statistics and tags in the header, the digest in `checksums` — and stops there. Arranging rows in this catalog's vocabulary, and describing a resumed run, belong to the composite driver in `deep-glacier-mapping`, beside the `config.yaml` it already writes. The schema is an on-disk contract under M-30, validated by `read_manifest` and `survey_tags` on this side | 6 |
 | M-29 | **One credit line, read from the style.** `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header. It was written three times before — the style's sources, the tiler call, and again at runtime in `glace-viewer` — and the three disagreed. The comma rather than a full stop keeps it one credit list, which is what a map attribution is | 4 |
 | M-28 | QA ramps are **sequential**: `cmc.turku` for QA-NUM, `cmc.glasgow` for QA-CQM. The diverging `cmc.vik` encoded a wrong reading of CQM — see P-19 | 4 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and mypy and covered by upstream's pyflakes pass instead | 8 |

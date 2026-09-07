@@ -27,7 +27,7 @@ that spans years, so ``finalize-catalog.py`` owns them. That is what makes addin
 a year later leave every existing year untouched.
 
 Usage:
-    uv run --env-file .env python scripts/stac/publish-year.py 2024 \\
+    uv run --env-file .env python scripts/publish-year.py 2024 \\
         --src  s3://s1-bursts/data/alps-total/2024/s1-comp-ch \\
         --scope ch \\
         --steps copy,vrt,mosaics,pmtiles,items
@@ -82,7 +82,7 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
     if not manifest_path.exists():
         msg = (
             f"{manifest_path} is absent. The composite run emits it; for an archive "
-            "that predates that, run scripts/stac/build-manifest.py first."
+            "that predates that, run scripts/build-manifest.py first."
         )
         raise SystemExit(msg)
 
@@ -297,9 +297,9 @@ def load_glacier_fractions(layout: stac.StoreLayout) -> dict[str, tuple[float, f
     path = layout.glacier_fractions
     if not path.exists():
         msg = (
-            f"{path} is absent. Run scripts/stac/derive-glacier-fractions.py for this "
-            "scope first; the fractions are pinned per scope so they cannot drift "
-            "between years."
+            f"{path} is absent. Run deep-glacier-mapping's "
+            "scripts/inventories/derive-glacier-fractions.py for this scope first; "
+            "the fractions are pinned per scope so they cannot drift between years."
         )
         raise SystemExit(msg)
     with path.open("rb") as handle:

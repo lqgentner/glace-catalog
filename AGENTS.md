@@ -85,8 +85,10 @@ to change, why, and how to know it worked.
 
 - `../deep-glacier-mapping` — composite production, labels, ML. Produces what
   this catalog publishes.
-- `../s1bursts` — the Sentinel-1 pipeline. Its COG writer must emit embedded
-  band statistics or nothing here can pass `PTL-DAT-009`.
+- `../s1bursts` — the Sentinel-1 pipeline. Its COG writer emits the embedded
+  band statistics `PTL-DAT-009` needs and the digest `file:checksum` publishes;
+  both are on main and unreleased. It does **not** write the run manifest — that
+  is the composite driver's job (M-31, `docs/UPSTREAM.md` D-4).
 - `../freezebase` — geo and IO helpers, including the VRT chain the mosaics use.
 
 Both first-party libraries are installed editable via `[tool.uv.sources]` while

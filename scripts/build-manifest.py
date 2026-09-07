@@ -1,16 +1,17 @@
 r"""Write a run manifest for a composite archive that predates manifest emission.
 
-The composite run is meant to emit ``manifest.parquet`` beside its output — one
-row per written file, carrying the provenance tags, the size and ETag, and the
-QA-derived valid-data percentages the run computes for free while the array is
-still in memory. The publisher then reads one file instead of opening every
+The composite run in ``deep-glacier-mapping`` emits ``manifest.parquet`` beside
+its output — one row per written file, carrying the provenance tags, the size,
+the multihash sha256 the writer computed, and the QA-derived valid-data
+percentages. The publisher then reads one file instead of opening every
 composite in the archive.
 
-The completed Swiss 2022-2024 runs predate that, and re-running three correct
+The completed Swiss 2021-2024 runs predate that, and re-running four correct
 years to produce a sidecar would be absurd. This reconstructs the manifest from
 the archive itself: filenames and asset keys by discovery, the provenance tags by
 reading each raster's header, the valid percentages by reading the QA-NUM
-rasters, and size and ETag from one listing.
+rasters, and sizes from one listing. It cannot recover a digest, so every
+``sha256`` it writes is ``None`` and those assets publish no ``file:checksum``.
 
 That costs one header read per file and one full read per QA-NUM raster — seconds
 to minutes on a Swiss year, and **not a viable path for the Alps**, which is the
@@ -18,7 +19,7 @@ whole reason the manifest moves upstream. Keep this afterwards as the fallback
 for any archive whose manifest is lost.
 
 Usage:
-    uv run --env-file .env python scripts/stac/build-manifest.py \\
+    uv run --env-file .env python scripts/build-manifest.py \\
         --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch
 """
 
