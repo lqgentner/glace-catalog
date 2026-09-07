@@ -293,7 +293,13 @@ file. Before, they carried the first and last contributing acquisition, so 143
 tiles of one year had 143 different `datetime` values and `odc.stac.load`
 returned a time axis with one mostly-empty slice per tile. The observed span is
 still published, per product, as `glace:coh_first_acquisition` and friends,
-from the `FIRST_ACQUISITION_DATE` / `LAST_ACQUISITION_DATE` tags.
+from the `FIRST_ACQUISITION_DATE` / `LAST_ACQUISITION_DATE` tags. The publisher
+reads the window from the manifest alone, `composite_window`, and requires one
+pair across the year: a file from another window refuses the year rather than
+widening its extent. `published_time_range` is the one place that turns the
+inclusive days into the `start_datetime` / `end_datetime` pair, so the tile
+items and the mosaic item cannot end a day apart. The filename's dates identify
+a file and are not read.
 
 **Dotfiles are build state.** `.build-state.json` and `.items.parquet` (the
 year's slice of the mirror, before `finalize-catalog` concatenates and rebases

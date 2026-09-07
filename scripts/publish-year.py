@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
 import logging
 from pathlib import Path
 import tempfile
@@ -54,6 +53,7 @@ from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import date
 
     import pystac
 
@@ -109,9 +109,13 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         msg = f"{len(problems)} of {len(files)} composites cannot be published"
         raise SystemExit(msg)
 
-    years = {file.start.year for file in files}
-    if years != {year}:
-        msg = f"{src} holds composites from {sorted(years)}, not {year}"
+    try:
+        window = composite_window(frame)
+    except ValueError as error:
+        msg = f"{src}: {error}"
+        raise SystemExit(msg) from None
+    if window[0].year != year:
+        msg = f"{src} holds composites of the window {window[0]}..{window[1]}, not of {year}"
         raise SystemExit(msg)
 
     logger.info("Manifest verified: %d files across %d tiles", len(files), len(by_tile))
@@ -190,16 +194,15 @@ def step_vrt(
     return chain
 
 
-def composite_window(frame: pd.DataFrame) -> tuple[datetime, datetime]:
-    """Read the year's compositing window, first and last day inclusive.
+def composite_window(frame: pd.DataFrame) -> tuple[date, date]:
+    """Read the year's compositing window, first and last day inclusive, from the manifest.
 
-    Every tile carries the same window since s1bursts names composites with the
-    caller's time range, so the min and max are the window itself; the fallback
-    to the span is what an older archive would give.
+    Every row carries the same pair; a second pair is a stale file and refuses
+    the year, see :func:`glace_catalog.stac.composite_window`.
     """
-    start = min(datetime.fromisoformat(value) for value in frame["composite_start"])
-    end = max(datetime.fromisoformat(value) for value in frame["composite_end"])
-    return start.replace(tzinfo=UTC), end.replace(tzinfo=UTC)
+    return stac.composite_window(
+        zip(frame["composite_start"], frame["composite_end"], strict=True)
+    )
 
 
 def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
@@ -215,8 +218,9 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
         values = {str(value) for value in rows[column].dropna().unique()}
         if len(values) == 1:
             tags[column] = values.pop()
-    tags["COMPOSITE_START_DATE"] = str(rows["composite_start"].min())
-    tags["COMPOSITE_END_DATE"] = str(rows["composite_end"].max())
+    start, end = composite_window(rows)
+    tags["COMPOSITE_START_DATE"] = start.isoformat()
+    tags["COMPOSITE_END_DATE"] = end.isoformat()
     # The span of contributing acquisitions differs per tile; the mosaic's is
     # their union, as the item builder derives it for a tile's two polarizations.
     for tag, pick in (("FIRST_ACQUISITION_DATE", min), ("LAST_ACQUISITION_DATE", max)):
@@ -265,7 +269,7 @@ def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
-    window: tuple[datetime, datetime],
+    window: tuple[date, date],
 ) -> list[webmap.LayerInfo]:
     """Render and upload the year's web-map archives."""
     staged = args.cache / "glace-store" / str(args.year) / "pmtiles"
@@ -275,8 +279,8 @@ def step_pmtiles(
         staged,
         style_path=args.style,
         year=args.year,
-        start_date=window[0].date().isoformat(),
-        end_date=window[1].date().isoformat(),
+        start_date=window[0].isoformat(),
+        end_date=window[1].isoformat(),
         layers=args.layers,
         workers=args.tiler_workers,
     )
@@ -355,18 +359,15 @@ def step_items(
         for tile, tile_files in sorted(by_tile.items())
     ]
 
-    window = composite_window(frame)
+    start, end = stac.published_time_range(composite_window(frame))
     geometry, bbox = mosaics.data_footprint(files)
     mosaic_item = stac.build_mosaic_item(
         scope,
         args.year,
         geometry=geometry,
         bbox=bbox,
-        start=window[0],
-        # The tile items publish the midnight after the inclusive last day as
-        # their end; the mosaic item must say the same or the two collections'
-        # extents end a day apart.
-        end=window[1] + timedelta(days=1),
+        start=start,
+        end=end,
         assets=mosaic_assets(state, frame),
         build_fingerprint=build_fingerprint,
     )

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dc_field
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +32,7 @@ from glace_catalog.stac.tags import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from glace_catalog.scopes import Scope
     from glace_catalog.stac.naming import CompositeFile
@@ -123,6 +123,51 @@ def _method_label(file: CompositeFile) -> str:
     if file.orbit is None:
         return "LRW composite"
     return f"{'ascending' if file.orbit == 'A' else 'descending'} pass composite"
+
+
+def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:
+    """Return the one compositing window a set of composites shares, as inclusive days.
+
+    s1bursts names and tags every composite of a run with the caller's window,
+    so every tile and every layer of a year carries the same pair, and the year
+    has exactly one time range. A second pair is a file left from a different
+    window, which the archive has to resolve before the year can be published;
+    it is never averaged or widened into the extent.
+
+    Parameters
+    ----------
+    pairs
+        ``(start, end)`` ISO dates, one per composite, as the manifest's
+        ``composite_start`` / ``composite_end`` columns or the rasters'
+        ``COMPOSITE_START_DATE`` / ``COMPOSITE_END_DATE`` tags give them.
+
+    Raises
+    ------
+    ValueError
+        If the pairs disagree, or there are none.
+    """
+    windows = sorted({(str(start), str(end)) for start, end in pairs})
+    if len(windows) != 1:
+        found = ", ".join(f"{start}..{end}" for start, end in windows) or "none"
+        msg = f"composites must share one compositing window; found {found}"
+        raise ValueError(msg)
+    ((start, end),) = windows
+    return date.fromisoformat(start), date.fromisoformat(end)
+
+
+def published_time_range(window: tuple[date, date]) -> tuple[datetime, datetime]:
+    """Return the window as every item publishes it: ``start_datetime`` and ``end_datetime``.
+
+    A window is inclusive calendar days; STAC wants instants with an exclusive
+    end. That is the first day at midnight UTC and the midnight after the last
+    day, and this is the only place the translation is written, so the tile
+    items and the mosaic item cannot end a day apart.
+    """
+    start, end = window
+    return (
+        datetime.combine(start, time.min, tzinfo=UTC),
+        datetime.combine(end + timedelta(days=1), time.min, tzinfo=UTC),
+    )
 
 
 def _acquisition_spans(
@@ -325,17 +370,26 @@ def build_tile_item(
     Raises
     ------
     KeyError
-        If a discovered composite has no entry in ``raster_info``.
+        If a discovered composite has no entry in ``raster_info``, or its entry
+        lacks the window tags.
+    ValueError
+        If the tile's files do not all carry the same compositing window.
     """
     geobox = MGRSGeoBox.from_mgrs(tile)
     geometry, bbox = _tile_geometry(geobox)
-    # The filename dates are the compositing window, the same for every tile of
-    # a year, so every tile item of a year shares one time range and a reader
-    # stacking them gets one time coordinate. Which acquisitions contributed is
-    # per product and per tile, and comes from the rasters' own tags.
-    start = min(f.start for f in files)
-    end = max(f.end for f in files) + timedelta(days=1)
-    year = start.year
+    # The rasters' own tags carry the compositing window, the same for every
+    # tile of a year, so every tile item of a year shares one time range and a
+    # reader stacking them gets one time coordinate. Which acquisitions
+    # contributed is per product and per tile, and comes from the tags too.
+    window = composite_window(
+        (
+            raster_info[file.asset_key].tags["COMPOSITE_START_DATE"],
+            raster_info[file.asset_key].tags["COMPOSITE_END_DATE"],
+        )
+        for file in files
+    )
+    start, end = published_time_range(window)
+    year = window[0].year
     acquisitions = _acquisition_spans(files, raster_info)
 
     item = pystac.Item(

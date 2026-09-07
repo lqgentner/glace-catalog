@@ -9,6 +9,9 @@ contributed varies per tile and product; that is the ``FIRST_ACQUISITION_DATE``
 and ``LAST_ACQUISITION_DATE`` tags, published per product as
 ``glace:{coh,rtc}_first_acquisition`` / ``_last_acquisition``.
 
+A tile whose files disagree about the window is refused rather than widened,
+and the window-to-range translation is checked once, since every item uses it.
+
 Reads no data and needs no network.
 
 Run: python3 tests/test_items.py
@@ -16,10 +19,11 @@ Run: python3 tests/test_items.py
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from pathlib import Path
 import sys
 
-from glace_catalog.stac.items import build_tile_item
+from glace_catalog.stac.items import build_tile_item, published_time_range
 from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
@@ -69,6 +73,19 @@ def _info(first: str, last: str, **extra: str) -> RasterInfo:
     return RasterInfo(tags=tags, band_name="x", data_type="float32", nodata=float("nan"))
 
 
+def _refuses_mixed_windows(files: list) -> bool:
+    """Check that a stale file from a different window refuses the tile, never widens it."""
+    info = {
+        "coh12_vv": _info("2023-07-21", "2023-09-30"),
+        "rtc_vv": _info("2023-07-21", "2023-10-12", COMPOSITE_END_DATE="2023-10-20"),
+    }
+    try:
+        build_tile_item(TILE, files, info)
+    except ValueError as error:
+        return "2023-10-20" in str(error)
+    return False
+
+
 def main() -> int:
     """Run the gate."""
     names = {
@@ -113,6 +130,10 @@ def main() -> int:
         )
         == "2023-07-21",
     }
+    checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
+    checks["the published range is the helper's"] = published_time_range(
+        (date(2023, 7, 18), date(2023, 10, 15))
+    ) == (datetime(2023, 7, 18, tzinfo=UTC), datetime(2023, 10, 16, tzinfo=UTC))
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

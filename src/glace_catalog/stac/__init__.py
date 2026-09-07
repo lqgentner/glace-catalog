@@ -18,6 +18,8 @@ from glace_catalog.stac.items import (
     MosaicAsset,
     build_mosaic_item,
     build_tile_item,
+    composite_window,
+    published_time_range,
 )
 from glace_catalog.stac.naming import (
     ASSET_KEYS,
@@ -88,6 +90,7 @@ __all__ = [
     "build_mosaic_item",
     "build_tile_item",
     "check_completeness",
+    "composite_window",
     "concat_indexes",
     "copy_composites",
     "discover_composites",
@@ -105,6 +108,7 @@ __all__ = [
     "manifest_valid_percents",
     "mosaic_item_link",
     "parse_composite_name",
+    "published_time_range",
     "read_manifest",
     "read_raster_info",
     "require_unique_composites",

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -67,8 +66,6 @@ class CompositeFile:
     tile: str  # MGRS 10-km code, e.g. "32TMS55"
     polarization: str
     orbit: str | None  # None for LRW composites, "A" or "D" for pass composites
-    start: datetime
-    end: datetime
 
     @property
     def method(self) -> str:
@@ -101,7 +98,12 @@ class CompositeFile:
 
 
 def parse_composite_name(path: Path | UPath) -> CompositeFile | None:
-    """Parse a composite filename; return ``None`` for non-matching names."""
+    """Parse a composite filename; return ``None`` for non-matching names.
+
+    The dates in the name identify the file and are matched, not read: the
+    compositing window a year publishes comes from the run manifest, the one
+    source of every fact about a raster, see ``composite_window``.
+    """
     match = _COMPOSITE_RE.match(path.name)
     if match is None:
         return None
@@ -112,8 +114,6 @@ def parse_composite_name(path: Path | UPath) -> CompositeFile | None:
         tile=match["tile"],
         polarization=match["pol"],
         orbit=match["orbit"],
-        start=datetime.strptime(match["start"], "%Y%m%d").replace(tzinfo=UTC),
-        end=datetime.strptime(match["end"], "%Y%m%d").replace(tzinfo=UTC),
     )
 
 
@@ -131,10 +131,11 @@ def discover_composites(comp_dir: Path | UPath) -> dict[str, list[CompositeFile]
 def require_unique_composites(by_tile: Mapping[str, Sequence[CompositeFile]]) -> None:
     """Reject multiple files that resolve to the same published name.
 
-    A shorter date range can remain beside a newer composite when an earlier
-    processing run skipped bursts. Neither filename is implicitly preferred:
-    publishing one must be an explicit archive-maintenance decision, never an
-    implicit overwrite of one by the other.
+    A composite is named with its compositing window, so a rerun of the same
+    window overwrites its file and a changed window writes a second one beside
+    it. Neither filename is implicitly preferred: publishing one must be an
+    explicit archive-maintenance decision, never an implicit overwrite of one
+    by the other.
 
     Raises
     ------
