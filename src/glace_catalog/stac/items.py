@@ -460,7 +460,8 @@ def build_mosaic_item(
     geometry, bbox
         WGS84 data footprint of the year.
     start, end
-        Composite window the year's tiles span.
+        The year's time range as the tile items publish it: the window's first
+        day, and the midnight after its last day.
     assets
         Written mosaic COGs and per-year documents, keyed by asset key.
     pmtiles

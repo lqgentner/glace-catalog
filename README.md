@@ -122,7 +122,7 @@ uv run --env-file .env python scripts/finalize-catalog.py --scope ch \
 ```
 
 This patches the two collection documents with what depends on the run — year
-links, per-year manifest assets, temporal extent, PMTiles links — concatenates
+links, temporal extent, PMTiles links — concatenates
 the per-year slices into each collection's `items.parquet`, repoints the
 MapLibre styles at the newest year, and validates the result. It never touches
 the prose, providers, license or `item_assets`: those are source, edited here

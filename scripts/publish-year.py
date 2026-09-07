@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import logging
 from pathlib import Path
 import tempfile
@@ -191,7 +191,12 @@ def step_vrt(
 
 
 def composite_window(frame: pd.DataFrame) -> tuple[datetime, datetime]:
-    """Composite window a year's tiles span, as an inclusive-exclusive range."""
+    """Read the year's compositing window, first and last day inclusive.
+
+    Every tile carries the same window since s1bursts names composites with the
+    caller's time range, so the min and max are the window itself; the fallback
+    to the span is what an older archive would give.
+    """
     start = min(datetime.fromisoformat(value) for value in frame["composite_start"])
     end = max(datetime.fromisoformat(value) for value in frame["composite_end"])
     return start.replace(tzinfo=UTC), end.replace(tzinfo=UTC)
@@ -212,6 +217,11 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
             tags[column] = values.pop()
     tags["COMPOSITE_START_DATE"] = str(rows["composite_start"].min())
     tags["COMPOSITE_END_DATE"] = str(rows["composite_end"].max())
+    # The span of contributing acquisitions differs per tile; the mosaic's is
+    # their union, as the item builder derives it for a tile's two polarizations.
+    for tag, pick in (("FIRST_ACQUISITION_DATE", min), ("LAST_ACQUISITION_DATE", max)):
+        if tag in rows and rows[tag].notna().any():
+            tags[tag] = str(pick(rows[tag].dropna()))
     tags["MGRS_TILE"] = "N/A -- mosaic of many tiles"
     if asset_key.endswith("_qa_num"):
         # The mosaic is a mean of counts, not a count: say so, because it is no
@@ -353,7 +363,10 @@ def step_items(
         geometry=geometry,
         bbox=bbox,
         start=window[0],
-        end=window[1],
+        # The tile items publish the midnight after the inclusive last day as
+        # their end; the mosaic item must say the same or the two collections'
+        # extents end a day apart.
+        end=window[1] + timedelta(days=1),
         assets=mosaic_assets(state, frame),
         build_fingerprint=build_fingerprint,
     )
