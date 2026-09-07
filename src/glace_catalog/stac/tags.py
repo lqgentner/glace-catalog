@@ -192,6 +192,14 @@ _INT_TAGS = frozenset(
     },
 )
 _FLOAT_TAGS = frozenset({"COHERENCE_AVERAGE", "COHERENCE_STD"})
+_STATISTICS_TAGS = {
+    "minimum": "STATISTICS_MINIMUM",
+    "maximum": "STATISTICS_MAXIMUM",
+    "mean": "STATISTICS_MEAN",
+    "stddev": "STATISTICS_STDDEV",
+    "valid_percent": "STATISTICS_VALID_PERCENT",
+}
+"""The GDAL band-tag items the writer embeds, keyed as :attr:`RasterInfo.statistics`."""
 
 
 @dataclass(frozen=True)
@@ -248,8 +256,14 @@ def read_raster_info(path: Path | UPath) -> RasterInfo:
         If the file does not start with a TIFF byte-order marker.
     """
     with rasterio_open(path) as src:
+        band_tags = src.tags(1)
         info = {
             "tags": dict(src.tags()),
+            "statistics": {
+                name: float(band_tags[tag])
+                for name, tag in _STATISTICS_TAGS.items()
+                if tag in band_tags
+            },
             "band_name": src.descriptions[0] or "",
             "band_unit": src.units[0] or "",
             "data_type": src.dtypes[0],

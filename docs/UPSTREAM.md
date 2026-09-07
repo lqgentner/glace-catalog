@@ -248,7 +248,7 @@ background. Masks land on the same MGRS tile and UTM zone as the composites
 because both sides ask `freezebase.mgrs`, which is where a grid contract
 belongs. Write this down in a README beside the data; nothing validates it now.
 
-### D-4 — Emit `manifest.parquet` beside the composites · **blocks the Alps**
+### D-4 — Emit `manifest.parquet` beside the composites · **implemented 2026-09-07, unrun at scale**
 
 One row per written file, so the publisher reads one file instead of opening
 every composite: 1 716 header reads on a Swiss year is seconds, 26 500 on an
@@ -270,7 +270,8 @@ Columns, one row per file:
 | `size` | a listing of the output prefix, taken **last** |
 | `sha256` | `ResolutionWeighter.checksums`, already multihash-encoded, keyed by output path. `None` where unknown — never fabricated |
 | `valid_percent` | the QA-NUM raster's own `STATISTICS_VALID_PERCENT`, keyed by the *data* asset it counts for; QA rows carry `None` (see S-1) |
-| `band_name`, `band_unit`, `data_type`, `nodata`, `spatial_resolution`, `bits_per_sample`, `byte_order` | the raster header |
+| `band_name`, `band_unit`, `data_type`, `nodata`, `spatial_resolution`, `bits_per_sample`, `byte_order` | the raster header. A NaN in `nodata` **is** the declared nodata — every float composite declares NaN, and parquet cannot say "none declared" any other way |
+| `stat_minimum`, `stat_maximum`, `stat_mean`, `stat_stddev`, `stat_valid_percent` | the band's own `STATISTICS_*` tags (S-1), so the publisher can fill `bands[].statistics` without a second header read |
 | one column per GeoTIFF tag, SCREAMING_CASE | the raster header, every tag it carries. Do not curate the list: the publisher picks the ones it knows and ignores the rest, so an extra column costs nothing and a missing one is caught |
 
 Parquet metadata: `manifest_version = 1`. Bump it when a column changes
@@ -294,6 +295,16 @@ Three constraints:
   here rebuilds one from the archive and is the retrofit for years that predate
   emission; with `--out` it is also the check that the run's manifest agrees
   with the bytes.
+
+**State:** `glacier_mapping/manifest.py` and the wiring in `run_composite`,
+with `tests/test_manifest.py` writing real COGs through `freezebase.write_cog`
+to cover the carry, the re-read, the reconcile and the per-pass result shapes.
+On this side, `manifest_raster_info` now consumes `sha256` and the `stat_*`
+columns — it silently dropped both before, so no manifest could ever have put a
+`file:checksum` on an item — and `tests/test_manifest_contract.py` holds the
+producer's column list verbatim and round-trips a manifest in that layout.
+`build-manifest.py` writes the same columns, so a retrofitted Swiss manifest
+and an emitted Alpine one look alike.
 
 Verified when: `publish-year.py --steps copy` on an Alpine year runs with no
 `build-manifest.py` beforehand, reports zero mismatches, and the

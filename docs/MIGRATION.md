@@ -526,10 +526,12 @@ Ordered by what blocks what.
       Now also carries `subprocess_s3_env` (F-2). See [`UPSTREAM.md`](UPSTREAM.md).
 - [ ] **P-20 — Manifest emission in the composite driver.** Settled 2026-09-07:
       `manifest.parquet` is written by `run_composite` in `deep-glacier-mapping`,
-      not by `s1bursts` (M-31). The driver also has to pass `checksum=True`,
-      which it does not today, or every `sha256` is `None`. Work order and
-      column contract in [`UPSTREAM.md`](UPSTREAM.md) D-4. `build-manifest.py`
-      stays as the retrofit for the Swiss years and as the cross-check.
+      not by `s1bursts` (M-31). **Implemented the same day on both sides**, with
+      the driver passing `checksum=True`; the reader here now consumes the
+      digest and the band statistics it used to drop. Column contract in
+      [`UPSTREAM.md`](UPSTREAM.md) D-4, gated by
+      `tests/test_manifest_contract.py`. Open until a real Alpine year has run
+      through `publish-year --steps copy` without `build-manifest.py`.
 - [ ] **P-7 — Overview-depth assertion.** `PTL-DAT-011` wants overviews down to
       one tile; the Alps mosaic at 41 984 × 69 120 needs 9 levels and the CH test
       COG stopped at 7.

@@ -63,6 +63,19 @@ one level down would only make every href longer.
 MANIFEST_VERSION = 1
 """Schema version of :data:`MANIFEST_NAME`, written into its parquet metadata."""
 
+STATISTICS_COLUMNS: dict[str, str] = {
+    "minimum": "stat_minimum",
+    "maximum": "stat_maximum",
+    "mean": "stat_mean",
+    "stddev": "stat_stddev",
+    "valid_percent": "stat_valid_percent",
+}
+"""The embedded band statistics, as :attr:`RasterInfo.statistics` key to manifest column.
+
+Read from the COG's own band tags at write time, so the publisher can put them on
+``bands[].statistics`` without a second read of the header.
+"""
+
 MANIFEST_COLUMNS: tuple[str, ...] = (
     "filename",
     "tile",
@@ -82,8 +95,13 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
     "spatial_resolution",
     "bits_per_sample",
     "byte_order",
+    *STATISTICS_COLUMNS.values(),
 )
 """Fixed columns of the manifest, before the one column per provenance tag.
+
+The composite driver in ``deep-glacier-mapping`` writes these and, after them,
+one column per GeoTIFF tag; ``tests/test_manifest_contract.py`` holds its
+column list verbatim and is where drift on either side surfaces.
 
 The tag columns are SCREAMING_CASE and these are lowercase, so the two
 vocabularies cannot collide.
@@ -355,6 +373,10 @@ def build_manifest_frame(
                 "spatial_resolution": info.spatial_resolution,
                 "bits_per_sample": info.bits_per_sample,
                 "byte_order": info.byte_order,
+                **{
+                    column: info.statistics.get(name)
+                    for name, column in STATISTICS_COLUMNS.items()
+                },
                 **_tag_columns(info.tags),
             },
         )
@@ -500,17 +522,28 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
             for tag in PROVENANCE_TAGS
             if tag in row and row[tag] is not None and pd.notna(row[tag])
         }
+        statistics = {
+            name: float(row[column])
+            for name, column in STATISTICS_COLUMNS.items()
+            if column in row and row[column] is not None and pd.notna(row[column])
+        }
+        checksum = row["sha256"]
         nodata = row["nodata"]
         info.setdefault(str(row["tile"]), {})[str(row["asset_key"])] = RasterInfo(
             tags=tags,
             band_name=str(row["band_name"] or ""),
             band_unit=str(row["band_unit"] or ""),
             data_type=str(row["data_type"]),
-            nodata=None if nodata is None or pd.isna(nodata) else float(nodata),
+            # A NaN in the column *is* the nodata value: every float composite
+            # declares NaN, and parquet has no way to say "none declared" apart
+            # from it. Only a missing value is "none declared".
+            nodata=None if nodata is None else float(nodata),
             spatial_resolution=float(row["spatial_resolution"]),
             bits_per_sample=int(row["bits_per_sample"]),
             byte_order=str(row["byte_order"]),
             size=int(row["size"]),
+            checksum=None if checksum is None or pd.isna(checksum) else str(checksum),
+            statistics=statistics,
         )
     return info
 
