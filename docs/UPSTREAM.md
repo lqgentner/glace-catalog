@@ -268,7 +268,7 @@ Columns, one row per file:
 | --- | --- |
 | `filename`, `tile`, `asset_key`, `product`, `qa`, `polarization`, `composite_start`, `composite_end` | the filename, by the same parse `glace_catalog.stac.naming` does. `asset_key` is the published stem, `coh12_vv_qa_num`; `product` is `COH12`; `qa` is `NUM`, `CQM` or `None` |
 | `size` | a listing of the output prefix, taken **last** |
-| `sha256` | `ResolutionWeighter.checksums`, already multihash-encoded, keyed by output path. `None` where unknown — never fabricated |
+| `sha256` | `ResolutionWeighter.checksums`, already multihash-encoded, keyed by output path, for files this run wrote; the file read once and hashed otherwise. Never absent, never fabricated |
 | `valid_percent` | the QA-NUM raster's own `STATISTICS_VALID_PERCENT`, keyed by the *data* asset it counts for; QA rows carry `None` (see S-1) |
 | `band_name`, `band_unit`, `data_type`, `nodata`, `spatial_resolution`, `bits_per_sample`, `byte_order` | the raster header. A NaN in `nodata` **is** the declared nodata — every float composite declares NaN, and parquet cannot say "none declared" any other way |
 | `stat_minimum`, `stat_maximum`, `stat_mean`, `stat_stddev`, `stat_valid_percent` | the band's own `STATISTICS_*` tags (S-1), so the publisher can fill `bands[].statistics` without a second header read |
@@ -287,9 +287,10 @@ Three constraints:
   a file that already exists, so its digest is not in memory. Load the previous
   manifest at the start, carry every row whose filename and size still match,
   header-read the files this run wrote or that carried no row, and **flush after
-  every geobox**, so a crash loses at most one tile's digests. A file with no
-  previous row and no in-memory digest gets `sha256 = None`, which is honest;
-  rewrite it with `overwrite=True` if a digest is wanted.
+  every geobox** as a checkpoint that may fail without ending the run. A file
+  with no previous row and no in-memory digest — the tile in flight when the
+  previous process died — is read once and hashed, so a resume costs at most
+  one tile's worth of full reads and every row ends up with a digest.
 - **A cache, not the source of truth.** Every value the manifest lists is also
   in the file; a published COG must be self-describing. `scripts/build-manifest.py`
   here rebuilds one from the archive and is the retrofit for years that predate
