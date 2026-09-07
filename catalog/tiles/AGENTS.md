@@ -57,9 +57,12 @@ Each GeoTIFF carries ~30 dataset tags recording the processing chain
 file is the source of truth and stays self-describing if separated from this
 catalog.
 
-Each year's run record is published as a collection asset: `manifest-{year}`
-lists every file the run wrote with its size, checksum and band statistics, and
-`config-{year}` is the configuration that produced them.
+Every tile item of a year carries the same `start_datetime` and `end_datetime`:
+the compositing window, chosen once per year from the lowest-snow period. Which
+acquisitions actually contributed varies per tile and product and is on the item
+as `glace:coh_first_acquisition` / `glace:coh_last_acquisition` and the `rtc`
+pair; coherence ends about twelve days before backscatter because a pair needs
+both dates inside the window.
 
 ## Pairing with the mosaics
 

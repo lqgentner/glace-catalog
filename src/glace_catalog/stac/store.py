@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MANIFEST_NAME = "manifest.parquet"
-CONFIG_NAME = "config.yaml"
 BUILD_STATE_NAME = ".build-state.json"
 YEAR_INDEX_NAME = ".items.parquet"
 ITEMS_INDEX_NAME = "items.parquet"
@@ -233,20 +232,6 @@ class StoreLayout:
     def tile(self, year: int, tile: str) -> Path | UPath:
         """Directory of one tile item, holding its twelve COGs and its ``item.json``."""
         return self.tile_year(year) / tile
-
-    def manifest(self, year: int) -> Path | UPath:
-        """Locate the year's copy of the composite run's manifest.
-
-        Sits under the tiles collection because that is what it records, and is
-        registered as a *collection* asset keyed ``manifest-{year}``: a catalog
-        organizes only and may carry no assets (PTL-AST-005), so a year catalog
-        cannot own its own record.
-        """
-        return self.tile_year(year) / MANIFEST_NAME
-
-    def config(self, year: int) -> Path | UPath:
-        """Locate the year's copy of the composite run's configuration."""
-        return self.tile_year(year) / CONFIG_NAME
 
     def build_state(self, year: int) -> Path | UPath:
         """Build state of one year's publication. Not published."""

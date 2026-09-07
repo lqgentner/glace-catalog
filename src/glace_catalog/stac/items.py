@@ -125,6 +125,31 @@ def _method_label(file: CompositeFile) -> str:
     return f"{'ascending' if file.orbit == 'A' else 'descending'} pass composite"
 
 
+def _acquisition_spans(
+    files: Sequence[CompositeFile],
+    raster_info: Mapping[str, RasterInfo],
+) -> dict[str, tuple[str, str]]:
+    """First and last contributing acquisition per product, over its data layers.
+
+    Read from ``FIRST_ACQUISITION_DATE`` and ``LAST_ACQUISITION_DATE``; the two
+    polarizations of a product may differ by an acquisition, so the span is the
+    union. ISO dates compare as strings.
+    """
+    spans: dict[str, tuple[str, str]] = {}
+    for file in files:
+        if file.qa is not None:
+            continue
+        tags = raster_info[file.asset_key].tags
+        first, last = tags.get("FIRST_ACQUISITION_DATE"), tags.get("LAST_ACQUISITION_DATE")
+        if first is None or last is None:
+            continue
+        seen = spans.get(file.product)
+        spans[file.product] = (
+            (first, last) if seen is None else (min(seen[0], first), max(seen[1], last))
+        )
+    return {product: spans[product] for product in PRODUCTS if product in spans}
+
+
 def _nodata(value: float | None, data_type: str) -> float | int | str | None:
     """Encode a nodata value for STAC, which spells the non-finite ones out."""
     if value is None:
@@ -304,11 +329,14 @@ def build_tile_item(
     """
     geobox = MGRSGeoBox.from_mgrs(tile)
     geometry, bbox = _tile_geometry(geobox)
-    starts = {f.product: f.start for f in files if f.qa is None}
-    ends = {f.product: f.end for f in files if f.qa is None}
+    # The filename dates are the compositing window, the same for every tile of
+    # a year, so every tile item of a year shares one time range and a reader
+    # stacking them gets one time coordinate. Which acquisitions contributed is
+    # per product and per tile, and comes from the rasters' own tags.
     start = min(f.start for f in files)
     end = max(f.end for f in files) + timedelta(days=1)
     year = start.year
+    acquisitions = _acquisition_spans(files, raster_info)
 
     item = pystac.Item(
         id=f"{tile}-{year}",
@@ -328,11 +356,10 @@ def build_tile_item(
     )
     item.stac_extensions.append(VERSION_EXTENSION_URI)
     _apply_common_metadata(item, geobox, tile)
-    for product in PRODUCTS:
-        if product in starts:
-            prefix = "coh" if product.startswith("COH") else "rtc"
-            item.properties[f"glace:{prefix}_start"] = starts[product].date().isoformat()
-            item.properties[f"glace:{prefix}_end"] = ends[product].date().isoformat()
+    for product, (first, last) in acquisitions.items():
+        prefix = "coh" if product.startswith("COH") else "rtc"
+        item.properties[f"glace:{prefix}_first_acquisition"] = first
+        item.properties[f"glace:{prefix}_last_acquisition"] = last
     if glacier_fraction is not None:
         item.properties["glace:glacier_fraction"] = round(glacier_fraction, 5)
     if glacier_fraction_buffered is not None:

@@ -50,7 +50,7 @@ from glace_catalog.config import settings
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.save import write_year_items
-from glace_catalog.stac.store import CONFIG_NAME, MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
+from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -124,25 +124,14 @@ def step_copy(
     files: Sequence[stac.CompositeFile],
     src: Any,
 ) -> None:
-    """Copy the manifest, the run configuration and every composite into the store.
+    """Copy every composite into the store, byte for byte.
 
-    The manifest and the configuration are the reproducibility record, and the
-    staging tree that holds them is meant to be deleted once the copy is
-    verified — so copying them out is not housekeeping, it is the step that stops
-    the cleanup destroying the record.
+    The run's manifest and configuration stay beside the source archive: the
+    manifest is the publisher's cache, and every value a reader needs from either
+    is on the items — tags, ``file:size``, ``file:checksum`` — or in the pipeline
+    repository's committed configuration.
     """
-    year_dir = layout.tile_year(args.year)
-    year_dir.mkdir(parents=True, exist_ok=True)
-    (year_dir / MANIFEST_NAME).write_bytes((src / MANIFEST_NAME).read_bytes())
-    config = src / CONFIG_NAME
-    if config.exists():
-        (year_dir / CONFIG_NAME).write_bytes(config.read_bytes())
-    else:
-        logger.warning(
-            "No %s beside the composites; the run's configuration is not archived",
-            CONFIG_NAME,
-        )
-
+    layout.tile_year(args.year).mkdir(parents=True, exist_ok=True)
     listing = stac.list_objects(src)
     result = stac.copy_composites(files, layout, args.year, listing, max_workers=args.max_workers)
     logger.info("copy: %s", result)
@@ -504,14 +493,7 @@ def main() -> None:
     if args.force_from is not None:
         state.invalidate_from(args.force_from)
 
-    # The manifest describes the composites, but `copy` also archives the run's
-    # configuration, so a config that appeared or changed has to reach the
-    # fingerprint too — otherwise the step stays "done" with the record missing.
-    config = src / CONFIG_NAME
-    copy_print = stac.fingerprint(
-        stac.manifest_digest(frame),
-        config.stat().st_size if config.exists() else None,
-    )
+    copy_print = stac.fingerprint(stac.manifest_digest(frame))
     prints = {
         "copy": copy_print,
         "vrt": copy_print,

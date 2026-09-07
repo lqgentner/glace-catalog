@@ -19,6 +19,7 @@ TESTS = [
     "test_grids.py",
     "test_styles.py",
     "test_manifest_contract.py",
+    "test_items.py",
     "test_links.py",
     "test_publish.py",
     "test_upload_data.py",

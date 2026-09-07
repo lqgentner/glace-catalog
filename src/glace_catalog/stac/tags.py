@@ -82,6 +82,8 @@ _REQUIRED_TAGS = (
     "MGRS_TILE",
     "COMPOSITE_START_DATE",
     "COMPOSITE_END_DATE",
+    "FIRST_ACQUISITION_DATE",
+    "LAST_ACQUISITION_DATE",
     "POLARIZATION",
     "PIXEL_COORDINATE_CONVENTION",
     "COMPOSITING_METHOD",
@@ -129,6 +131,10 @@ _TAG_FIELDS: dict[str, str] = {
     "PIXEL_COORDINATE_CONVENTION": "glace:pixel_coordinate_convention",
     "COMPOSITE_START_DATE": "glace:composite_start_date",
     "COMPOSITE_END_DATE": "glace:composite_end_date",
+    # The window above is the sampling frame, shared by every tile of a year;
+    # these two are the acquisitions that actually contributed to this file.
+    "FIRST_ACQUISITION_DATE": "glace:first_acquisition_date",
+    "LAST_ACQUISITION_DATE": "glace:last_acquisition_date",
     # The sat extension's `sat:orbit_state` would be the standard home for
     # this, but its schema requires at least one `sat:` field in the item
     # properties, and a GLACE item mixes LRW composites (both directions) with

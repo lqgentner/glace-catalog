@@ -277,14 +277,23 @@ because they kept both in one directory; we do not, because the directory does
 that work instead. If a COG display product ever returns to an item directory
 here, it takes FTW's naming with it.
 
-**Per-year run records are collection assets.** `PTL-AST-005` forbids assets on a
-catalog, so the year catalog cannot own the manifest that sits beside it. The
-files stay at `tiles/{year}/manifest.parquet` — under the collection whose data
-they record — and register as collection assets keyed `manifest-{year}` /
-`config-{year}`, role `metadata`. This is strictly better than the old plan's
-placement on the mosaic item, which put a record of the tiles in the other
-collection and needed a `describedby` link on all 24 000 tile items to
-compensate. Those links are dropped.
+**Per-year run records are not published (M-32, 2026-09-07; retires M-4).**
+The manifest is the publisher's cache and the configuration is pipeline state;
+every value a reader needs from either is on the items — the tags, `file:size`,
+`file:checksum` — or in the pipeline repository's committed configuration.
+FTW publishes neither. M-4 had registered both as collection assets keyed
+`manifest-{year}` / `config-{year}` because `PTL-AST-005` forbids them on the
+year catalog; the better answer was to leave them beside the source archive.
+The `describedby` links on tile items that the older plan needed stay dropped.
+
+**Every tile item of a year shares one time range (M-33).** The filename and
+`COMPOSITE_*_DATE` tags carry the compositing window, which s1bursts ≥ 0.5.0
+takes from the caller and the pipeline takes from a committed per-scope windows
+file. Before, they carried the first and last contributing acquisition, so 143
+tiles of one year had 143 different `datetime` values and `odc.stac.load`
+returned a time axis with one mostly-empty slice per tile. The observed span is
+still published, per product, as `glace:coh_first_acquisition` and friends,
+from the `FIRST_ACQUISITION_DATE` / `LAST_ACQUISITION_DATE` tags.
 
 **Dotfiles are build state.** `.build-state.json` and `.items.parquet` (the
 year's slice of the mirror, before `finalize-catalog` concatenates and rebases
@@ -814,7 +823,7 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-1 | Collection-owned subtree: `tiles/{year}/{tile}/`, `mosaics/{year}/`. Supersedes D-3's flat `{year}/` | 3 |
 | M-2 | One collection per product with year sub-catalogs, not one collection per year | 3 |
 | M-3 | Year sub-catalogs only; `PTL-CAT-001` accepted rather than adding two more directory levels | 3 |
-| M-4 | Per-year manifest and config are **tiles-collection** assets keyed `manifest-{year}`; the mosaic-item placement and the 24 000 `describedby` links are dropped. Supersedes D-18 | 3 |
+| M-4 | ~~Per-year manifest and config are tiles-collection assets~~ **retired by M-32**; the 24 000 `describedby` links stay dropped | 3 |
 | M-5 | Item mirror at `{collection}/items.parquet`, role `collection-mirror`, no `rel: "items"` link. Supersedes D-6's root-level `tiles.parquet` with role `stac-items` | 3 |
 | M-6 | ~~Raster PMTiles retired~~ **superseded by M-19** | 4 |
 | M-7 | Single-band uint8 display COGs rejected on measurement — 95 %/49 % of the LERC baseline is not worth a second product | 4 |
@@ -838,6 +847,8 @@ Superseding the `PLAN.md` decision log where they conflict.
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header carries bounds and zoom range, the `rel:"pmtiles"` link carries the href, the item carries the dates, and the display constants go in the MapLibre style's `metadata`. `renders` is *not* their home — its `colormap_name` deliberately names a different ramp than the one baked (M-10), and it covers 4 of 14 layer types | 4 |
 | M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** `catalog/mosaics/styles/default.json` carries each layer's ramp, range and units under `metadata.portolan:legend`; `webmap.py` reads them to build its LUTs instead of holding `DEFAULT_STYLES` / `RGB_STYLES`. **Upholds M-21** rather than narrowing it — the numbers are colour decisions, they belong in a reviewed file, and the file that is reviewed should be the file that is used. The cost is a build-time dependency on a catalog file, accepted because the alternative is two copies and two copies is what P-18 is | 4 |
 | M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` — a shared library is the right place for a grid contract, a sibling repository is not. Making it true moved `INVENTORY_OVERLAYS`, `export_inventory`, `export_tile_grid` and `build_vector_pmtiles` to `deep-glacier-mapping` (dead code here; its inventory export was the only caller), replaced `get_scope` in the fraction script with a `--perimeter-tiles` argument, and dropped the labels catalog (P-15) | 7 |
+| M-32 | **The run manifest and configuration are not published.** Both live beside the source archive and in the pipeline repository; the items carry every value a reader needs. Retires M-4 | 3 |
+| M-33 | **One time range per year.** Composite filenames and `COMPOSITE_*_DATE` carry the compositing window from the committed windows file, so every tile item of a year shares `datetime`; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 3 |
 | M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes — statistics and tags in the header, the digest in `checksums` — and stops there. Arranging rows in this catalog's vocabulary, and describing a resumed run, belong to the composite driver in `deep-glacier-mapping`, beside the `config.yaml` it already writes. The schema is an on-disk contract under M-30, validated by `read_manifest` and `survey_tags` on this side | 6 |
 | M-29 | **One credit line, read from the style.** `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header. It was written three times before — the style's sources, the tiler call, and again at runtime in `glace-viewer` — and the three disagreed. The comma rather than a full stop keeps it one credit list, which is what a map attribution is | 4 |
 | M-28 | QA ramps are **sequential**: `cmc.turku` for QA-NUM, `cmc.glasgow` for QA-CQM. The diverging `cmc.vik` encoded a wrong reading of CQM — see P-19 | 4 |

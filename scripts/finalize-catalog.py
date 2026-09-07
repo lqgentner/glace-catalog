@@ -44,9 +44,7 @@ from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, read_item
 from glace_catalog.stac.store import (
-    CONFIG_NAME,
     ITEMS_INDEX_NAME,
-    MANIFEST_NAME,
     upload_tree,
 )
 
@@ -165,17 +163,16 @@ def patch_collections(
     source_dir: Path,
     years: Sequence[int],
     mosaic_items: Sequence[pystac.Item],
-    *,
-    base_url: str,
-    has_config: Mapping[int, bool],
 ) -> dict[str, dict]:
     """Patch the tracked collection documents with what has actually been published.
 
     **These documents are source, not output.** Their prose, providers, license,
     ``item_assets``, ``renders`` and style registrations are written by hand and
     reviewed in git; nothing here touches them. What this adds is only what
-    depends on the run: the links to the years that exist, the per-year manifest
-    and configuration assets, and the temporal extent.
+    depends on the run: the links to the years that exist and the temporal
+    extent. The run's manifest and configuration stay beside the source archive
+    and in the pipeline repository; every value a reader needs from them is on
+    the items as tags, ``file:size`` and ``file:checksum``.
 
     That split is the whole reason the catalog is kept in git. A generator that
     rewrote the descriptions would make every publication a diff nobody can
@@ -189,17 +186,12 @@ def patch_collections(
         Published years, ascending.
     mosaic_items
         The mosaic items, read back from the store, for the temporal extent.
-    base_url
-        Public base URL, for the per-year asset hrefs.
-    has_config
-        Whether each year archived its run configuration.
 
     Returns
     -------
     dict
         ``{"tiles": ..., "mosaics": ...}``, the patched documents.
     """
-    base = base_url.rstrip("/")
     patched: dict[str, dict] = {}
 
     tiles = _load(source_dir / TILES_DIR / "collection.json")
@@ -207,25 +199,14 @@ def patch_collections(
         *_keep(tiles["links"], {"child", "item", "self"}),
         *[stac.year_child_link(year) for year in years],
     ]
-    for year in years:
-        tiles.setdefault("assets", {})[f"manifest-{year}"] = {
-            "href": f"{base}/{TILES_DIR}/{year}/{MANIFEST_NAME}",
-            "type": "application/vnd.apache.parquet",
-            "title": f"Composite run manifest, {year}",
-            "description": (
-                "Every file the composite run wrote that year, with its size, digest, "
-                "band statistics and full provenance tag set. The run's own record; "
-                "the rasters remain the source of truth and carry the same tags."
-            ),
-            "roles": ["metadata"],
-        }
-        if has_config.get(year):
-            tiles["assets"][f"config-{year}"] = {
-                "href": f"{base}/{TILES_DIR}/{year}/{CONFIG_NAME}",
-                "type": "application/yaml",
-                "title": f"Composite run configuration, {year}",
-                "roles": ["metadata"],
-            }
+    # Per-year run records used to be registered here as `manifest-{year}` and
+    # `config-{year}` assets. Drop any a previous finalize left in the tracked
+    # document, so a re-run converges.
+    tiles["assets"] = {
+        key: asset
+        for key, asset in tiles.get("assets", {}).items()
+        if not key.startswith(("manifest-", "config-"))
+    }
     patched["tiles"] = tiles
 
     mosaics = _load(source_dir / MOSAICS_DIR / "collection.json")
@@ -458,8 +439,6 @@ def main() -> None:
         args.source,
         years,
         mosaic_items,
-        base_url=args.base_url,
-        has_config={year: layout.config(year).exists() for year in years},
     )
     documents["mosaics"]["links"] += pmtiles_links(layout, years, args.base_url)
     write_documents(

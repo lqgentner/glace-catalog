@@ -60,9 +60,9 @@ findings are structural consequences of that and are recorded in
 - **Collections own their subtrees.** `tiles/{year}/{tile}/item.json`, not
   `{year}/tiles/...`. Portolan requires a collection directory to hold its items,
   and a catalog may only appear *below* a collection to organize them.
-- **A catalog carries no assets.** Only collections and items may. That is why
-  each year's `manifest.parquet` is a *collection* asset keyed `manifest-{year}`
-  rather than an asset of the year catalog that sits beside it.
+- **A catalog carries no assets.** Only collections and items may. The year
+  catalogs group items and hold nothing else; the run's manifest and
+  configuration are not published at all (M-32).
 - **Structural links are relative; asset hrefs are absolute https.** The first
   keeps the tree valid in the repo, in a preview and in production. The second
   is what makes assets resolve for a client reading one object in isolation, and

@@ -396,9 +396,9 @@ The {n_items} MGRS tiles composited in {year}. Each item carries twelve
 single-band Cloud-Optimized GeoTIFFs at 10 m, in that tile's own UTM zone.
 
 This sub-catalog exists to group the year's items for browsing. It holds no
-assets of its own — a STAC catalog may not have any — so the year's run manifest
-and configuration are registered on the [tiles collection](../collection.json)
-as `manifest-{year}` and `config-{year}`.
+assets of its own — a STAC catalog may not have any — and adds no metadata:
+everything about the pixels is on the items, and everything about the run that
+wrote them is in each GeoTIFF's tags.
 
 ## Reading it
 
@@ -415,8 +415,8 @@ CC-BY-4.0. Contains modified Copernicus Sentinel data.
 
 Produced at the University of Zurich, Department of Geography, from Copernicus
 Sentinel-1 SLC data. Per-file provenance is embedded in each GeoTIFF's tags and
-mirrored into the item properties; the run that wrote them is recorded in
-`manifest-{year}` on the collection.
+mirrored into the item properties, including the software versions, the DEM and
+the compositing window and parameters.
 """
     agents = f"""# GLACE tiles {year} — agent guide
 

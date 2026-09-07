@@ -87,8 +87,7 @@ consumer at. Revisit if browsing the published tree proves genuinely painful.
 ### `PTL-AST-003` — `file:size` and `file:checksum` on collection assets
 
 *"every asset should carry file:size and file:checksum."* The collection-level
-assets (`items`, `glacier-fractions`, `thumbnail`, `manifest-{year}`,
-`config-{year}`) point at generated files whose bytes do not exist when the
+assets (`items`, `glacier-fractions`, `thumbnail`) point at generated files whose bytes do not exist when the
 collection document is written by hand. `finalize-catalog.py` fills both fields
 from the real bytes at publication.
 
@@ -137,7 +136,7 @@ catalog non-conformant if it ships before they land. Tracked in
 
 | Rule | Requirement | State |
 |---|---|---|
-| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **blocking.** The completed Swiss 2021–2024 composites have empty band tags. Fixed upstream in `s1bursts`, unreleased; the existing archive needs a restat pass. |
+| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | written by s1bursts 0.4.0; the Swiss 2021–2024 composites are being regenerated with it (P-1) |
 | `PTL-DAT-010` | a COG band with nodata declares its valid percent | as above |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | not yet implemented in the geoparquet writer |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | not yet asserted by a gate |
