@@ -82,13 +82,14 @@ script lives in `deep-glacier-mapping`, which owns the inventories it reads, and
 environment does not have:
 
 ```bash
-cd ../deep-glacier-mapping
-uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
-    --scope ch --perimeter-tiles 143 \
-    --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet
+( cd ../deep-glacier-mapping &&
+  uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
+      --scope ch --perimeter-tiles 143 \
+      --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet )
 ```
 
-Write the `--out` prefix in full: that checkout's `.env` does not define
+The subshell is the point: every later step runs from this checkout. Write the
+`--out` prefix in full, too — that checkout's `.env` does not define
 `GLACE_STORE_ROOT`, and the value has to match this repository's.
 
 ### 2. Once per year

@@ -296,12 +296,13 @@ data; `file:checksum` on every item asset is what lets a reader check downloaded
 bytes against a cited release.
 
 One version string per release. `DATASET_VERSION` in
-`src/glace_catalog/stac/items.py` is the source of truth; the STAC `version` on
-both collections repeats it, so does `CITATION.cff`, and the git tag is
-`v{DATASET_VERSION}`. `tests/test_version.py` fails if those four places
-disagree. Items are not among them because they cannot: `build_tile_item` and
-`build_mosaic_item` default their `version` argument to `DATASET_VERSION`, so an
-item carries the same string by construction.
+`src/glace_catalog/stac/items.py` is the source of truth, the STAC `version` on
+both `collection.json` repeats it and so does `CITATION.cff`, and
+`tests/test_version.py` fails if those four places disagree. Items are not among
+them because they cannot be: `build_tile_item` and `build_mosaic_item` default
+their `version` argument to `DATASET_VERSION`, so an item carries the same string
+by construction. The tag `v{DATASET_VERSION}` is a manual step of the release
+below, not something the gate can see.
 
 The release procedure, run by hand. Zenodo's GitHub bridge has to be enabled for
 this repository on zenodo.org by its owner before step 8 mints anything.
