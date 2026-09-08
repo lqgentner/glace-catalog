@@ -214,7 +214,12 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
     """
     rows = frame.loc[frame["asset_key"] == asset_key]
     tags: dict[str, str] = {}
+    # PROVENANCE_TAGS is the union over every product: a pass composite's
+    # PASS_DIRECTION is not a column of an LRW manifest, and a coherence tag is
+    # not one of a backscatter-only run. Absent is fine; disagreement is not.
     for column in stac.PROVENANCE_TAGS:
+        if column not in rows:
+            continue
         values = {str(value) for value in rows[column].dropna().unique()}
         if len(values) == 1:
             tags[column] = values.pop()

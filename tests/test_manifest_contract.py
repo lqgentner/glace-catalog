@@ -20,6 +20,8 @@ Run: python3 tests/test_manifest_contract.py
 
 from __future__ import annotations
 
+import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -78,8 +80,10 @@ def producer_manifest() -> pd.DataFrame:
         "spatial_resolution": 10.0,
         "byte_order": "little-endian",
         # Dataset tags follow the fixed columns, one column each, uncurated.
+        # No PASS_DIRECTION: an LRW composite does not carry it, so the real
+        # manifest has no such column, and the publisher must not index one.
         "PROCESSING_SOFTWARE": "s1bursts 0.4.0",
-        "PASS_DIRECTION": "Ascending",
+        "COMPOSITING_METHOD": "LRW",
     }
     rows = [
         {
@@ -122,7 +126,7 @@ def producer_manifest() -> pd.DataFrame:
         },
     ]
     frame = pd.DataFrame(
-        rows, columns=[*PRODUCER_COLUMNS, "PROCESSING_SOFTWARE", "PASS_DIRECTION"]
+        rows, columns=[*PRODUCER_COLUMNS, "PROCESSING_SOFTWARE", "COMPOSITING_METHOD"]
     )
     frame.attrs["manifest_version"] = 1
     return frame
@@ -176,6 +180,27 @@ def refuses_partial_statistics() -> bool:
     return False
 
 
+def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
+    """Check the mosaic tag collector tolerates a provenance tag the run never wrote.
+
+    ``PROVENANCE_TAGS`` is the union over every product; the first real run
+    died on ``PASS_DIRECTION``, which only pass composites carry.
+    """
+    # The script resolves its store root at import; a local value keeps this
+    # gate off object storage, and nothing here reads or writes it.
+    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
+    spec = importlib.util.spec_from_file_location(
+        "publish_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
+    )
+    if spec is None or spec.loader is None:
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tags = module.mosaic_tags(frame, "coh12_vv")
+    return tags.get("COMPOSITING_METHOD") == "LRW" and "PASS_DIRECTION" not in tags
+
+
 def main() -> int:
     """Run the gate."""
     missing = set(MANIFEST_COLUMNS) - set(PRODUCER_COLUMNS)
@@ -206,7 +231,10 @@ def main() -> int:
         "size carried": data.size == 1234,
         "NaN nodata stays NaN": data.nodata is not None and np.isnan(data.nodata),
         "zero nodata stays zero": count.nodata == 0.0,
-        "tags carried": data.tags.get("PASS_DIRECTION") == "Ascending",
+        "tags carried": data.tags.get("COMPOSITING_METHOD") == "LRW",
+        "mosaic tags survive a manifest without the pass-only column": (
+            mosaic_tags_survive_missing_column(frame)
+        ),
         "valid percent keyed by the data asset": percents == {"32TPS05": {"coh12_vv": 84.375}},
         "a manifest missing one statistic is refused by column name": (
             refuses_partial_statistics()
