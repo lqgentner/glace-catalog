@@ -65,6 +65,8 @@ is not:
 | R-11 | No `.portolan/metadata.yaml`. It is the input of `portolan add`, which this repository does not use; the collection documents are hand-written source. A second copy of title, license and contact that nothing reads is drift waiting to happen. |
 | R-12 | The item mirror satisfies `PTL-DAT-006/007/008/016` as rashid implements them (`rashid/data/checks.py::_check_geoparquet`, `_check_mirror`). P-2 closes. |
 | R-13 | `RasterInfo.statistics` becomes a typed `BandStatistics` record with the five fields s1bursts writes; a missing field is a `ValueError` at manifest read, not a `KeyError` at publication. |
+| R-15 | `uv.lock` is tracked. Dropping the editable overrides makes the dependency set resolvable from a checkout; without a committed lock a fresh clone still resolves to whatever PyPI serves that day. |
+| R-16 | **The catalog is versioned by git tags and GitHub releases, each archived on Zenodo for a DOI.** Source Cooperative is not immutable, so a citation must name a release and a reader must be able to verify their bytes against it. One version string per release: `DATASET_VERSION` in `src/glace_catalog/stac/items.py` is the source of truth, the STAC `version` on both collections and every item equals it, and the git tag is `v{DATASET_VERSION}`. `file:checksum` on every item asset is what lets a reader check downloaded bytes against a cited release. Zenodo archives the repository snapshot (the metadata), never the data. Metadata for Zenodo comes from `CITATION.cff`. The `sci:doi` / `sci:citation` fields (STAC scientific extension) are added to the root catalog and both collections **after** the first release mints the concept DOI, because a published placeholder DOI is worse than none; until then STATUS.md carries it as an open item with the exact fields to fill. |
 | R-14 | Docs: `docs/MIGRATION.md` is replaced by `docs/DESIGN.md` (the stable design and the decision table, no superseded reasoning) and `docs/STATUS.md` (what is done, what is open, the §11 swap checklist). `docs/UPSTREAM.md` shrinks to the three surviving on-disk contracts. `docs/superpowers/specs/2026-09-05-display-product-design.md` is deleted (folded into M-24/M-25). |
 
 ---
@@ -326,6 +328,55 @@ test calls.
 
 ---
 
+## Task 6 — Release model: tracked lock, version gate, citation metadata
+
+**Files:** `.gitignore`, `uv.lock` (now tracked), `CITATION.cff` (new),
+`tests/test_version.py` (new), `src/glace_catalog/stac/items.py` (docstring of
+`DATASET_VERSION` only), `.github/workflows/*.yml` if a release workflow is wanted
+(see below).
+
+Decisions R-15 and R-16 bind this task.
+
+1. **`build: track uv.lock`** — remove the `uv.lock` line from `.gitignore` (and the
+   comment that justified it, if any), `git add uv.lock`, commit. Nothing else in
+   that commit.
+2. **`CITATION.cff`** at the repository root, CFF 1.2.0, `type: dataset`:
+   title "GLACE: Sentinel-1 coherence and backscatter composites over Alpine
+   glaciers"; authors: Luis Q. Gentner (University of Zurich, Department of
+   Geography, email luis.gentner@geo.uzh.ch, add `orcid` only if it is found in the
+   repository or the user's other repositories — otherwise omit the key);
+   `license: CC-BY-4.0`; `repository-code: https://github.com/lqgentner/glace-catalog`;
+   `url: https://data.source.coop/lqgentner/glace-ch`; `version` equal to
+   `DATASET_VERSION`; `date-released` left for the release commit (omit the key
+   now); `keywords` matching the collections' `keywords` arrays; an `abstract` of two
+   or three sentences taken from the root catalog description. Zenodo reads this
+   file when the GitHub bridge archives a release. Validate it with
+   `uv run --with cffconvert cffconvert --validate` if that package installs
+   cleanly; otherwise state in the report that it was not validated.
+3. **`tests/test_version.py`**, a gate under `run_all.py`: `DATASET_VERSION`, the
+   `version` field of both tracked `collection.json`, and `CITATION.cff`'s `version`
+   are one string; the string matches `^\d+\.\d+(\.\d+)?$`. Fail with a message that
+   names each place and its value.
+4. **`DATASET_VERSION` docstring:** state the release rule from R-16 in three lines
+   (bump here; collections and CITATION.cff follow, the gate enforces it; tag
+   `v{version}` after the store is published and finalized).
+5. **Release workflow — do not add one.** Zenodo's GitHub bridge needs the
+   repository enabled on zenodo.org by its owner, which is the user's action; a
+   workflow that publishes a GitHub release on tag push is optional and is left for
+   the user to ask for. Record the manual procedure in the report so Task 5 can
+   document it: bump `DATASET_VERSION` and the two collections and `CITATION.cff`
+   → build and finalize the store → `tools/sync_data.py --confirm` → run
+   `rashid check --live` against `public_base` → commit `date-released` →
+   `git tag v{version}` and push the tag → create the GitHub release with the
+   rashid summary in its notes → Zenodo mints the version DOI → add `sci:doi`
+   (concept DOI) and `sci:citation` to the root catalog and both collections in the
+   next commit if this was the first release.
+
+**Report contract:** status, commits, test summary, whether `CITATION.cff` was
+validated and how.
+
+---
+
 ## Task 5 — Consolidate the documentation
 
 **Files:** `README.md`, `AGENTS.md`, `docs/DESIGN.md` (new), `docs/STATUS.md` (new),
@@ -338,7 +389,7 @@ WebMercator grid"; the mosaics are ETRS89-LAEA 40 m since M-24), and
 `catalog/mosaics/AGENTS.md` wherever they say the same.
 
 Decision R-14 binds this task. Every statement in the new documents must be true of
-the repository **after Tasks 1–4**; read the code, not the old prose, when in doubt.
+the repository **after Tasks 1–4 and 6**; read the code, not the old prose, when in doubt.
 
 **`docs/DESIGN.md`** (target ≤ 350 lines): the layout tree and the reasons that are
 still live (§3 of MIGRATION.md minus the reversed arguments); the visualization
@@ -356,7 +407,10 @@ still open). No history of reversals: git holds it.
 implemented, thumbnails implemented, sync tool implemented; published store: old
 prefixes being cleared, rehearsal build pending); the remaining-work list with only
 open items, renumbered from P-1 and each with a one-line "verified when";
-the swap checklist for the Alps (§11's grep command and its file list).
+the swap checklist for the Alps (§11's grep command and its file list); an open
+item "first release: enable the Zenodo bridge, then add `sci:doi` and
+`sci:citation` to `catalog/catalog.json` and both `collection.json`" naming the
+exact fields.
 
 **`docs/UPSTREAM.md`** (target ≤ 120 lines): keep the framing paragraph; then the
 three on-disk contracts only — D-1 glacier fractions (columns, the correct `--out`
@@ -374,7 +428,9 @@ satisfied by the regenerated composites (verified on real headers 2026-09-08),
 paragraph to say finalize fills the fields on the store copy (Task 3). Keep the
 accepted-deviation and stac-check sections.
 
-**`README.md`:** the tree listing (`tools/` line, `docs/` line); Quick start
+**`README.md`:** a short "Citing" section (cite by release version; the DOI
+arrives with the first release; `CITATION.cff` is the machine-readable form);
+the tree listing (`tools/` line, `docs/` line); Quick start
 unchanged; "Where things are" table rows pointing at the new files; step 1's
 `--out` path corrected and `--perimeter-tiles 143` added; "Publishing" rewritten
 for `tools/sync_data.py` (dry run, `--confirm`, `--prefix`); a sentence that the
