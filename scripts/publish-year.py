@@ -247,7 +247,7 @@ def step_mosaics(
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
     frame: pd.DataFrame,
-) -> dict[str, Path]:
+) -> dict[str, mosaics.MosaicWrite]:
     """Write and upload the year's twelve mosaic COGs."""
     band_names = {
         key: mosaics.mosaic_band_name(
@@ -434,6 +434,11 @@ def mosaic_assets(
         unit = frame.loc[frame["asset_key"] == asset_key, "band_unit"]
         if not is_num and len(unit) and str(unit.iloc[0]):
             band["unit"] = str(unit.iloc[0])
+        # The five statistics the writer embedded in the COG, republished as the
+        # raster extension's `bands[].statistics` rather than measured again.
+        statistics = detail.get("statistics")
+        if statistics:
+            band["statistics"] = statistics
         assets[asset_key] = stac.MosaicAsset(
             href=f"{asset_key}.tif",
             title=f"{asset_key} annual mosaic",
@@ -557,10 +562,12 @@ def main() -> None:
                 prints[step],
                 {
                     key: {
-                        "size": path.stat().st_size,
+                        "size": write.path.stat().st_size,
                         "resolution": scope.analysis_grid.resolution,
+                        "checksum": write.checksum,
+                        "statistics": write.statistics.to_dict(),
                     }
-                    for key, path in written.items()
+                    for key, write in written.items()
                 },
             )
         elif step == "pmtiles":

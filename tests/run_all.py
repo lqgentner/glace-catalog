@@ -21,6 +21,7 @@ TESTS = [
     "test_styles.py",
     "test_manifest_contract.py",
     "test_items.py",
+    "test_mosaic_stats.py",
     "test_mirror.py",
     "test_thumbnails.py",
     "test_links.py",

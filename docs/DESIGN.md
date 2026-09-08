@@ -244,9 +244,12 @@ publishes no `file:checksum` at all, which Portolan permits and prefers; a
 fabricated value is worse than an absent one.
 
 The same manifest carries the five `STATISTICS_*` values per band, which
-`PTL-DAT-009/010` make a blocking requirement of the *composites* rather than of
-this repository: a run whose files lack them cannot be published
-([`UPSTREAM.md`](UPSTREAM.md), S-1).
+`PTL-DAT-009/010` make a blocking requirement of the *composites*: a run whose
+files lack them cannot be published ([`UPSTREAM.md`](UPSTREAM.md), S-1). The
+annual mosaics are not in the manifest because this repository writes them, so
+they carry their own: `build_mosaic_cog` accumulates the five over the source
+VRT window by window and writes them onto the band before the COG copy, which is
+the only point at which they can reach the file's own header.
 
 ---
 

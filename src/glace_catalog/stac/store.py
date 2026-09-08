@@ -313,6 +313,13 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
     return frame
 
 
+MULTIHASH_SHA256 = "1220"
+"""Multihash prefix of a 32-byte sha256 digest, the form ``file:checksum`` requires."""
+
+HASH_CHUNK = 1 << 20
+"""Bytes read per chunk when hashing a file, so a gigabyte-scale COG is not read at once."""
+
+
 def multihash_sha256(payload: bytes) -> str:
     """Multihash-encoded sha256 of some bytes, the form ``file:checksum`` requires.
 
@@ -320,7 +327,21 @@ def multihash_sha256(payload: bytes) -> str:
     encoding the run manifest carries for every composite, so a checksum this
     writes and one the pipeline measured are read the same way.
     """
-    return "1220" + hashlib.sha256(payload).hexdigest()
+    return MULTIHASH_SHA256 + hashlib.sha256(payload).hexdigest()
+
+
+def multihash_sha256_file(path: Path | UPath) -> str:
+    """Multihash-encoded sha256 of a file, read in chunks rather than at once.
+
+    Same encoding as :func:`multihash_sha256`, for the files this repository
+    writes itself: an annual mosaic is hundreds of megabytes, and holding one in
+    memory to hash it would undo the streaming the writer is careful about.
+    """
+    digest = hashlib.sha256()
+    with UPath(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(HASH_CHUNK), b""):
+            digest.update(chunk)
+    return MULTIHASH_SHA256 + digest.hexdigest()
 
 
 def manifest_digest(frame: pd.DataFrame) -> str:
