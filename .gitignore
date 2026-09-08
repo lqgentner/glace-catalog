@@ -53,7 +53,6 @@ catalog/**/thumbnail.png
 
 # uv
 .venv/
-uv.lock
 
 # mypy daemon status files
 .dmypy.json
