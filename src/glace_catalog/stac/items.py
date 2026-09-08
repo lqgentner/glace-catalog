@@ -586,12 +586,3 @@ def extent_from_items(items: Sequence[pystac.Item]) -> pystac.Extent:
     ends = [datetime.fromisoformat(item.properties["end_datetime"]) for item in items]
     temporal = pystac.TemporalExtent([[min(starts), max(ends)]])
     return pystac.Extent(spatial=spatial, temporal=temporal)
-
-
-_PRODUCERS = [
-    pystac.Provider(
-        name="University of Zurich, Department of Geography",
-        roles=[pystac.ProviderRole.PRODUCER, pystac.ProviderRole.PROCESSOR],
-    ),
-]
-_KEYWORDS = ["Sentinel-1", "SAR", "InSAR coherence", "backscatter", "glaciers"]
