@@ -31,10 +31,16 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 RELEASE_PATTERN = re.compile(r"^\d+\.\d+(\.\d+)?$")
+COLLECTIONS = ("catalog/mosaics/collection.json", "catalog/tiles/collection.json")
 
 
 def tracked_collections() -> list[Path]:
-    """Every ``collection.json`` that git tracks, so generated output is skipped."""
+    """Check that git tracks exactly the two collection documents, and return them.
+
+    Named rather than globbed: a discovered set shrinks silently. An ignore
+    rule or a rename that hides one collection would leave a gate that passes
+    over three places while a fourth carries a stale version.
+    """
     result = subprocess.run(
         ["git", "ls-files", "-z", "catalog"],
         cwd=ROOT,
@@ -45,11 +51,11 @@ def tracked_collections() -> list[Path]:
     if result.returncode != 0:
         print("error  git ls-files failed; run this from inside the repository")
         raise SystemExit(1)
-    return [
-        ROOT / name
-        for name in result.stdout.split("\0")
-        if name and name.endswith("/collection.json")
-    ]
+    found = sorted(name for name in result.stdout.split("\0") if name.endswith("/collection.json"))
+    if found != sorted(COLLECTIONS):
+        print(f"error  expected git to track exactly {sorted(COLLECTIONS)}, found {found}")
+        raise SystemExit(1)
+    return [ROOT / name for name in found]
 
 
 def citation_version(path: Path) -> object:
@@ -81,8 +87,10 @@ places.append(("CITATION.cff version", citation_version(citation)))
 
 problems: list[str] = []
 
-values = {value for _, value in places}
-if len(values) != 1:
+# repr, not the values themselves: a YAML list or mapping under `version:`
+# is unhashable, and it has to fail with this gate's message rather than a
+# TypeError from set construction.
+if len({repr(value) for _, value in places}) != 1:
     problems.append("the release version differs between the places that carry it")
 
 for name, value in places:
