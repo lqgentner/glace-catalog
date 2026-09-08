@@ -21,9 +21,9 @@
     "InSAR coherence",
     "backscatter",
     "glaciers",
+    "cryosphere",
     "Alps",
-    "mosaic",
-    "cryosphere"
+    "mosaic"
   ],
   "version": "0.1",
   "providers": [

@@ -20,8 +20,9 @@
     "InSAR coherence",
     "backscatter",
     "glaciers",
+    "cryosphere",
     "Alps",
-    "cryosphere"
+    "MGRS"
   ],
   "version": "0.1",
   "providers": [
