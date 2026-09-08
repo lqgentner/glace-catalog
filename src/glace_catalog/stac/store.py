@@ -26,7 +26,7 @@ import pandas as pd
 from upath import UPath
 
 from glace_catalog.stac.naming import CompositeFile, parse_composite_name
-from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo
+from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -66,7 +66,7 @@ STATISTICS_COLUMNS: dict[str, str] = {
     "stddev": "stat_stddev",
     "valid_percent": "stat_valid_percent",
 }
-"""The embedded band statistics, as :attr:`RasterInfo.statistics` key to manifest column.
+"""The embedded band statistics, as :class:`BandStatistics` field to manifest column.
 
 Read from the COG's own band tags at write time, so the publisher can put them on
 ``bands[].statistics`` without a second read of the header.
@@ -412,6 +412,11 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
 
     This is what collapses the publisher's most expensive work: the survey that
     used to be one remote open per file becomes one read of the manifest.
+
+    Raises
+    ------
+    ValueError
+        If a row carries some but not all of the five ``stat_*`` columns.
     """
     info: dict[str, dict[str, RasterInfo]] = {}
     for row in frame.to_dict("records"):
@@ -420,11 +425,15 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
             for tag in PROVENANCE_TAGS
             if tag in row and row[tag] is not None and pd.notna(row[tag])
         }
-        statistics = {
-            name: float(row[column])
-            for name, column in STATISTICS_COLUMNS.items()
-            if column in row and row[column] is not None and pd.notna(row[column])
-        }
+        statistics = band_statistics(
+            {
+                name: float(row[column])
+                for name, column in STATISTICS_COLUMNS.items()
+                if column in row and row[column] is not None and pd.notna(row[column])
+            },
+            names=STATISTICS_COLUMNS,
+            source=f"{row['filename']} in the manifest",
+        )
         checksum = row["sha256"]
         nodata = row["nodata"]
         info.setdefault(str(row["tile"]), {})[str(row["asset_key"])] = RasterInfo(

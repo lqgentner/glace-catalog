@@ -36,7 +36,7 @@ from glace_catalog.stac.store import (
     manifest_valid_percents,
     read_manifest,
 )
-from glace_catalog.stac.tags import read_raster_info
+from glace_catalog.stac.tags import BandStatistics, read_raster_info
 
 PRODUCER_COLUMNS = (
     "filename",
@@ -146,13 +146,34 @@ def header_checks(tmp: Path) -> dict[str, bool]:
     ) as dst:
         dst.write(data, 1)
         dst.update_tags(
-            1, STATISTICS_MINIMUM="0.5", STATISTICS_MAXIMUM="0.5", STATISTICS_VALID_PERCENT="100"
+            1,
+            STATISTICS_MINIMUM="0.5",
+            STATISTICS_MAXIMUM="0.5",
+            STATISTICS_MEAN="0.5",
+            STATISTICS_STDDEV="0.0",
+            STATISTICS_VALID_PERCENT="100",
         )
     info = read_raster_info(path)
     return {
         "header reader fills statistics from band tags": info.statistics
-        == {"minimum": 0.5, "maximum": 0.5, "valid_percent": 100.0},
+        == BandStatistics(minimum=0.5, maximum=0.5, mean=0.5, stddev=0.0, valid_percent=100.0),
     }
+
+
+def refuses_partial_statistics() -> bool:
+    """Check a manifest missing one ``stat_*`` value is refused, by column name.
+
+    Four of five is a producer bug, and the publisher is where it has to
+    surface: a band that reached ``bands[].statistics`` with a hole in it would
+    fail the Portolan gate long after the run that wrote it.
+    """
+    frame = producer_manifest()
+    frame.loc[0, "stat_mean"] = None
+    try:
+        manifest_raster_info(frame)
+    except ValueError as error:
+        return "stat_mean" in str(error)
+    return False
 
 
 def main() -> int:
@@ -181,12 +202,15 @@ def main() -> int:
         "digest reaches RasterInfo.checksum": data.checksum == DIGEST,
         "absent digest stays None": count.checksum is None,
         "statistics reach RasterInfo.statistics": data.statistics
-        == {"minimum": 0.01, "maximum": 0.99, "mean": 0.5, "stddev": 0.2, "valid_percent": 87.5},
+        == BandStatistics(minimum=0.01, maximum=0.99, mean=0.5, stddev=0.2, valid_percent=87.5),
         "size carried": data.size == 1234,
         "NaN nodata stays NaN": data.nodata is not None and np.isnan(data.nodata),
         "zero nodata stays zero": count.nodata == 0.0,
         "tags carried": data.tags.get("PASS_DIRECTION") == "Ascending",
         "valid percent keyed by the data asset": percents == {"32TPS05": {"coh12_vv": 84.375}},
+        "a manifest missing one statistic is refused by column name": (
+            refuses_partial_statistics()
+        ),
     }
     checks.update(header)
     failed = [name for name, ok in checks.items() if not ok]

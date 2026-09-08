@@ -215,7 +215,7 @@ def _asset(
     *,
     title: str,
     roles: list[str],
-    statistics: dict[str, float] | None = None,
+    valid_percent: float | None = None,
 ) -> pystac.Asset:
     """Build one asset, describing its pixels entirely from the raster's own metadata."""
     require_valid(file, info)
@@ -236,9 +236,12 @@ def _asset(
     # A dimensionless band carries no unit at all rather than an empty string.
     if info.band_unit:
         band["unit"] = info.band_unit
-    stats = dict(info.statistics)
-    if statistics is not None:
-        stats.update(statistics)
+    # The manifest records the valid percentage of the published pixels
+    # separately from the writer's embedded statistics; where it has one, it is
+    # the one measured over the file as published.
+    stats = info.statistics.to_dict() if info.statistics is not None else {}
+    if valid_percent is not None:
+        stats["valid_percent"] = valid_percent
     if stats:
         band["statistics"] = stats
     asset.extra_fields["bands"] = [band]
@@ -270,7 +273,7 @@ def _data_asset(
         info,
         title=f"{quantity} {file.polarization}, {_method_label(file)}",
         roles=["data", "cloud-optimized"],
-        statistics=None if valid_percent is None else {"valid_percent": valid_percent},
+        valid_percent=valid_percent,
     )
     asset.extra_fields["sar:polarizations"] = [file.polarization]
     asset.extra_fields["sar:product_type"] = "COH" if is_coh else "RTC"

@@ -66,6 +66,7 @@ from glace_catalog.stac.store import (
 from glace_catalog.stac.tags import (
     PROVENANCE_EXPECTATION,
     PROVENANCE_TAGS,
+    BandStatistics,
     RasterInfo,
     RasterProblems,
     read_raster_info,
@@ -81,6 +82,7 @@ __all__ = [
     "PROVENANCE_EXPECTATION",
     "PROVENANCE_TAGS",
     "QA_METRICS",
+    "BandStatistics",
     "BuildState",
     "CompositeFile",
     "MosaicAsset",
