@@ -8,11 +8,12 @@ left behind and assembles the documents over them:
   relocating the bucket is this one run;
 - ``tiles/collection.json`` and ``mosaics/collection.json``, each declaring its
   own ``item_assets`` and its collection assets;
-- ``tiles.parquet``, the per-year indexes concatenated with their hrefs rebased
-  onto ``--base-url``, and ``mosaics.parquet``, built straight from the mosaic
-  items because one row per year leaves nothing to concatenate;
-  None of it describes a measurement, which is why it sits beside the catalogue
-  rather than inside it.
+- ``tiles/items.parquet``, the per-year indexes concatenated with their hrefs
+  rebased onto ``--base-url``, and ``mosaics/items.parquet``, built straight from
+  the mosaic items because one row per year leaves nothing to concatenate.
+
+None of it describes a measurement, which is why it sits beside the items rather
+than inside them.
 
 Usage:
     uv run --env-file .env python scripts/finalize-catalog.py \\

@@ -5,10 +5,11 @@ different failure modes:
 
 - **source** — the composite archive a run produced, on the private UZH bucket.
   Read-only here; this repository never writes into it.
-- **store** — where the published tree is assembled. Either a prefix on the
-  private bucket or a staging directory under ``/mnt``, chosen by whether
-  ``GLACE_STORE_ROOT`` starts with ``s3://``. Nothing about the pipeline changes
-  between the two: a staging build is the same bytes in a cheaper place.
+- **store** — where the published tree is assembled: a prefix on the private UZH
+  bucket. The store *is* what gets published, object for object, so a local
+  ``GLACE_STORE_ROOT`` is a build that cannot be published —
+  ``tools/sync_data.py`` refuses one. A local path still resolves here, which is
+  what tests and throwaway builds use.
 - **publish target** — Source Cooperative, which this module does *not* know
   about. It lives in ``catalog.publish.yaml`` and is read by
   ``tools/sync_data.py`` alone, so a credential for the public bucket can never
@@ -62,9 +63,9 @@ class S3Settings(BaseSettings):
 class StoreSettings(BaseSettings):
     """Locations from ``GLACE_*`` environment variables, held as raw strings.
 
-    ``store_root`` is the one switch that decides whether a build lands on the
-    private bucket or on local staging. Both are written the same way; only the
-    resolved path differs.
+    ``store_root`` is where the published tree is assembled, normally an
+    ``s3://`` prefix on the private bucket. A local path resolves the same way
+    and is written the same way; only publication insists on the bucket.
     """
 
     model_config = SettingsConfigDict(env_prefix="GLACE_", extra="ignore")
@@ -128,11 +129,6 @@ class Settings:
     def store_root(self) -> AnyDir:
         """Root the published tree is assembled under."""
         return self.resolve_path(self.locations.store_root)
-
-    @property
-    def staging(self) -> bool:
-        """Whether the store root is a local staging directory rather than a bucket."""
-        return not self.locations.store_root.startswith("s3://")
 
     @property
     def cache_dir(self) -> Path:

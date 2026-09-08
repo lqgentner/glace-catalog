@@ -133,7 +133,6 @@ class StoreLayout:
         |   |-- glacier-fractions.parquet
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
-        |       |-- manifest.parquet  config.yaml
         |       |-- .build-state.json  .items.parquet
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
