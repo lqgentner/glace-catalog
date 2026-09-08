@@ -8,14 +8,14 @@ publication copies that tree and nothing else -- no staging directory, no second
 walk over the tracked ``catalog/``, which would put the unpatched documents over
 the patched ones.
 
-Bytes never touch local disk. A ``GetObject`` body on the private gateway is
-handed straight to ``upload_fileobj`` on Source Cooperative, which streams it in
-one part below the multipart threshold and in parallel parts above it.
-
-Two clients, two credentials, and they are deliberately not the same session:
-the source client comes from ``GLACE_S3_*`` (the private bucket, read-only
-here) and the target client from the ``profile`` in ``catalog.publish.yaml``,
-whose ``endpoint_url`` is the Source Cooperative S3 proxy.
+Both sides are :class:`~upath.UPath` roots. The source is the store root the
+build wrote to, with the ``GLACE_S3_*`` profile, endpoint and checksum settings
+every other step uses. The target is the ``write_prefix`` in
+``catalog.publish.yaml`` opened with the ``profile`` named there, and nothing
+else: that profile's config section carries the Source Cooperative endpoint,
+and botocore reads it from there. Bytes never touch local disk. Each object is
+read from one root and written to the other in chunks, and the retry budget
+``freezebase`` puts on every S3 path covers both sides.
 
 Change detection is size against size, from one listing per side. That is a weak
 content check and deliberately all this does: an ETag is an MD5 for a
@@ -35,12 +35,12 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+import shutil
 import sys
-from typing import IO, TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING
 
-import boto3
-from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
+from freezebase.s3 import make_s3_upath
 from tqdm import tqdm
 from upath import UPath
 import yaml
@@ -49,13 +49,15 @@ from glace_catalog.config import settings
 from glace_catalog.stac.store import list_objects_recursive
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 
 DEFAULT_WORKERS = 8
 DEFAULT_CONTENT_TYPE = "application/octet-stream"
+COPY_CHUNK = 8 << 20
+"""Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
 
 CONTENT_TYPES: dict[str, str] = {
     ".json": "application/json",
@@ -72,91 +74,13 @@ CONTENT_TYPES: dict[str, str] = {
 Source Cooperative serves what the upload declared, so this table is what makes
 a COG open by range request instead of downloading, a README render instead of
 saving, and the item mirror recognisable as parquet. Anything unlisted goes up
-as an opaque byte stream rather than as a guess.
+as an opaque byte stream rather than as a guess: s3fs would otherwise consult
+``mimetypes``, which knows none of the cloud-native suffixes.
 """
 
 
-class SourceClient(Protocol):
-    """The one call this makes against the private gateway."""
-
-    def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:  # noqa: N803
-        """Open one object; ``["Body"]`` is a streaming file object."""
-        ...
-
-
-class Paginator(Protocol):
-    """A botocore paginator over one listing operation."""
-
-    def paginate(self, **kwargs: Any) -> Iterator[Mapping[str, Any]]:
-        """Yield one response page per round trip."""
-        ...
-
-
-class TargetClient(Protocol):
-    """The two calls this makes against Source Cooperative."""
-
-    def get_paginator(self, operation_name: str, /) -> Paginator:
-        """Paginator for ``list_objects_v2``."""
-        ...
-
-    def upload_fileobj(
-        self,
-        Fileobj: IO[bytes],  # noqa: N803
-        Bucket: str,  # noqa: N803
-        Key: str,  # noqa: N803
-        ExtraArgs: Mapping[str, Any],  # noqa: N803
-    ) -> None:
-        """Stream a file object to a key, chunking it if it is large."""
-        ...
-
-
-@dataclass(frozen=True)
-class Target:
-    """Where publication writes, as ``catalog.publish.yaml`` states it."""
-
-    bucket: str
-    prefix: str
-    profile: str
-
-    def key(self, relative: str) -> str:
-        """Full object key of a store-relative path."""
-        return f"{self.prefix}/{relative}" if self.prefix else relative
-
-    def __str__(self) -> str:
-        """Render the target as the ``s3://`` URI it was configured from."""
-        return f"s3://{self.bucket}/{self.prefix}" if self.prefix else f"s3://{self.bucket}"
-
-
-def split_s3_uri(uri: str) -> tuple[str, str]:
-    """Split an ``s3://bucket/key/prefix`` URI into its bucket and its key prefix.
-
-    Parameters
-    ----------
-    uri
-        An ``s3://`` URI. A trailing slash is not significant.
-
-    Returns
-    -------
-    tuple of str
-        Bucket, and the key prefix, which is empty for a bare bucket.
-
-    Raises
-    ------
-    ValueError
-        If ``uri`` does not start with ``s3://`` or names no bucket.
-    """
-    if not uri.startswith("s3://"):
-        msg = f"{uri} is not an s3:// URI."
-        raise ValueError(msg)
-    bucket, _, prefix = uri[len("s3://") :].partition("/")
-    if not bucket:
-        msg = f"{uri} names no bucket."
-        raise ValueError(msg)
-    return bucket, prefix.strip("/")
-
-
-def read_target(path: Path = PUBLISH_CONFIG) -> Target:
-    """Read the publication target from ``catalog.publish.yaml``.
+def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
+    """Open the publication target ``catalog.publish.yaml`` names.
 
     Parameters
     ----------
@@ -165,21 +89,26 @@ def read_target(path: Path = PUBLISH_CONFIG) -> Target:
 
     Returns
     -------
-    Target
-        Bucket, key prefix and AWS profile.
+    UPath
+        The ``write_prefix``, authenticated with the ``profile``. No endpoint is
+        passed: the profile's config section carries it.
 
     Raises
     ------
     ValueError
-        If ``write_prefix`` or ``profile`` is missing.
+        If ``write_prefix`` or ``profile`` is missing, or ``write_prefix`` is
+        not an ``s3://`` URI.
     """
     config = yaml.safe_load(path.read_text()) or {}
     missing = [key for key in ("write_prefix", "profile") if not config.get(key)]
     if missing:
         msg = f"{path} sets no {' and no '.join(missing)}."
         raise ValueError(msg)
-    bucket, prefix = split_s3_uri(str(config["write_prefix"]))
-    return Target(bucket=bucket, prefix=prefix, profile=str(config["profile"]))
+    uri = str(config["write_prefix"]).rstrip("/")
+    if not uri.startswith("s3://") or not uri[len("s3://") :]:
+        msg = f"{path}: write_prefix {uri!r} is not an s3:// URI naming a bucket."
+        raise ValueError(msg)
+    return make_s3_upath(uri, profile=str(config["profile"]))
 
 
 def bucket_root(root: Path | UPath) -> UPath:
@@ -312,7 +241,7 @@ def human_bytes(size: int) -> str:
     return f"{value:.1f} {BINARY_UNITS[-1]}"
 
 
-def summary_lines(plan: Plan, source: str, target: Target) -> list[str]:
+def summary_lines(plan: Plan, source: str, target: UPath) -> list[str]:
     """Render the plan as the table printed before anything uploads."""
     rows = (
         ("new", plan.new),
@@ -320,9 +249,10 @@ def summary_lines(plan: Plan, source: str, target: Target) -> list[str]:
         ("unchanged", plan.unchanged),
         ("skipped", plan.skipped),
     )
+    profile = target.storage_options.get("profile")
     lines = [
         f"source:  {source}",
-        f"target:  {target}  (profile {target.profile})",
+        f"target:  {target}  (profile {profile})",
         "",
     ]
     lines.extend(
@@ -337,15 +267,13 @@ def summary_lines(plan: Plan, source: str, target: Target) -> list[str]:
     return lines
 
 
-def list_published(client: TargetClient, target: Target, subtree: str = "") -> dict[str, int]:
-    """List what the target already holds, as store-relative path to size.
+def list_subtree(root: UPath, subtree: str) -> dict[str, int]:
+    """List one subtree of a root as store-relative path to size.
 
     Parameters
     ----------
-    client
-        Client for Source Cooperative.
-    target
-        Bucket and key prefix publication writes to.
+    root
+        Store root on either side.
     subtree
         Store-relative subtree to list, matching ``--prefix``. Empty lists all
         of it.
@@ -353,51 +281,35 @@ def list_published(client: TargetClient, target: Target, subtree: str = "") -> d
     Returns
     -------
     dict
-        Store-relative path to size, for everything already published.
+        Store-relative path to size. Relative to ``root``, not to the subtree,
+        so the two sides compare and copy by the same names.
     """
-    prefix = f"{target.prefix}/" if target.prefix else ""
-    listed = f"{prefix}{subtree}/" if subtree else prefix
-    published: dict[str, int] = {}
-    for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=target.bucket,
-        Prefix=listed,
+    listed = list_objects_recursive(root / subtree if subtree else root)
+    if not subtree:
+        return listed
+    return {f"{subtree}/{name}": size for name, size in listed.items()}
+
+
+def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
+    """Stream one object from the private gateway to Source Cooperative.
+
+    The content type goes with the write: s3fs hands ``ContentType`` to the
+    upload it starts, single-part or multipart alike.
+    """
+    reader_path = source_root / relative
+    writer_path = target_root / relative
+    with (
+        reader_path.open("rb") as reader,
+        writer_path.open("wb", ContentType=content_type_for(relative)) as writer,
     ):
-        for entry in page.get("Contents", []):
-            key = str(entry["Key"])
-            if not key.startswith(listed):
-                continue
-            published[key[len(prefix) :]] = int(entry["Size"])
-    return published
-
-
-def transfer_one(
-    source_client: SourceClient,
-    target_client: TargetClient,
-    relative: str,
-    *,
-    source_bucket: str,
-    source_prefix: str,
-    target: Target,
-) -> None:
-    """Stream one object from the private gateway to Source Cooperative."""
-    key = f"{source_prefix}/{relative}" if source_prefix else relative
-    body = source_client.get_object(Bucket=source_bucket, Key=key)["Body"]
-    target_client.upload_fileobj(
-        body,
-        target.bucket,
-        target.key(relative),
-        {"ContentType": content_type_for(relative)},
-    )
+        shutil.copyfileobj(reader, writer, COPY_CHUNK)
 
 
 def transfer(
-    source_client: SourceClient,
-    target_client: TargetClient,
+    source_root: UPath,
+    target_root: UPath,
     relatives: Sequence[str],
     *,
-    source_bucket: str,
-    source_prefix: str,
-    target: Target,
     workers: int = DEFAULT_WORKERS,
 ) -> list[str]:
     """Stream every named object, returning the paths that failed.
@@ -408,14 +320,7 @@ def transfer(
 
     def move(relative: str) -> str | None:
         try:
-            transfer_one(
-                source_client,
-                target_client,
-                relative,
-                source_bucket=source_bucket,
-                source_prefix=source_prefix,
-                target=target,
-            )
+            transfer_one(source_root, target_root, relative)
         except Exception as error:  # noqa: BLE001 - one object must not stop the run
             print(f"error  {relative}: {error}", file=sys.stderr)
             return relative
@@ -431,63 +336,6 @@ def transfer(
             disable=not sys.stderr.isatty(),
         )
         return [name for name in moved if name is not None]
-
-
-def gateway_config() -> Config:
-    """Botocore configuration for the private gateway, from ``GLACE_S3_*``.
-
-    All four ``GLACE_S3_*`` knobs have to reach the client, not just the
-    profile and the endpoint: boto3 >= 1.36 defaults both checksum settings to
-    ``when_supported``, which puts ``x-amz-checksum`` trailers on the wire and a
-    ``ChecksumMode`` header on ``GetObject``, and the UZH Ceph gateway rejects
-    them. ``config.py`` hands the same two values to ``make_s3_upath`` for the
-    listing side, so this is what keeps the reads and the listing speaking the
-    same dialect.
-    """
-    return Config(
-        request_checksum_calculation=settings.s3.request_checksum_calculation,
-        response_checksum_validation=settings.s3.response_checksum_validation,
-    )
-
-
-def source_client(session: Any = None) -> SourceClient:
-    """Build the read client for the private gateway from ``GLACE_S3_*``.
-
-    The same profile, endpoint and checksum settings the store's
-    :class:`~upath.UPath` carries, so the listing and the reads cannot end up
-    authenticated or encoded differently.
-
-    Parameters
-    ----------
-    session
-        Session to build the client from. Defaults to the configured profile's;
-        the gate passes a recording stand-in rather than opening a socket.
-
-    Returns
-    -------
-    SourceClient
-        Client for ``GetObject`` against the private bucket.
-    """
-    if session is None:
-        session = boto3.Session(profile_name=settings.s3.profile)
-    return session.client(
-        "s3",
-        endpoint_url=settings.s3.endpoint_url,
-        config=gateway_config(),
-    )
-
-
-def target_client(target: Target) -> TargetClient:
-    """Build the write client for Source Cooperative.
-
-    No ``endpoint_url`` is passed: the profile carries the S3 proxy's endpoint,
-    and it is that endpoint which makes the bucket the account name and the key
-    start with the product. No checksum overrides either -- those exist for the
-    UZH gateway, and the proxy was verified against a client with boto3's
-    defaults.
-    """
-    session = boto3.Session(profile_name=target.profile)
-    return session.client("s3")
 
 
 def positive_int(raw: str) -> int:
@@ -543,16 +391,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         target = read_target()
         root = bucket_root(settings.store_root)
-        source_bucket, source_prefix = split_s3_uri(str(root))
-        listing_root = root / subtree if subtree else root
-        listed = list_objects_recursive(listing_root)
-        client = target_client(target)
-        published = list_published(client, target, subtree)
+        source = list_subtree(root, subtree)
+        published = list_subtree(target, subtree)
     except (BotoCoreError, ClientError, OSError, ValueError) as error:
         print(f"error  {error}", file=sys.stderr)
         return 1
 
-    source = {f"{subtree}/{name}" if subtree else name: size for name, size in listed.items()}
+    listing_root = root / subtree if subtree else root
     plan = plan_sync(source, published, force=args.force)
     for line in summary_lines(plan, str(listing_root), target):
         print(line)
@@ -566,15 +411,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\nnothing to upload")
         return 0
 
-    failed = transfer(
-        source_client(),
-        client,
-        plan.upload,
-        source_bucket=source_bucket,
-        source_prefix=source_prefix,
-        target=target,
-        workers=args.workers,
-    )
+    failed = transfer(root, target, plan.upload, workers=args.workers)
     if failed:
         print(f"\n{len(failed)} of {len(plan.upload)} object(s) failed:", file=sys.stderr)
         for name in failed:

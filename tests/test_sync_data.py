@@ -5,12 +5,12 @@
 bucket, and its two decisions -- which objects move, and what they are served as
 -- are both made from listings rather than from bytes. That makes them checkable
 without a network, and this is where they are checked: the change detection over
-a synthetic pair of listings, the content types, the ``write_prefix`` split, the
-refusal of a local store root, and the dry run, which is the last thing a person
-reads before typing ``--confirm``.
+a synthetic pair of listings, the content types, the target the publication
+file names, the refusal of a local store root, and the dry run, which is the
+last thing a person reads before typing ``--confirm``.
 
-Both S3 clients are stand-ins recording their calls. Nothing here opens a
-socket.
+Both sides of a transfer are in-memory filesystems, because the tool only ever
+asks a root for a listing, a reader and a writer. Nothing here opens a socket.
 
 Run: python3 tests/test_sync_data.py
 """
@@ -19,12 +19,13 @@ from __future__ import annotations
 
 from argparse import ArgumentTypeError
 from contextlib import redirect_stderr
-from io import BytesIO, StringIO
+from io import StringIO
 import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import IO, TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Self
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -35,12 +36,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
 
 from botocore.exceptions import ProfileNotFound  # noqa: E402
+from fsspec.implementations.memory import MemoryFileSystem  # noqa: E402
 import sync_data  # noqa: E402
+from upath import UPath  # noqa: E402
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
-
-TARGET = sync_data.Target(bucket="lqgentner", prefix="glace-ch", profile="source-coop")
+    from collections.abc import Mapping
 
 # One year of one collection, cut down: a document, a raster, an archive, the
 # item mirror, and the two dotfiles that are build state rather than content.
@@ -63,57 +64,14 @@ PUBLISHED: dict[str, int] = {
 }
 
 
-class FakeSource:
-    """A source client returning canned bodies and recording every read."""
-
-    def __init__(self) -> None:
-        self.reads: list[tuple[str, str]] = []
-
-    def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:  # noqa: N803
-        """Record the read and hand back a body of the recorded size."""
-        self.reads.append((Bucket, Key))
-        return {"Body": BytesIO(b"x" * 8)}
-
-
-class FakePaginator:
-    """A paginator honouring ``Prefix``, in two pages to exercise the loop."""
-
-    def __init__(self, listing: Mapping[str, int]) -> None:
-        self.listing = listing
-
-    def paginate(self, **kwargs: Any) -> Iterator[Mapping[str, Any]]:
-        """Yield the keys under the requested prefix, split across two pages."""
-        prefix = str(kwargs["Prefix"])
-        contents = [
-            {"Key": key, "Size": size}
-            for key, size in sorted(self.listing.items())
-            if key.startswith(prefix)
-        ]
-        return iter([{"Contents": contents[:1]}, {"Contents": contents[1:]}])
-
-
-class FakeTarget:
-    """A target client with a fixed listing, recording every upload."""
-
-    def __init__(self, listing: Mapping[str, int]) -> None:
-        self.listing = {f"{TARGET.prefix}/{name}": size for name, size in listing.items()}
-        self.uploads: list[tuple[str, str, str]] = []
-
-    def get_paginator(self, operation_name: str, /) -> FakePaginator:
-        """Paginate the listing the way ``list_objects_v2`` does."""
-        del operation_name
-        return FakePaginator(self.listing)
-
-    def upload_fileobj(
-        self,
-        Fileobj: IO[bytes],  # noqa: N803
-        Bucket: str,  # noqa: N803
-        Key: str,  # noqa: N803
-        ExtraArgs: Mapping[str, Any],  # noqa: N803
-    ) -> None:
-        """Record the upload, and read the body the way boto3 would."""
-        Fileobj.read()
-        self.uploads.append((Bucket, Key, str(ExtraArgs["ContentType"])))
+def memory_root(listing: Mapping[str, int]) -> UPath:
+    """Make a fresh in-memory root holding one object of the listed size per path."""
+    root = UPath(f"memory://{uuid4().hex}")
+    for relative, size in listing.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"x" * size)
+    return root
 
 
 def check_change_detection() -> dict[str, bool]:
@@ -174,42 +132,49 @@ def check_content_types() -> dict[str, bool]:
 
 
 def check_target_config() -> dict[str, bool]:
-    """Check the ``write_prefix`` split and what the repository's own file states."""
-    checks = {
-        "a bucket and a key prefix": sync_data.split_s3_uri("s3://lqgentner/glace-ch")
-        == ("lqgentner", "glace-ch"),
-        "a trailing slash is not part of the prefix": sync_data.split_s3_uri(
-            "s3://lqgentner/glace-ch/",
-        )
-        == ("lqgentner", "glace-ch"),
-        "a nested prefix stays nested": sync_data.split_s3_uri("s3://b/one/two")
-        == ("b", "one/two"),
-        "a bare bucket has no prefix": sync_data.split_s3_uri("s3://b") == ("b", ""),
-        "a key is the prefix and the relative path": TARGET.key("catalog.json")
-        == "glace-ch/catalog.json",
-    }
-    for uri in ("https://data.source.coop/lqgentner", "s3://"):
-        try:
-            sync_data.split_s3_uri(uri)
-        except ValueError:
-            checks[f"{uri} is refused"] = True
-        else:
-            checks[f"{uri} is refused"] = False
+    """Check the target the repository's own publication file opens.
 
+    Building the path opens no connection, so this can read the real file: the
+    profile only has to exist once a request is signed.
+    """
     target = sync_data.read_target()
-    checks["catalog.publish.yaml names the account bucket"] = target.bucket == "lqgentner"
-    checks["catalog.publish.yaml names the product prefix"] = target.prefix == "glace-ch"
-    checks["catalog.publish.yaml names the profile"] = target.profile == "source-coop"
+    options = target.storage_options
+    checks = {
+        "the target is an S3 path": target.protocol == "s3",
+        "catalog.publish.yaml names the account bucket and the product prefix": str(target)
+        == "s3://lqgentner/glace-ch",
+        "the profile is the one catalog.publish.yaml names": options.get("profile")
+        == "source-coop",
+        "no endpoint is passed; the profile's config section carries it": options.get(
+            "endpoint_url",
+        )
+        is None,
+        "the retry budget is freezebase's": options.get("config_kwargs", {}).get("retries")
+        == {"max_attempts": 10, "mode": "adaptive"},
+    }
 
     with tempfile.TemporaryDirectory() as directory:
-        incomplete = Path(directory) / "catalog.publish.yaml"
-        incomplete.write_text("public_base: https://example.invalid/x\n")
-        try:
-            sync_data.read_target(incomplete)
-        except ValueError:
-            checks["a configuration without write_prefix is refused"] = True
-        else:
-            checks["a configuration without write_prefix is refused"] = False
+        config = Path(directory) / "catalog.publish.yaml"
+        config.write_text("write_prefix: s3://lqgentner/glace-ch/\nprofile: source-coop\n")
+        checks["a trailing slash is not part of the prefix"] = (
+            str(sync_data.read_target(config)) == "s3://lqgentner/glace-ch"
+        )
+        refused = {
+            "a configuration without write_prefix": "public_base: https://x.invalid/\n",
+            "a configuration without profile": "write_prefix: s3://lqgentner/glace-ch\n",
+            "an https write_prefix": (
+                "write_prefix: https://data.source.coop/lqgentner\nprofile: source-coop\n"
+            ),
+            "a write_prefix naming no bucket": "write_prefix: s3://\nprofile: source-coop\n",
+        }
+        for name, text in refused.items():
+            config.write_text(text)
+            try:
+                sync_data.read_target(config)
+            except ValueError:
+                checks[f"{name} is refused"] = True
+            else:
+                checks[f"{name} is refused"] = False
     return checks
 
 
@@ -224,125 +189,101 @@ def check_local_root() -> dict[str, bool]:
     else:
         checks["a local store root is refused"] = False
         checks["the refusal names the variable"] = False
-    root = sync_data.bucket_root(sync_data.UPath("s3://s1-bursts/data/glace-ch"))
-    checks["a bucket root is accepted"] = sync_data.split_s3_uri(str(root)) == (
-        "s1-bursts",
-        "data/glace-ch",
-    )
+    root = sync_data.bucket_root(UPath("s3://s1-bursts/data/glace-ch"))
+    checks["a bucket root is accepted"] = str(root) == "s3://s1-bursts/data/glace-ch"
     return checks
 
 
-def check_listing_and_transfer() -> dict[str, bool]:
-    """Check the remote listing and one transfer per object with its content type."""
-    target_client = FakeTarget(PUBLISHED)
-    listed = sync_data.list_published(target_client, TARGET)
-    plan = sync_data.plan_sync(SOURCE, listed)
+class RecordingWrites:
+    """Record the keyword arguments every in-memory write is opened with."""
 
-    source_client = FakeSource()
-    failed = sync_data.transfer(
-        source_client,
-        target_client,
-        plan.upload,
-        source_bucket="s1-bursts",
-        source_prefix="data/glace-ch",
-        target=TARGET,
-        workers=2,
-    )
-    uploaded = {key: content_type for _, key, content_type in target_client.uploads}
+    def __init__(self) -> None:
+        self.opened: dict[str, dict[str, Any]] = {}
+        self._original = MemoryFileSystem._open  # noqa: SLF001 - the seam under test
+
+    def __enter__(self) -> Self:
+        """Wrap the filesystem's opener for the duration of the block."""
+        original = self._original
+        opened = self.opened
+
+        def record(fs: MemoryFileSystem, path: str, mode: str = "rb", **kwargs: Any) -> Any:
+            if "w" in mode:
+                opened[path] = dict(kwargs)
+            return original(fs, path, mode, **kwargs)
+
+        MemoryFileSystem._open = record  # noqa: SLF001 # pyrefly: ignore[bad-assignment]
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Restore the opener."""
+        MemoryFileSystem._open = self._original  # noqa: SLF001
+
+
+def check_listing_and_transfer() -> dict[str, bool]:
+    """Check both listings and one transfer per object with its content type."""
+    source_root = memory_root(SOURCE)
+    target_root = memory_root(PUBLISHED)
+    source = sync_data.list_subtree(source_root, "")
+    published = sync_data.list_subtree(target_root, "")
+    plan = sync_data.plan_sync(source, published)
+    # Listed before the transfer adds the year's objects under tiles/.
+    subtree = sync_data.list_subtree(target_root, "tiles")
+
+    with RecordingWrites() as writes:
+        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
+    written = {
+        path.removeprefix(f"{target_root.path}/"): kwargs for path, kwargs in writes.opened.items()
+    }
+    after = sync_data.list_subtree(target_root, "")
     return {
-        "the listing comes back store-relative": listed == PUBLISHED,
-        "a subtree lists only its own keys, still store-relative": sync_data.list_published(
-            target_client,
-            TARGET,
-            "tiles",
-        )
+        "the source listing comes back store-relative": source == SOURCE,
+        "the target listing comes back store-relative": published == PUBLISHED,
+        "a subtree lists only its own keys, still store-relative": subtree
         == {"tiles/collection.json": 1_500},
-        "every read is keyed under the source prefix": sorted(source_client.reads)
-        == sorted(("s1-bursts", f"data/glace-ch/{name}") for name in plan.upload),
-        "every upload is keyed under the target prefix": sorted(uploaded)
-        == sorted(f"glace-ch/{name}" for name in plan.upload),
+        "an unpublished target lists as empty": sync_data.list_subtree(
+            UPath(f"memory://{uuid4().hex}"),
+            "",
+        )
+        == {},
         "no transfer failed": not failed,
-        "the raster is served as a COG": uploaded["glace-ch/tiles/2024/32TMS24/coh12_vv.tif"]
+        "every planned object was written under the target root": sorted(written)
+        == sorted(plan.upload),
+        "the bytes arrived whole": all(after[name] == SOURCE[name] for name in plan.upload),
+        "the unchanged object was left alone": after["catalog.json"] == PUBLISHED["catalog.json"],
+        "the raster is served as a COG": written["tiles/2024/32TMS24/coh12_vv.tif"].get(
+            "ContentType",
+        )
         == "image/tiff; application=geotiff; profile=cloud-optimized",
-        "the document is served as JSON": uploaded["glace-ch/tiles/collection.json"]
+        "the document is served as JSON": written["tiles/collection.json"].get("ContentType")
         == "application/json",
     }
 
 
 def check_failure_is_reported() -> dict[str, bool]:
     """One unreadable object is reported, not raised, and the rest still move."""
-
-    class Broken(FakeSource):
-        @override
-        def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-            """Fail on the raster, serve everything else."""
-            if Key.endswith(".tif"):
-                msg = "AccessDenied"
-                raise RuntimeError(msg)
-            return super().get_object(Bucket=Bucket, Key=Key)
-
-    target_client = FakeTarget(PUBLISHED)
+    source_root = memory_root(SOURCE)
+    target_root = memory_root(PUBLISHED)
     plan = sync_data.plan_sync(SOURCE, PUBLISHED)
+    # The raster is not on the source at all, which is what a rejected read
+    # looks like from the tool's side.
+    (source_root / "tiles/2024/32TMS24/coh12_vv.tif").unlink()
     # The tool reports the failure on stderr as it happens; held here so the
     # gate's own output stays a list of what it checked.
     reported = StringIO()
     with redirect_stderr(reported):
-        failed = sync_data.transfer(
-            Broken(),
-            target_client,
-            plan.upload,
-            source_bucket="s1-bursts",
-            source_prefix="data/glace-ch",
-            target=TARGET,
-            workers=2,
-        )
+        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
+    after = sync_data.list_subtree(target_root, "")
     return {
         "the failed object is named": failed == ["tiles/2024/32TMS24/coh12_vv.tif"],
-        "the reason reaches stderr": "AccessDenied" in reported.getvalue(),
-        "the others still uploaded": len(target_client.uploads) == len(plan.upload) - 1,
+        "the reason reaches stderr": "coh12_vv.tif" in reported.getvalue(),
+        "the others still uploaded": all(
+            name in after for name in plan.upload if name not in failed
+        ),
+        "the failed object was not written": "tiles/2024/32TMS24/coh12_vv.tif" not in after,
     }
 
 
-class FakeSession:
-    """A boto3 session recording what a client would be built from."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, dict[str, Any]]] = []
-
-    def client(self, service_name: str, **kwargs: Any) -> FakeSource:
-        """Record the request and hand back something client-shaped."""
-        self.calls.append((service_name, kwargs))
-        return FakeSource()
-
-
-def check_source_client_config() -> dict[str, bool]:
-    """Check that all four gateway knobs reach the client, not just two.
-
-    boto3 >= 1.36 sends ``x-amz-checksum`` trailers and a ``ChecksumMode``
-    header unless told otherwise, and the UZH Ceph gateway rejects both. The
-    listing side gets the settings through ``make_s3_upath``; this is the read
-    side getting the same ones.
-    """
-    session = FakeSession()
-    sync_data.source_client(session)
-    service, kwargs = session.calls[0]
-    config = kwargs.get("config")
-    return {
-        "the client is built once, for s3": len(session.calls) == 1 and service == "s3",
-        "the endpoint comes from the settings": kwargs.get("endpoint_url")
-        == sync_data.settings.s3.endpoint_url,
-        "the request checksum setting reaches botocore": config is not None
-        and config.request_checksum_calculation
-        == sync_data.settings.s3.request_checksum_calculation
-        == "when_required",
-        "the response checksum setting reaches botocore": config is not None
-        and config.response_checksum_validation
-        == sync_data.settings.s3.response_checksum_validation
-        == "when_required",
-    }
-
-
-def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> sync_data.Target:
+def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> UPath:
     """Fail the way an absent ``source-coop`` profile does."""
     del path
     raise ProfileNotFound(profile="source-coop")
@@ -413,7 +354,7 @@ def check_summary() -> dict[str, bool]:
     """Check the table a person reads before typing ``--confirm``."""
     plan = sync_data.plan_sync(SOURCE, PUBLISHED)
     rendered = "\n".join(
-        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-ch", TARGET),
+        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-ch", sync_data.read_target()),
     )
     if rendered != DRY_RUN:
         print("--- rendered ---")
@@ -435,7 +376,6 @@ def main() -> int:
         check_local_root,
         check_listing_and_transfer,
         check_failure_is_reported,
-        check_source_client_config,
         check_setup_failures_are_messages,
         check_workers_floor,
         check_summary,

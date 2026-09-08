@@ -10,7 +10,6 @@ license.file = "LICENSE"
 dynamic = ["version"]
 
 dependencies = [
-    "boto3>=1.42.84",
     "cmcrameri>=1.9",
     "defusedxml>=0.7.1",
     "freezebase[s3]>=0.7,<0.8",

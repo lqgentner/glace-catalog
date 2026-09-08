@@ -31,10 +31,12 @@ under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
 documents and data alike: the store *is* the published tree, and its collection
 documents are the tracked ones that `finalize-catalog` patched on the way in.
 Syncing the tracked `catalog/` over them would strip those patches, which is why
-nothing does. Nothing is staged anywhere in between; a `GetObject` body on the
-private gateway is handed straight to `upload_fileobj` on the target. Change
-detection is size against size from one listing per side; `--force` re-uploads
-regardless. Build state (`.build-state.json`, `.items.parquet`, anything whose
+nothing does. Nothing is staged anywhere in between: both sides are `UPath`
+roots, and each object is read from one and written to the other in chunks,
+with its content type on the write. The source root is `settings.store_root`;
+the target is the `write_prefix` opened with the `profile` alone, whose config
+section carries the endpoint. Change detection is size against size from one
+listing per side; `--force` re-uploads regardless. Build state (`.build-state.json`, `.items.parquet`, anything whose
 name starts with a dot) never leaves the store.
 
 **Source Cooperative is addressed through its S3 proxy.** The `source-coop`

@@ -656,7 +656,6 @@ wheels = [
 name = "glace-catalog"
 source = { editable = "." }
 dependencies = [
-    { name = "boto3" },
     { name = "cmcrameri" },
     { name = "defusedxml" },
     { name = "freezebase", extra = ["s3"] },
@@ -698,7 +697,6 @@ validate = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", specifier = ">=1.42.84" },
     { name = "cmcrameri", specifier = ">=1.9" },
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "freezebase", extras = ["s3"], specifier = ">=0.7,<0.8" },

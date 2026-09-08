@@ -213,8 +213,12 @@ that rewrote descriptions would make every publication an unreviewable diff.
 **The store is the published tree.** `tools/sync_data.py` streams every object
 under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
 documents and data alike, object to object, with nothing on local disk and no
-staging directory. Syncing the tracked `catalog/` over the store afterwards would
-put the unpatched documents over the patched ones, which is why nothing does.
+staging directory. Both sides are `UPath` roots from `freezebase.make_s3_upath`,
+so the listing, the reads and the writes share one client configuration and one
+retry budget, and the target needs only the profile: botocore reads the Source
+Cooperative endpoint from that profile's config section. Syncing the tracked
+`catalog/` over the store afterwards would put the unpatched documents over the
+patched ones, which is why nothing does.
 Change detection is size against size from one listing per side; `--force`
 re-uploads, dotfiles never leave the store, and nothing is ever deleted.
 
@@ -426,7 +430,7 @@ struck through — git holds them.
 | R-3 | PMTiles are registered at collection level only. `build_mosaic_item` has no `pmtiles` parameter and items carry no `rel: "pmtiles"` link | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7,<0.8` from PyPI | 6 |
 | R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the `ch` scope's default root stays that value and the fresh build lands there once it is empty | 4 |
-| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py` | 4 |
+| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand | 4 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |
 | R-9 | Thumbnails are cut from the latest year's `coh12_rgb.pmtiles` archive, so they obey the committed style by construction: the whole scope for the mosaics, tile `32TMS24` (Aletsch) for the tiles, both framed 3:2 | 3 |
