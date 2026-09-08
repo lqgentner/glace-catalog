@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 from freezebase.raster import rasterio_open
 import numpy as np
 
+from glace_catalog.stac.naming import by_asset_key
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
@@ -325,7 +327,7 @@ def survey_tags(
     found: list[RasterProblems] = []
     for tile, files in sorted(by_tile.items()):
         infos = raster_info.get(tile, {})
-        for file in sorted(files, key=lambda f: f.asset_key):
+        for file in sorted(files, key=by_asset_key):
             info = infos.get(file.asset_key)
             problems = (
                 ["no raster metadata was read"] if info is None else tag_problems(file, info)

@@ -28,7 +28,7 @@ import logging
 from pathlib import Path
 import re
 import tempfile
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from freezebase.raster import rasterio_open
 import numpy as np
@@ -41,10 +41,10 @@ from upath import UPath
 from glace_catalog import stac
 from glace_catalog.config import settings
 from glace_catalog.scopes import get_scope
-from glace_catalog.stac.items import extent_from_items
-from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, read_item
+from glace_catalog.stac.items import PMTILES_LINK_REL, extent_from_items
+from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
 from glace_catalog.stac.store import (
-    ITEMS_INDEX_NAME,
+    YEAR_INDEX_NAME,
     upload_tree,
 )
 
@@ -64,16 +64,21 @@ THUMBNAIL_RANGES = ((-18.5, -5.0), (-26.0, -11.0), (4.0, 14.0))
 
 
 def published_years(layout: stac.StoreLayout) -> list[int]:
-    """Years the store actually holds, by the presence of their item index."""
+    """Years the store actually holds, by the presence of their item index.
+
+    The years sit under the tiles collection, which owns its subtree, and each
+    one is published with the slice of the item mirror ``publish-year`` wrote
+    beside its items.
+    """
     years: list[int] = []
-    entries = cast("list[Path | UPath]", list(layout.root.iterdir()))
-    for entry in sorted(entries, key=lambda path: path.name):
-        if not entry.name.isdigit():
+    entries = {entry.name: entry for entry in layout.tiles.iterdir()}
+    for name in sorted(entries):
+        if not name.isdigit():
             continue
-        if (entry / ITEMS_INDEX_NAME).exists():
-            years.append(int(entry.name))
+        if (entries[name] / YEAR_INDEX_NAME).exists():
+            years.append(int(name))
         else:
-            logger.warning("%s has no %s; skipping", entry.name, ITEMS_INDEX_NAME)
+            logger.warning("%s has no %s; skipping", name, YEAR_INDEX_NAME)
     if not years:
         msg = f"No published years under {layout.root}. Run publish-year.py first."
         raise SystemExit(msg)
@@ -83,7 +88,7 @@ def published_years(layout: stac.StoreLayout) -> list[int]:
 
 def read_year_index(layout: stac.StoreLayout, year: int) -> pa.Table:
     """Read one year's tile-item index."""
-    with layout.items_index(year).open("rb") as handle:
+    with layout.year_index(year).open("rb") as handle:
         return pq.read_table(handle)
 
 
@@ -130,7 +135,7 @@ def read_mosaic_items(layout: stac.StoreLayout, years: Sequence[int]) -> list[py
     """Read the per-year mosaic items; one per year, so reading them all is cheap."""
     items = []
     for year in years:
-        path = layout.mosaics(year) / "item.json"
+        path = layout.mosaic_item(year)
         if not path.exists():
             logger.warning("%s has no mosaic item; skipping", year)
             continue
@@ -149,12 +154,12 @@ def collection_asset(
     return pystac.Asset(href=href, title=title, media_type=media_type, roles=roles)
 
 
-def _load(path: Path) -> dict:
+def _load(path: Path) -> Document:
     """Read one tracked source document."""
     return json.loads(path.read_text())
 
 
-def _keep(links: Sequence[dict], drop: set[str]) -> list[dict]:
+def _keep(links: Sequence[Document], drop: set[str]) -> list[Document]:
     """Links other than the ones this run regenerates."""
     return [link for link in links if link.get("rel") not in drop]
 
@@ -163,7 +168,7 @@ def patch_collections(
     source_dir: Path,
     years: Sequence[int],
     mosaic_items: Sequence[pystac.Item],
-) -> dict[str, dict]:
+) -> dict[str, Document]:
     """Patch the tracked collection documents with what has actually been published.
 
     **These documents are source, not output.** Their prose, providers, license,
@@ -192,7 +197,7 @@ def patch_collections(
     dict
         ``{"tiles": ..., "mosaics": ...}``, the patched documents.
     """
-    patched: dict[str, dict] = {}
+    patched: dict[str, Document] = {}
 
     tiles = _load(source_dir / TILES_DIR / "collection.json")
     tiles["links"] = [
@@ -257,7 +262,11 @@ def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
     return written
 
 
-def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int], base_url: str) -> list[dict]:
+def pmtiles_links(
+    layout: stac.StoreLayout,
+    years: Sequence[int],
+    base_url: str,
+) -> list[Document]:
     """Register every published web-map archive on the mosaics collection.
 
     Portolan puts PMTiles registration at collection level (``PORTO-FMT-011``),
@@ -266,7 +275,7 @@ def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int], base_url: str)
     on, which is what the field is for; it is the same id the styles use.
     """
     base = base_url.rstrip("/")
-    links: list[dict] = []
+    links: list[Document] = []
     for year in years:
         directory = layout.pmtiles(year)
         if not directory.exists():
@@ -277,7 +286,7 @@ def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int], base_url: str)
             layer = archive.stem
             links.append(
                 {
-                    "rel": "pmtiles",
+                    "rel": PMTILES_LINK_REL,
                     "href": f"{base}/{MOSAICS_DIR}/pmtiles/{year}/{archive.name}",
                     "type": "application/vnd.pmtiles",
                     "title": f"{layer} web-map tiles, {year}",
@@ -291,7 +300,7 @@ def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int], base_url: str)
 def write_documents(
     source_dir: Path,
     layout: stac.StoreLayout,
-    documents: Mapping[str, dict],
+    documents: Mapping[str, Document],
     *,
     base_url: str,
     latest: int,
@@ -343,7 +352,7 @@ def render_thumbnail(layout: stac.StoreLayout, years: Sequence[int]) -> bool:
     from PIL import Image  # noqa: PLC0415
 
     year = max(years)
-    sources = [layout.mosaics(year) / f"rtc_{pol}.tif" for pol in ("vv", "vh")]
+    sources = [layout.mosaic_year(year) / f"rtc_{pol}.tif" for pol in ("vv", "vh")]
     if not all(path.exists() for path in sources):
         logger.warning("No RTC mosaics for %d; thumbnail not rendered", year)
         return False
@@ -373,8 +382,14 @@ def render_thumbnail(layout: stac.StoreLayout, years: Sequence[int]) -> bool:
     with tempfile.TemporaryDirectory() as tmp:
         staged = Path(tmp) / "thumbnail.png"
         Image.fromarray(rgba, mode="RGBA").save(staged)
-        layout.thumbnail.write_bytes(staged.read_bytes())
-    logger.info("Wrote %s from %d (%dx%d)", layout.thumbnail, year, rgba.shape[1], rgba.shape[0])
+        layout.mosaics_thumbnail.write_bytes(staged.read_bytes())
+    logger.info(
+        "Wrote %s from %d (%dx%d)",
+        layout.mosaics_thumbnail,
+        year,
+        rgba.shape[1],
+        rgba.shape[0],
+    )
     return True
 
 

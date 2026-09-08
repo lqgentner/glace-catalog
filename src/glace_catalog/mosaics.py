@@ -47,7 +47,7 @@ from dataclasses import dataclass
 import logging
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
 import defusedxml.ElementTree as DefusedET
@@ -524,7 +524,7 @@ def mosaic_band_name(asset_key: str, source_band_name: str) -> str:
     return source_band_name or asset_key
 
 
-def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict, list[float]]:
+def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list[float]]:
     """WGS84 footprint and bbox of the tiles a year actually holds.
 
     The mosaic sits on the scope's canonical extent, which is a bounding box

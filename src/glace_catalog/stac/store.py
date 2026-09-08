@@ -20,7 +20,7 @@ import hashlib
 import json
 import logging
 from secrets import token_hex
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 from upath import UPath
@@ -536,7 +536,13 @@ def list_objects_recursive(directory: Path | UPath) -> dict[str, int]:
     entries: dict[str, int] = {}
     if not directory.fs.exists(str(directory.path)):
         return entries
-    for info in directory.fs.find(str(directory.path), detail=True).values():
+    # `detail=True` makes fsspec return `{path: info}`; its signature declares
+    # only the `detail=False` list, so the mapping has to be named here.
+    listing = cast(
+        "dict[str, dict[str, Any]]",
+        directory.fs.find(str(directory.path), detail=True),
+    )
+    for info in listing.values():
         name = str(info["name"])
         if not name.startswith(prefix):
             continue

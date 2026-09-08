@@ -28,7 +28,7 @@ import json
 import logging
 from pathlib import Path
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urljoin
 
 import pyarrow as pa
@@ -72,10 +72,12 @@ class UPathStacIO(pystac.stac_io.DefaultStacIO):
             return UPath(href, **self._storage_options)
         return UPath(href)
 
+    @override
     def read_text_from_href(self, href: str) -> str:
         """Read one document, from a local path or an object store."""
         return self._path(href).read_text()
 
+    @override
     def write_text_to_href(self, href: str, txt: str) -> None:
         """Write one document, to a local path or an object store."""
         target = self._path(href)
@@ -90,6 +92,13 @@ The versioned schema URI is the single signal of specification version — there
 is no separate version property — so every generated catalog must agree with the
 tracked ``catalog.json``. rashid reports a mismatch against the root as a warning
 (``PTL-CNF-002``), which makes this constant the one place a spec bump is edited.
+"""
+
+Document = dict[str, Any]
+"""One STAC document as it is read and written: JSON object keys to JSON values.
+
+The values are genuinely heterogeneous — a link list, a nested extent, a number —
+and every consumer here reads a named key rather than the mapping as a whole.
 """
 
 ITEM_NAME = "item.json"
@@ -122,7 +131,7 @@ def item_prefix(item: pystac.Item) -> str:
     return f"{MOSAICS_DIR}/{year}"
 
 
-def item_dict(item: pystac.Item) -> dict:
+def item_dict(item: pystac.Item) -> Document:
     """Serialize an item without resolving its links.
 
     A published item's links are all relative, so pystac's default href
@@ -132,7 +141,7 @@ def item_dict(item: pystac.Item) -> dict:
     return item.to_dict(include_self_link=False, transform_hrefs=False)
 
 
-def write_stac_geoparquet(payloads: Sequence[dict], out_path: Path | UPath) -> None:
+def write_stac_geoparquet(payloads: Sequence[Document], out_path: Path | UPath) -> None:
     """Write item dicts as a stac-geoparquet index.
 
     Always through ``stac_geoparquet.arrow.to_parquet``, never a plain parquet
@@ -255,6 +264,11 @@ def index_from_items(
     return len(dicts)
 
 
+def _mgrs_tile(item: pystac.Item) -> str:
+    """MGRS tile an item covers, as a sort key over tile items."""
+    return str(item.properties["glace:mgrs_tile"])
+
+
 def _write_table(table: pa.Table, out_path: Path | UPath) -> None:
     """Write an arrow table to parquet, locally or on the object store."""
     out_path = UPath(out_path)
@@ -278,7 +292,7 @@ def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) 
     return link
 
 
-def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> dict:
+def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> Document:
     """Render one item as the JSON the store publishes.
 
     The structural links follow from the layout alone, so a year can be written
@@ -342,7 +356,7 @@ def year_catalog_document(
     scope_title: str,
     portolan_schema: str,
     collection_id: str,
-) -> dict:
+) -> Document:
     """Build the sub-catalog listing one year's tile items.
 
     A catalog, not a collection: Portolan forbids a collection inside a
@@ -480,7 +494,7 @@ def write_year_items(
     """
     written: list[Path] = []
     listed: list[tuple[str, str]] = []
-    for item in sorted(tile_items, key=lambda i: str(i.properties["glace:mgrs_tile"])):
+    for item in sorted(tile_items, key=_mgrs_tile):
         tile = str(item.properties["glace:mgrs_tile"])
         path = tiles_dir / tile / ITEM_NAME
         path.parent.mkdir(parents=True, exist_ok=True)

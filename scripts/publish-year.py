@@ -350,7 +350,7 @@ def step_items(
     tile_items = [
         stac.build_tile_item(
             tile,
-            sorted(tile_files, key=lambda f: f.asset_key),
+            sorted(tile_files, key=stac.by_asset_key),
             raster_info[tile],
             glacier_fraction=fractions[tile][0],
             glacier_fraction_buffered=fractions[tile][1],

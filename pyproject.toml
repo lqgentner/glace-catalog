@@ -45,12 +45,12 @@ dependencies = [
 
 [dependency-groups]
 # Tighter floors for development dependencies: they track the toolchain CI
-# actually runs. That matters most for ruff and mypy, whose output is
+# actually runs. That matters most for ruff and pyrefly, whose output is
 # version-dependent, and these match s1bursts so a finding in one repository
 # reproduces in the other.
 dev = [
-    "mypy>=2.3",
     "pandas-stubs>=3.0",
+    "pyrefly>=1.2.0",
     "ruff>=0.16",
     "types-PyYAML>=6.0",
     "types-requests>=2.33",
@@ -173,13 +173,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
-# The gates shell out to git, ruff and mypy with argv lists they build
+# The gates shell out to git, ruff and pyrefly with argv lists they build
 # themselves. There is no shell and no external input, so flake8-bandit's
 # subprocess rules have nothing to catch here; leaving them on would only teach
 # the next person that a noqa is the normal way to write a gate.
 "tests/**/*.py" = [
     "S101",     # Allow asserts in tests
-    "S603",     # Gates run git, ruff and mypy with an argv list, never a shell
+    "S603",     # Gates run git, ruff and pyrefly with an argv list, never a shell
     "S607",     # `git` and the linters are resolved from PATH on purpose
     "PLR2004",  # Allow magic values in tests
 ]
@@ -194,6 +194,21 @@ suppress-dummy-args = false
 known-first-party = ["glace_catalog"]
 force-sort-within-sections = true
 
-[tool.mypy]
-ignore_missing_imports = true
-files = ["src/glace_catalog", "scripts"]
+# Pyrefly infers from installed sources, so the geo/scientific stack needs no
+# stubs. `project-excludes` repeats the vendored list above: code kept
+# byte-close to upstream is not held to this repository's typing standard.
+[tool.pyrefly]
+project-includes = ["src/glace_catalog", "scripts", "tools", "tests"]
+project-excludes = [
+    "tools/publish.py",
+    "tools/upload_data.py",
+    "tests/test_links.py",
+    "tests/test_publish.py",
+    "tests/test_upload_data.py",
+    "tests/test_stac_valid.py",
+    "tests/test_conformance.py",
+]
+# Repo root, so `tools.*` and `tests.*` modules resolve the way the gates
+# import them.
+search-path = [".", "src"]
+preset = "strict"

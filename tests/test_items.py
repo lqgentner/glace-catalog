@@ -12,6 +12,9 @@ and ``LAST_ACQUISITION_DATE`` tags, published per product as
 A tile whose files disagree about the window is refused rather than widened,
 and the window-to-range translation is checked once, since every item uses it.
 
+The mosaic item is checked for what it must *not* carry: the web-map archives
+are registered on the mosaics collection, never on an item.
+
 Reads no data and needs no network.
 
 Run: python3 tests/test_items.py
@@ -22,10 +25,22 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
 
-from glace_catalog.stac.items import build_tile_item, published_time_range
-from glace_catalog.stac.naming import parse_composite_name
+from glace_catalog.scopes import get_scope
+from glace_catalog.stac.items import (
+    MosaicAsset,
+    build_mosaic_item,
+    build_tile_item,
+    published_time_range,
+)
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name
 from glace_catalog.stac.tags import RasterInfo, required_tags
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import pystac
 
 TILE = "32TPS05"
 WINDOW = "20230718_20231015"
@@ -73,7 +88,7 @@ def _info(first: str, last: str, **extra: str) -> RasterInfo:
     return RasterInfo(tags=tags, band_name="x", data_type="float32", nodata=float("nan"))
 
 
-def _refuses_mixed_windows(files: list) -> bool:
+def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
     """Check that a stale file from a different window refuses the tile, never widens it."""
     info = {
         "coh12_vv": _info("2023-07-21", "2023-09-30"),
@@ -86,16 +101,32 @@ def _refuses_mixed_windows(files: list) -> bool:
     return False
 
 
+def _mosaic_item() -> pystac.Item:
+    """Build one year's mosaic item over a single asset."""
+    return build_mosaic_item(
+        get_scope("ch"),
+        2023,
+        geometry={"type": "Polygon", "coordinates": [[[6.0, 45.8], [10.5, 45.8], [6.0, 47.8]]]},
+        bbox=[6.0, 45.8, 10.5, 47.8],
+        start=datetime(2023, 7, 18, tzinfo=UTC),
+        end=datetime(2023, 10, 16, tzinfo=UTC),
+        assets={"coh12_vv": MosaicAsset(href="coh12_vv.tif", title="x", roles=["data"])},
+    )
+
+
 def main() -> int:
     """Run the gate."""
     names = {
         "coh12_vv": f"S1_COH12_LRW_{TILE}_VV_{WINDOW}.tif",
         "rtc_vv": f"S1_RTC_LRW_{TILE}_VV_{WINDOW}.tif",
     }
-    files = [parse_composite_name(Path("/a") / name) for name in names.values()]
-    assert all(files)
+    parsed = [parse_composite_name(Path("/a") / name) for name in names.values()]
+    files = [file for file in parsed if file is not None]
+    if len(files) != len(parsed):
+        print("error  fixture filename did not parse")
+        return 1
     for file in files:
-        missing = set(required_tags(file)) - set(_info("x", "x").tags)  # type: ignore[union-attr]
+        missing = set(required_tags(file)) - set(_info("x", "x").tags)
         if missing:
             print(f"error  fixture lacks required tags {sorted(missing)}")
             return 1
@@ -103,7 +134,7 @@ def main() -> int:
         "coh12_vv": _info("2023-07-21", "2023-09-30"),  # coherence ends a pair earlier
         "rtc_vv": _info("2023-07-21", "2023-10-12"),
     }
-    item = build_tile_item(TILE, files, info)  # type: ignore[arg-type]
+    item = build_tile_item(TILE, files, info)
     props = item.properties
 
     checks = {
@@ -131,6 +162,15 @@ def main() -> int:
         == "2023-07-21",
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
+    # PMTiles are registered on the mosaics collection (PORTO-FMT-011), which is
+    # `finalize-catalog`'s job. An item that also linked them would claim a
+    # rendering is one of its measurements, and would declare an extension whose
+    # version the collection alone is the source of.
+    mosaic = _mosaic_item()
+    checks["the mosaic item links no PMTiles archive"] = not mosaic.get_links("pmtiles")
+    checks["the mosaic item declares no web-map-links extension"] = not any(
+        "web-map-links" in uri for uri in mosaic.stac_extensions
+    )
     checks["the published range is the helper's"] = published_time_range(
         (date(2023, 7, 18), date(2023, 10, 15))
     ) == (datetime(2023, 7, 18, tzinfo=UTC), datetime(2023, 10, 16, tzinfo=UTC))
@@ -139,7 +179,7 @@ def main() -> int:
         print(f"error  {name}")
     if failed:
         return 1
-    print(f"OK: {len(checks)} item date check(s)")
+    print(f"OK: {len(checks)} item check(s)")
     return 0
 
 

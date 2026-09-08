@@ -9,7 +9,8 @@ Three checks, all of which must be reproducible from a clean checkout:
 - ``ruff check`` — the lint rule set is in ``pyproject.toml`` and is the same
   one deep-glacier-mapping uses, so code moving between the two repositories
   does not change shape on the way.
-- ``mypy`` over ``src/``, ``scripts/`` and ``tools/``.
+- ``pyrefly check`` under the ``strict`` preset, over the paths
+  ``[tool.pyrefly] project-includes`` names.
 
 Each tool is resolved from the active interpreter's environment first
 (``python -m ruff``), then from PATH. A tool that is absent **fails** rather
@@ -45,9 +46,9 @@ def run(name: str, tool: str, args: list[str], *, targets: bool = True) -> str |
     command = resolve(tool)
     if command is None:
         return f"{tool} is not installed; install it with: uv sync --all-groups"
-    # mypy reads its own `files` key from pyproject.toml. Handing it paths here
-    # would override that and drag in the vendored template code, which is
-    # deliberately out of scope.
+    # pyrefly reads its own `project-includes` and `project-excludes` from
+    # pyproject.toml. Handing it paths here would override both and drag in the
+    # vendored template code, which is deliberately out of scope.
     existing = [t for t in TARGETS if (ROOT / t).exists()] if targets else []
     result = subprocess.run(
         [*command, *args, *existing],
@@ -69,7 +70,7 @@ failures = [
     for problem in (
         run("ruff format", "ruff", ["format", "--check"]),
         run("ruff check", "ruff", ["check"]),
-        run("mypy", "mypy", [], targets=False),
+        run("pyrefly", "pyrefly", ["check"], targets=False),
     )
     if problem is not None
 ]

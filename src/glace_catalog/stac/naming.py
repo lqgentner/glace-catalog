@@ -97,6 +97,15 @@ class CompositeFile:
         return f"{self.asset_key}.tif"
 
 
+def by_asset_key(file: CompositeFile) -> str:
+    """Sort key ordering composite files by the asset key they publish under.
+
+    A named function rather than a lambda so the parameter carries a type: every
+    caller sorts the same records the same way.
+    """
+    return file.asset_key
+
+
 def parse_composite_name(path: Path | UPath) -> CompositeFile | None:
     """Parse a composite filename; return ``None`` for non-matching names.
 

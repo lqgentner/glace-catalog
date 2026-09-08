@@ -23,6 +23,7 @@ from pystac.utils import datetime_to_str
 from glace_catalog.stac.naming import (
     POLARIZATIONS,
     PRODUCTS,
+    by_asset_key,
 )
 from glace_catalog.stac.tags import (
     SPECIFICATION_URL,
@@ -57,7 +58,6 @@ RASTER_EXTENSION_URI = "https://stac-extensions.github.io/raster/v2.0.0/schema.j
 FILE_EXTENSION_URI = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
 PROCESSING_EXTENSION_URI = "https://stac-extensions.github.io/processing/v1.2.0/schema.json"
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
-WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.2.0/schema.json"
 
 CEOS_ARD_LINK_REL = "ceos-ard-specification"
 """Relation type of the CEOS-ARD extension, used without declaring the extension.
@@ -75,6 +75,9 @@ A pre-styled RGBA pyramid is a rendering, not a measurement — no bands, no
 units, no values to read — so it is a link rather than an asset or an item. That
 also keeps the asset key ``coh12_vv`` naming one thing inside the mosaics
 collection rather than both a COG and an archive.
+
+Portolan registers PMTiles at collection level (``PORTO-FMT-011``), so the link
+is written by ``finalize-catalog``; a mosaic item carries none.
 """
 
 
@@ -96,7 +99,7 @@ def _add_specification_link(target: pystac.Item | pystac.Collection) -> None:
     )
 
 
-def _tile_geometry(geobox: MGRSGeoBox) -> tuple[dict, list[float]]:
+def _tile_geometry(geobox: MGRSGeoBox) -> tuple[dict[str, Any], list[float]]:
     """WGS84 polygon (simplified to the corners) and bounding box of a tile."""
     extent = geobox.geographic_extent
     geometry = extent.simplify(GEOMETRY_SIMPLIFY_DEG).geom.__geo_interface__
@@ -420,7 +423,7 @@ def build_tile_item(
         item.properties["glace:glacier_fraction_buffered"] = round(glacier_fraction_buffered, 5)
 
     valid_percents = valid_percents or {}
-    for file in sorted(files, key=lambda f: f.asset_key):
+    for file in sorted(files, key=by_asset_key):
         info = raster_info[file.asset_key]
         if file.qa is None:
             asset = _data_asset(file, info, valid_percents.get(file.asset_key))
@@ -499,7 +502,6 @@ def build_mosaic_item(
     start: datetime,
     end: datetime,
     assets: Mapping[str, MosaicAsset],
-    pmtiles: Mapping[str, str],
     build_fingerprint: str | None = None,
     version: str = DATASET_VERSION,
 ) -> pystac.Item:
@@ -518,10 +520,6 @@ def build_mosaic_item(
         day, and the midnight after its last day.
     assets
         Written mosaic COGs and per-year documents, keyed by asset key.
-    pmtiles
-        Href per PMTiles archive, keyed by layer id. Attached as
-        ``rel="pmtiles"`` links rather than assets: a pre-styled pyramid is a
-        rendering, not a measurement.
     build_fingerprint
         Fingerprint of the inputs this year was built from, so a store can be
         checked against them without re-deriving anything.
@@ -561,17 +559,6 @@ def build_mosaic_item(
     )
     for key, mosaic in sorted(assets.items()):
         item.add_asset(key, mosaic.to_asset())
-    if pmtiles:
-        item.stac_extensions.append(WEB_MAP_LINKS_EXTENSION_URI)
-    for layer_id, href in sorted(pmtiles.items()):
-        item.add_link(
-            pystac.Link(
-                rel=PMTILES_LINK_REL,
-                target=href,
-                media_type="application/vnd.pmtiles",
-                title=f"{layer_id} web-map tiles",
-            ),
-        )
     _add_specification_link(item)
     return item
 
