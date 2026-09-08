@@ -14,16 +14,12 @@ Run: python3 tests/test_links.py
 """
 import json
 import os
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
-
-from publish import load_config  # noqa: E402
-
-config = load_config()
-BASE = ROOT / config["publish_dir"]
+# Local deviation from upstream: tools/publish.py is deleted (R-8), so the
+# tracked catalog directory is named here instead of read from publish_dir.
+BASE = ROOT / "catalog"
 
 errors: list[str] = []
 skipped = 0

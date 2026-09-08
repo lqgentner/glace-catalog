@@ -25,14 +25,16 @@ level. Those are committed and reviewed.
 
 ## Publication model
 
-Two uploaders, one bucket prefix, and they do not overlap:
+One uploader, one bucket prefix. `tools/sync_data.py` streams every object
+under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
+documents and data alike: the store *is* the published tree, and its collection
+documents are the tracked ones that `finalize-catalog` patched on the way in.
+Syncing the tracked `catalog/` over them would strip those patches, which is why
+nothing does. Change detection is size against size from one listing per side;
+`--force` re-uploads regardless. Build state (`.build-state.json`,
+`.items.parquet`, anything whose name starts with a dot) never leaves the store.
 
-- `tools/publish.py` syncs `catalog/` — metadata only. It compares local size
-  and MD5 against the remote listing's size and ETag and keeps no state.
-- `tools/upload_data.py` syncs the built rasters and parquet from `data_dir`,
-  scoped by an allow-list of file suffixes.
-
-Publishing never deletes. Removing a file from `catalog/` leaves the object in
+Publishing never deletes. Removing a file from the store leaves the object in
 the bucket; delete it separately if that is what you meant.
 
 `portolan push` is **not** used here and must not be mixed in — it tracks

@@ -21,8 +21,7 @@ TESTS = [
     "test_manifest_contract.py",
     "test_items.py",
     "test_links.py",
-    "test_publish.py",
-    "test_upload_data.py",
+    "test_sync_data.py",
     "test_stac_valid.py",
     "test_conformance.py",
 ]

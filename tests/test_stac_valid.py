@@ -58,13 +58,9 @@ Run: python3 tests/test_stac_valid.py
 """
 import json
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
-
-from publish import load_config  # noqa: E402
 
 INSTALL = "python -m pip install stac-check"
 
@@ -86,8 +82,9 @@ try:
 except ImportError:
     fail("stac-check is not installed, so this gate checks nothing")
 
-config = load_config()
-BASE = ROOT / config["publish_dir"]
+# Local deviation from upstream: tools/publish.py is deleted (R-8), so the
+# tracked catalog directory is named here instead of read from publish_dir.
+BASE = ROOT / "catalog"
 
 STAC_TYPES = {"Catalog", "Collection", "Feature"}
 

@@ -30,13 +30,14 @@ jobs:
       - name: Install the validators
         run: python -m pip install 'rashid>=0.1.8,<0.2.0' stac-check
 
-      # pyflakes covers the files vendored from the catalog template, which
-      # ruff deliberately excludes so a re-sync stays a merge. The ruff and
-      # mypy gates in tests/test_lint.py cover everything this repo writes.
-      - name: Lint the vendored tooling
+      # pyflakes covers the three gates vendored from the catalog template,
+      # which ruff deliberately excludes so a re-sync stays a merge. The ruff
+      # and pyrefly gates in tests/test_lint.py cover everything this repo
+      # writes, tools/ included.
+      - name: Lint the vendored gates
         run: |
           python -m pip install pyflakes
-          pyflakes tools/*.py tests/*.py
+          pyflakes tests/test_links.py tests/test_stac_valid.py tests/test_conformance.py
 
       - name: Install the linters
         run: python -m pip install 'ruff>=0.16' 'mypy>=2.3' 'pandas-stubs>=3.0' types-PyYAML types-requests types-tqdm

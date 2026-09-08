@@ -20,7 +20,7 @@ is built onto object storage and referenced by URL.
 catalog/          the published tree — STAC JSON, README.md, AGENTS.md
 src/glace_catalog/ the library that builds it
 scripts/          the build commands
-tools/            publish.py (metadata) and upload_data.py (bytes)
+tools/            sync_data.py, which publishes the built store
 tests/            the gates, incl. rashid conformance
 docs/             MIGRATION.md (living), UPSTREAM.md, conformance.md
 ```
@@ -49,7 +49,7 @@ rather than skips.
 | accepted validator findings | [`docs/conformance.md`](docs/conformance.md) |
 
 Data never lands in this repository. `.gitignore` refuses `.tif` and `.parquet`,
-and `tools/publish.py` only ever syncs `catalog/`.
+and publication reads the built store on object storage, never this checkout.
 
 ## Building a store
 
@@ -136,15 +136,15 @@ and step 3 again; existing years are never touched.
 ## Publishing
 
 Publishing needs the Source Cooperative profile named in `catalog.publish.yaml`.
-Two uploaders, one bucket prefix, and they do not overlap:
+The built store is the published tree, so one command streams it object by
+object from the private bucket to that profile's prefix:
 
 ```bash
-python3 tools/publish.py                # dry run, uploads nothing
-python3 tools/publish.py --confirm      # metadata: catalog/ only
-python3 tools/upload_data.py --confirm  # the rasters and parquet, from data_dir
+uv run --env-file .env python tools/sync_data.py            # dry run, uploads nothing
+uv run --env-file .env python tools/sync_data.py --confirm  # the whole store
 ```
 
-Publishing never deletes. Removing a file from `catalog/` leaves the object in
+Publishing never deletes. Removing a file from the store leaves the object in
 the bucket; delete it separately if that is what you meant.
 
 ## Contributing

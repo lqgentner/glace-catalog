@@ -10,9 +10,9 @@ different failure modes:
   ``GLACE_STORE_ROOT`` starts with ``s3://``. Nothing about the pipeline changes
   between the two: a staging build is the same bytes in a cheaper place.
 - **publish target** — Source Cooperative, which this module does *not* know
-  about. It lives in ``catalog.publish.yaml`` and is read by ``tools/publish.py``
-  alone, so a credential for the public bucket can never be picked up by a build
-  step that only meant to read a composite.
+  about. It lives in ``catalog.publish.yaml`` and is read by
+  ``tools/sync_data.py`` alone, so a credential for the public bucket can never
+  be picked up by a build step that only meant to read a composite.
 
 Configuration is read from the environment only, so every command needs
 ``--env-file .env``. Fields without a default are required at import time: a
