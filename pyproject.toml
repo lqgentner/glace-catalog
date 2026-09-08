@@ -13,7 +13,7 @@ dependencies = [
     "boto3>=1.42.84",
     "cmcrameri>=1.9",
     "defusedxml>=0.7.1",
-    "freezebase[s3]>=0.6.1",
+    "freezebase[s3]>=0.7,<0.8",
     "fsspec>=2026.6.0",
     "geopandas>=1.1",
     "matplotlib>=3.7",
@@ -79,15 +79,6 @@ packages = ["src/glace_catalog"]
 
 [tool.uv]
 default-groups = ["dev", "validate"]
-
-[tool.uv.sources]
-# First-party. Editable while the store refactor lands changes on both sides:
-# freezebase gained the VRT/COG helpers the mosaic chain needs, and s1bursts is
-# the writer that must emit embedded band statistics before anything published
-# here can pass PTL-DAT-009. Cut releases and drop both overrides before the
-# Alps backfill — an editable path is not reproducible from a git checkout.
-freezebase = { path = "../freezebase", editable = true }
-s1bursts = { path = "../s1bursts", editable = true }
 
 [tool.ruff]
 line-length = 99

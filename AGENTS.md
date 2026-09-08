@@ -91,6 +91,4 @@ to change, why, and how to know it worked.
   is the composite driver's job (M-31, `docs/UPSTREAM.md` D-4).
 - `../freezebase` — geo and IO helpers, including the VRT chain the mosaics use.
 
-Both first-party libraries are installed editable via `[tool.uv.sources]` while
-the transition lands. Cut releases and drop the overrides before the Alps
-backfill: an editable path is not reproducible from a checkout.
+Both first-party libraries are consumed as released versions from PyPI.
