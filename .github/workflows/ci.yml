@@ -46,4 +46,4 @@ jobs:
       - name: Catalog gates
         env:
           CI_LIGHT: "1"
-        run: uv run python3 tests/run_all.py
+        run: uv run tests/run_all.py
