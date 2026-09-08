@@ -15,10 +15,11 @@ geometries and datetimes a real tile item carries, without the tags
 ``tests/test_items.py`` owns. 400 rows is above the floor below which rashid's
 row-ordering measurement says nothing, and small enough to build in a second.
 
-Two negative controls keep the gate honest: the same rows in shuffled order must
-fail the ordering rule, and a mirror stripped of its covering declaration must
-fail the statistics rule. Without them a gate that only ever sees conforming
-files cannot tell that it is checking anything.
+Negative controls keep the gate honest: the same rows in shuffled order must
+fail the ordering rule, a mirror stripped of its covering declaration must fail
+the statistics rule, and the writer must refuse to write one. Without them a
+gate that only ever sees conforming files cannot tell that it is checking
+anything.
 
 Reads no data and needs no network.
 
@@ -36,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 
 from freezebase.mgrs import MGRSGeoBox
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 from rashid.catalog import CatalogGraph, Node
 from rashid.data import DAT_ORDERING, DAT_ROWGROUP_STATS
@@ -249,12 +251,50 @@ def _year_of(item_id: str) -> str:
     return item_id[-4:]
 
 
+def _writer_checks(root: Path) -> dict[str, bool]:
+    """Check what the writer does with input it should not accept quietly.
+
+    Whole-number bboxes are the case that makes the type explicit: Arrow infers
+    ``int64`` for them, and a year written that way could not be concatenated
+    with a year of ordinary float coordinates. A table with no covering
+    declaration at all must not be written, since nothing downstream would
+    notice a mirror whose row groups carry no spatial statistics.
+    """
+    payloads = [_item_payload(tile, 2023) for tile in _tile_codes()[:5]]
+    for i, payload in enumerate(payloads):
+        payload["bbox"] = [i, 0, i + 1, 1]
+        payload["geometry"] = {
+            "type": "Polygon",
+            "coordinates": [[[i, 0], [i + 1, 0], [i + 1, 1], [i, 1], [i, 0]]],
+        }
+    whole = root / "whole-numbers.parquet"
+    write_stac_geoparquet(payloads, whole)
+    refused = False
+    table = pq.read_table(whole)
+    metadata = dict(table.schema.metadata or {})
+    geo = json.loads(metadata[b"geo"])
+    del geo["columns"]["geometry"]["covering"]
+    metadata[b"geo"] = json.dumps(geo).encode()
+    try:
+        _write_mirror(table.replace_schema_metadata(metadata), root / "refused.parquet")
+    except ValueError:
+        refused = True
+    return {
+        "whole-number bboxes are still written as float64": pq.ParquetFile(whole)
+        .schema_arrow.field("bbox")
+        .type
+        == pa.struct([(corner, pa.float64()) for corner in ("xmin", "ymin", "xmax", "ymax")]),
+        "a table with no covering declaration is refused": refused,
+    }
+
+
 def main() -> int:
     """Run the gate."""
     checks = _hilbert_checks()
     tiles = _tile_codes()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
+        checks |= _writer_checks(root)
         first = _year_payloads(tiles, 2023)
         second = _year_payloads(tiles, 2024)
 
