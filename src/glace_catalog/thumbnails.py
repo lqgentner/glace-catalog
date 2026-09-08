@@ -223,9 +223,9 @@ def _decode_tile(payload: bytes, compression: Compression) -> Image.Image:
     ------
     ValueError
         If the archive declares a compression other than ``NONE`` or ``GZIP``.
-        ``rio pmtiles`` writes neither BROTLI nor ZSTD, so an archive that does
-        was written by something else; failing here beats handing compressed
-        bytes to Pillow and reading its unrecognised-format error.
+        The in-tree tiler writes neither BROTLI nor ZSTD, so an archive that
+        does was written by something else; failing here beats handing
+        compressed bytes to Pillow and reading its unrecognised-format error.
     """
     if compression == Compression.GZIP:
         payload = gzip.decompress(payload)

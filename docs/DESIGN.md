@@ -137,6 +137,20 @@ correction the catalog does not declare. The web-map archives are tiled on
 WebMercatorQuad at z13. Both are resampled straight from the 10 m UTM composites,
 so LAEA never enters the display path and the tiler never pays a second warp.
 
+**Each layer is warped once, then tiled locally.** The colour-mapped RGBA VRT
+over the display chain is copied to a local, overview-free GeoTIFF before
+tiling, and the tiler reads that. Tiling straight from the VRT was measured at
+174 s per Swiss layer against 10 s from the local copy (2026-09-08 tiling
+spike): every tile of every zoom re-warped the remote UTM composites, nine zoom
+levels deep, so the object store was read nine times per archive. The tiler
+itself is in-tree (`glace_catalog.tiler`, adapted from rio-pmtiles under its MIT
+licence, see `THIRD_PARTY_NOTICES.md`): rio-pmtiles 1.2.1 leaks the overview
+level it chose for a coarse tile into every finer tile the same worker renders
+afterwards, so a source with overviews came out blurred at max zoom, and
+running it as a subprocess meant one worker pool, one environment and one
+`rio` executable per archive. The archive itself is written by the `pmtiles`
+package's own writer. What is owned here is the warp of one tile.
+
 **The style is committed, not generated.** `mosaics/styles/default.json` holds
 every published layer of the newest year — colour, opacity and legend stops are
 design decisions that belong in review — and carries both the `style` and
@@ -418,6 +432,7 @@ struck through — git holds them.
 | R-9 | Thumbnails are cut from the latest year's `coh12_rgb.pmtiles` archive, so they obey the committed style by construction: the whole scope for the mosaics, tile `32TMS24` (Aletsch) for the tiles, both framed 3:2 | 3 |
 | R-10 | The root catalog carries a `rel: "icon"` link to `_assets/glace-wordmark.svg` | 2 |
 | R-11 | No `.portolan/metadata.yaml`. It is the input of `portolan add`, which this repository does not use; a second copy of title, license and contact is drift waiting to happen | 4 |
+| R-12 | **Warp once per layer, tile locally.** The RGBA intermediate is a local overview-free GeoTIFF; the tiler is in-tree (`glace_catalog.tiler`, from rio-pmtiles, MIT) and shares one worker pool across the year's layers; `rio-pmtiles` is no longer a dependency | 3 |
 | R-12 | The item mirror satisfies `PTL-DAT-006/007/008/016` as rashid implements them: Hilbert-ordered rows, a float64 `bbox` covering column, 2 048-row groups | 2 |
 | R-13 | `RasterInfo.statistics` is a typed `BandStatistics` record; a missing field is a `ValueError` at manifest read, not a `KeyError` at publication | 5 |
 | R-14 | `docs/DESIGN.md` and `docs/STATUS.md` replace `MIGRATION.md`; `UPSTREAM.md` keeps only the on-disk contracts | — |

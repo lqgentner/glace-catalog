@@ -20,6 +20,10 @@ dependencies = [
     "numpy>=1.24",
     "pandas>=2.3",
     "pillow",
+    # The PMTiles v3 reader the thumbnails cut from and the writer the in-tree
+    # tiler (glace_catalog.tiler) packs archives with. Previously a transitive
+    # dependency of rio-pmtiles, which the tiler replaced.
+    "pmtiles>=3.7",
     "pyarrow",
     "pydantic-settings>=2.13.1",
     "pyproj>=3.5",
@@ -27,11 +31,6 @@ dependencies = [
     "pyyaml>=6.0",
     "rasterio>=1.4.3",
     "rio-cogeo>=5.4.2",
-    # The raster PMTiles tiler, invoked as the `rio pmtiles` CLI plugin by
-    # webmap.py. Declared because M-25 makes PMTiles the only display product:
-    # undeclared, `publish-year.py --steps pmtiles` could not run from a clean
-    # `uv sync`, which is a build that cannot be reproduced from a checkout.
-    "rio-pmtiles>=1.1",
     "rustac>=0.9",
     # 2026.7.0 fixes fsspec/s3fs#1034: before it, one prefixed glob caches a
     # partial listing under the directory key, so later globs and `exists()`

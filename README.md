@@ -129,6 +129,11 @@ Useful options:
 - `--tiler-workers` — processes for the web-map tiler, one per core by
   default. Each decodes raster blocks, so **this is what to lower if the
   machine runs out of memory**. It is unrelated to `--max-workers`.
+- `--concurrent-layers` — web-map layers warped at once, four by default.
+  Each layer is warped once into an RGBA raster in the cache before it is
+  tiled, so **this is what to lower if the machine runs out of disk**, and
+  what to raise towards fourteen where there is room: an Alpine raster is
+  about 1.1 GB.
 
 Steps are safe to re-run. Each records a fingerprint of what it was built from
 and skips itself only if nothing has changed; if the source composites, the

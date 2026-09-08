@@ -10,7 +10,7 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | --- | --- |
 | repository | scaffolded from `portolan-sdi/portolan-catalog-template`; the vendored publishers are gone (R-8) |
 | catalog documents | root + both collections written, **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)) |
-| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, links, sync, stac-check, rashid |
+| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, links, sync, stac-check, rashid |
 | source composites | Swiss 2021–2024 **regenerated with s1bursts 0.5.0** and verified 2026-09-08 through `load_and_verify_manifest`: 1 716 files across 143 tiles per year, every row carrying a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, asset stamps, validate) implemented; never yet run end to end |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
@@ -43,9 +43,13 @@ Ordered by what blocks what. Everything not listed here is done.
   *Verified when* the mosaic writer asserts the level count and
   `rashid check --data` passes on an Alpine mosaic.
 - **P-6 — The VRT chain and the tiler at scale.** A 2 209-source chain on S3 is
-  the most likely thing to force a design change, and `rio pmtiles` reading
-  `/vsis3` under a profile alone is unproven at that size. *Verified when* an
-  Alpine year completes `--steps vrt,mosaics,pmtiles` without a rewrite.
+  the most likely thing to force a design change. The web-map step now warps
+  each layer once into a local raster and tiles from that (R-12), which the
+  Swiss measurement puts at 5.5 min a year against 40 min before; the Alpine
+  projection is 1.4-1.6 h a year, and fourteen concurrent intermediates are
+  15 GB of scratch (`--concurrent-layers` bounds it). *Verified when* an
+  Alpine year completes `--steps vrt,mosaics,pmtiles` without a rewrite, with
+  its peak scratch and RSS recorded.
 - **P-7 — The run manifest at scale.** Implemented on both sides and gated by
   `tests/test_manifest_contract.py`, but only ever read on Swiss years.
   *Verified when* `publish-year.py --steps copy` on an Alpine year reports zero

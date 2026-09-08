@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from glace_catalog import mosaics, stac, webmap
+from glace_catalog import mosaics, stac, tiler, webmap
 from glace_catalog.config import settings
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
@@ -288,6 +288,10 @@ def step_pmtiles(
         end_date=window[1].isoformat(),
         layers=args.layers,
         workers=args.tiler_workers,
+        concurrent_layers=args.concurrent_layers,
+        # Beside the staged archives, not inside them: everything under
+        # `staged` is uploaded, and a warp interrupted half-way must not be.
+        scratch=args.cache / "glace-store" / str(args.year) / "rgba",
     )
     stac.store.upload_tree(staged, layout.pmtiles(args.year))
     return layers
@@ -490,6 +494,17 @@ def parse_args() -> argparse.Namespace:
             "constrained machine -- unlike --max-workers, it is not a thread count"
         ),
     )
+    parser.add_argument(
+        "--concurrent-layers",
+        type=int,
+        default=webmap.DEFAULT_CONCURRENT_LAYERS,
+        help=(
+            "web-map layers warped at once before tiling. Each holds one RGBA raster of "
+            "the whole scope in the cache while it runs (about 100 MB for ch, 1.1 GB for "
+            "the Alps), so this is the lever to pull on a disk-constrained machine; "
+            "raise it towards 14 where there is room"
+        ),
+    )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
     parser.add_argument(
         "--style",
@@ -534,11 +549,15 @@ def main() -> None:
         # The committed style is the source of the stretches and ramps (M-27),
         # so its bytes are what a rebuild has to notice: edit a range and every
         # archive that baked the old one is stale.
+        # The tiler's own identity is an input too: its output changed when it
+        # moved in-tree (R-12), and archives of one year must not silently keep
+        # an older tiler's pixels beside another year's.
         "pmtiles": stac.fingerprint(
             copy_print,
             scope.display_grid,
             args.style.read_bytes().decode() if args.style.exists() else None,
             args.layers,
+            tiler.WRITER,
         ),
     }
     prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION)

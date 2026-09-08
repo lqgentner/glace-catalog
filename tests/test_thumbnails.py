@@ -300,8 +300,8 @@ def main() -> int:
         7.9 < aletsch[0] < 8.1 and 46.4 < aletsch[1] < 46.5
     )
 
-    # An archive rio pmtiles did not write may carry a compression the decoder
-    # cannot read; it must say so rather than hand the bytes to Pillow.
+    # An archive the in-tree tiler did not write may carry a compression the
+    # decoder cannot read; it must say so rather than hand the bytes to Pillow.
     checks["an unsupported tile compression is named"] = _rejects_brotli()
 
     failed = [name for name, ok in checks.items() if not ok]

@@ -24,6 +24,8 @@ TESTS = [
     "test_mosaic_stats.py",
     "test_mirror.py",
     "test_thumbnails.py",
+    "test_tiler.py",
+    "test_webmap.py",
     "test_links.py",
     "test_sync_data.py",
     "test_stac_valid.py",
