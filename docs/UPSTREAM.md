@@ -126,9 +126,8 @@ mismatches and the `file:checksum` of a published item verifies under
 | **F-2** `subprocess_s3_env` | Moved into `freezebase/s3.py` beside `s3_env`; `glace_catalog.gdal_s3` deleted, 2026-09-04 |
 | **F-3** the VRT helpers | `freezebase/vrt.py`, released in freezebase 0.7.0 on 2026-09-04 and in use by the mosaic chain |
 | **F-4** cut releases, drop the editable overrides | freezebase 0.7.0 and s1bursts 0.5.0 are on PyPI; this repository floors `freezebase[s3]>=0.7,<0.8` and has no `[tool.uv.sources]`, 2026-09-08 |
-| **F-5** `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for`, `file_sha256(UPath)`, the profile-configured endpoint in `s3_env` | In `freezebase` on the `feat/s3-settings-and-listing` branch, 2026-09-08, unreleased. This repository and `deep-glacier-mapping` consume it editable via `[tool.uv.sources]`; **open** until the release lands and both drop the override |
+| **F-5** `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for`, `file_sha256(UPath)`, the profile-configured endpoint in `s3_env` | Released in freezebase 0.7.1 on 2026-09-08; this repository floors `freezebase[s3]>=0.7.1,<0.8` and has no `[tool.uv.sources]` |
 | **D-2** delete the pipeline copied out of `deep-glacier-mapping` | Done 2026-09-05. `rasterize-labels.py`, `derive-glacier-fractions.py` and `export-inventories.py` stayed there, under `scripts/inventories/` |
 
 s1bursts is not a dependency of this repository; it is the writer whose output
-this repository reads. freezebase is a dependency, consumed from PyPI once F-5
-is released and from the sibling checkout until then.
+this repository reads. freezebase is a dependency, consumed from PyPI.

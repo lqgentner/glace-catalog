@@ -112,10 +112,7 @@ how to know it worked.
 
 **s1bursts is not a dependency of this repository**: it is the writer whose
 output this repository reads, and nothing here imports it. `freezebase` is a
-dependency, floored at `>=0.7,<0.8`. **Until the next freezebase release** it
-is consumed from the sibling checkout through `[tool.uv.sources]` (editable),
-because this repository already uses `freezebase.settings.S3Settings`,
-`list_object_sizes`, `atomic_write_text`, `content_type_for` and the
-profile-configured endpoint, none of which 0.7.0 has. When that release is on
-PyPI, delete the table, floor the release, and re-lock (F-5 in UPSTREAM.md).
-`uv.lock` is tracked.
+dependency and is consumed from PyPI, floored at `>=0.7.1,<0.8` because 0.7.1
+is where `freezebase.settings.S3Settings`, `list_object_sizes`,
+`atomic_write_text`, `content_type_for` and the profile-configured endpoint
+arrived; there are no editable installs and `uv.lock` is tracked.

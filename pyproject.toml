@@ -14,7 +14,9 @@ dependencies = [
     "botocore>=1.36",
     "cmcrameri>=1.9",
     "defusedxml>=0.7.1",
-    "freezebase[s3]>=0.7,<0.8",
+    # 0.7.1 carries S3Settings, list_object_sizes, atomic_write_text,
+    # content_type_for and the profile-configured endpoint in s3_env.
+    "freezebase[s3]>=0.7.1,<0.8",
     "fsspec>=2026.6.0",
     "geopandas>=1.1",
     "matplotlib>=3.7",
@@ -42,12 +44,6 @@ dependencies = [
     "tqdm",
     "universal-pathlib>=0.2.6",
 ]
-
-# freezebase is consumed from the sibling checkout until the release that
-# carries S3Settings, list_object_sizes and the profile-configured endpoint
-# is on PyPI; drop this table and floor the release then (DESIGN.md R-4).
-[tool.uv.sources]
-freezebase = { path = "../freezebase", editable = true }
 
 [dependency-groups]
 # Tighter floors for development dependencies: they track the toolchain CI
