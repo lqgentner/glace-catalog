@@ -187,8 +187,9 @@ Metadata in git, data on object storage, one uploader.
 | `.build-state.json`, `.items.parquet`, any other dotfile | no | no |
 
 **The build never writes into `catalog/`.** `scripts/publish-year.py` and
-`scripts/finalize-catalog.py` read the composites from `GLACE_SOURCE_ROOT` and
-write to `GLACE_STORE_ROOT`, a prefix on the private UZH gateway.
+`scripts/finalize-catalog.py` read the composites from the archive named by
+`publish-year.py --src` and write to `GLACE_STORE_ROOT`, a prefix on the private
+UZH gateway.
 `finalize-catalog` stages the tracked documents into the store and *patches* the
 copies there with what depends on the run — year links, temporal extent, PMTiles
 links, `file:size` and `file:checksum` on the collection assets it wrote — and

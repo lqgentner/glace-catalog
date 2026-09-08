@@ -42,7 +42,7 @@ rather than skips.
 | what | where |
 | --- | --- |
 | what publishes, and to which bucket | `catalog.publish.yaml` |
-| where the build reads and writes | `GLACE_SOURCE_ROOT`, `GLACE_STORE_ROOT` in `.env` |
+| where the build writes | `GLACE_STORE_ROOT` in `.env`; the composites it reads are `publish-year.py --src` |
 | the layout of a built store, and why | [`docs/DESIGN.md`](docs/DESIGN.md) §2 |
 | every design decision, with its reason | [`docs/DESIGN.md`](docs/DESIGN.md) §9 |
 | what is done and what is open | [`docs/STATUS.md`](docs/STATUS.md) |
@@ -59,14 +59,13 @@ composite COGs, annual mosaics of them, web-map archives, and the STAC documents
 describing all of it. Two regions are defined, `ch` and `alps`, each with a
 fixed grid and a default root in `src/glace_catalog/scopes.py`.
 
-Building needs credentials for the private source bucket and the two locations
-it works between, all read from `.env`:
+Building needs credentials for the private UZH bucket and the prefix the store
+is assembled under, read from `.env`:
 
 ```bash
-GLACIERS_S3_ENDPOINT_URL=   # the UZH S3 gateway
-GLACIERS_S3_PROFILE=        # a named profile in ~/.aws/credentials
-GLACE_SOURCE_ROOT=          # s3:// prefix holding the composite archives
-GLACE_STORE_ROOT=           # s3:// prefix the published tree is built under
+GLACE_S3_ENDPOINT_URL=   # the UZH S3 gateway
+GLACE_S3_PROFILE=        # a named profile in ~/.aws/credentials
+GLACE_STORE_ROOT=        # s3:// prefix the published tree is built under
 ```
 
 Authentication is by named profile only, so no access key passes through the

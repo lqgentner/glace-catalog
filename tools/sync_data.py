@@ -13,7 +13,7 @@ handed straight to ``upload_fileobj`` on Source Cooperative, which streams it in
 one part below the multipart threshold and in parallel parts above it.
 
 Two clients, two credentials, and they are deliberately not the same session:
-the source client comes from ``GLACIERS_S3_*`` (the private bucket, read-only
+the source client comes from ``GLACE_S3_*`` (the private bucket, read-only
 here) and the target client from the ``profile`` in ``catalog.publish.yaml``,
 whose ``endpoint_url`` is the Source Cooperative S3 proxy.
 
@@ -434,9 +434,9 @@ def transfer(
 
 
 def gateway_config() -> Config:
-    """Botocore configuration for the private gateway, from ``GLACIERS_S3_*``.
+    """Botocore configuration for the private gateway, from ``GLACE_S3_*``.
 
-    All four ``GLACIERS_S3_*`` knobs have to reach the client, not just the
+    All four ``GLACE_S3_*`` knobs have to reach the client, not just the
     profile and the endpoint: boto3 >= 1.36 defaults both checksum settings to
     ``when_supported``, which puts ``x-amz-checksum`` trailers on the wire and a
     ``ChecksumMode`` header on ``GetObject``, and the UZH Ceph gateway rejects
@@ -451,7 +451,7 @@ def gateway_config() -> Config:
 
 
 def source_client(session: Any = None) -> SourceClient:
-    """Build the read client for the private gateway from ``GLACIERS_S3_*``.
+    """Build the read client for the private gateway from ``GLACE_S3_*``.
 
     The same profile, endpoint and checksum settings the store's
     :class:`~upath.UPath` carries, so the listing and the reads cannot end up

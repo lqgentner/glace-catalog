@@ -4,7 +4,9 @@ Three locations, deliberately separate, because they have different owners and
 different failure modes:
 
 - **source** — the composite archive a run produced, on the private UZH bucket.
-  Read-only here; this repository never writes into it.
+  Read-only here; this repository never writes into it. It is named per run, as
+  ``publish-year.py --src``, because one year's archive is one prefix and a
+  store may draw on more than one.
 - **store** — where the published tree is assembled: a prefix on the private UZH
   bucket. The store *is* what gets published, object for object, so a local
   ``GLACE_STORE_ROOT`` is a build that cannot be published —
@@ -35,18 +37,18 @@ type AnyDir = Path | UPath
 
 
 class S3Settings(BaseSettings):
-    """S3 profile and botocore tuning from ``GLACIERS_S3_*`` environment variables.
+    """S3 profile and botocore tuning from ``GLACE_S3_*`` environment variables.
 
-    Authentication is by named AWS profile only: ``GLACIERS_S3_PROFILE`` selects
+    Authentication is by named AWS profile only: ``GLACE_S3_PROFILE`` selects
     a section of ``~/.aws/credentials`` (or of ``AWS_SHARED_CREDENTIALS_FILE``),
     so no access key ever passes through the environment. Selecting a profile
     explicitly also drops boto's environment-variable provider from the
     credential chain, so a stray ``AWS_ACCESS_KEY_ID`` in a shell cannot sign
     these requests. The endpoint is not read from the AWS config file and must
-    stay in ``GLACIERS_S3_ENDPOINT_URL``.
+    stay in ``GLACE_S3_ENDPOINT_URL``.
     """
 
-    model_config = SettingsConfigDict(env_prefix="GLACIERS_S3_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="GLACE_S3_", extra="ignore")
 
     endpoint_url: str | None = None
     profile: str | None = None
@@ -69,9 +71,6 @@ class StoreSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(env_prefix="GLACE_", extra="ignore")
-
-    source_root: str
-    """Prefix holding the composite archives, one directory per year."""
 
     store_root: str
     """Root the published tree is assembled under. ``s3://...`` or a local path."""
@@ -110,7 +109,7 @@ class Settings:
         if not raw.startswith("s3://"):
             return Path(raw).expanduser()
         if not (self.s3.endpoint_url and self.s3.profile):
-            msg = "An s3:// path needs GLACIERS_S3_ENDPOINT_URL and GLACIERS_S3_PROFILE."
+            msg = "An s3:// path needs GLACE_S3_ENDPOINT_URL and GLACE_S3_PROFILE."
             raise ValueError(msg)
         return make_s3_upath(
             raw,
@@ -119,11 +118,6 @@ class Settings:
             request_checksum_calculation=self.s3.request_checksum_calculation,
             response_checksum_validation=self.s3.response_checksum_validation,
         )
-
-    @property
-    def source_root(self) -> AnyDir:
-        """Prefix holding the composite archives this store publishes."""
-        return self.resolve_path(self.locations.source_root)
 
     @property
     def store_root(self) -> AnyDir:

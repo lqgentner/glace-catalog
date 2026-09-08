@@ -30,9 +30,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 # glace_catalog.config resolves its locations at import, so importing the tool
-# needs the two variables set. Local values keep every path in this gate off
-# object storage; nothing here reads or writes either location.
-os.environ.setdefault("GLACE_SOURCE_ROOT", str(ROOT / "does-not-exist" / "source"))
+# needs the variable set. A local value keeps every path in this gate off
+# object storage; nothing here reads or writes the location.
 os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
 
 from botocore.exceptions import ProfileNotFound  # noqa: E402
