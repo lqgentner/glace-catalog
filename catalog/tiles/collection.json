@@ -23,7 +23,7 @@
     "Alps",
     "cryosphere"
   ],
-  "version": "1.0",
+  "version": "0.1",
   "providers": [
     {
       "name": "European Space Agency / Copernicus",
