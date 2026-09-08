@@ -37,6 +37,7 @@ from glace_catalog.scopes import TILE_PX, get_scope
 from glace_catalog.thumbnails import (
     THUMBNAIL_TILE,
     Bbox,
+    _decode_tile,
     choose_zoom,
     frame_3_2,
     mosaics_bbox,
@@ -258,6 +259,16 @@ def _rendering_checks(archive: Path) -> dict[str, bool]:
     }
 
 
+def _rejects_brotli() -> bool:
+    """Check that a BROTLI tile raises, naming it and the two supported compressions."""
+    try:
+        _decode_tile(b"", Compression.BROTLI)
+    except ValueError as error:
+        message = str(error)
+        return "BROTLI" in message and "GZIP" in message and "NONE" in message
+    return False
+
+
 def main() -> int:
     """Run every thumbnail check and report."""
     tall: Bbox = (8.0, 46.0, 8.1, 47.0)
@@ -288,6 +299,10 @@ def main() -> int:
     checks[f"{THUMBNAIL_TILE} is the Aletsch tile"] = (
         7.9 < aletsch[0] < 8.1 and 46.4 < aletsch[1] < 46.5
     )
+
+    # An archive rio pmtiles did not write may carry a compression the decoder
+    # cannot read; it must say so rather than hand the bytes to Pillow.
+    checks["an unsupported tile compression is named"] = _rejects_brotli()
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

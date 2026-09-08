@@ -103,11 +103,6 @@ class LayerInfo:
     colors: list[str] = field(default_factory=list)
 
 
-def zoom_resolution(zoom: int) -> float:
-    """Ground resolution of a WebMercatorQuad zoom level at the equator, in metres."""
-    return MERCATOR_SPAN_M / (TILE_SIZE * 2**zoom)
-
-
 def native_max_zoom(res_m: float, lat_deg: float) -> int:
     """Smallest zoom level that does not undersample ``res_m`` at ``lat_deg``.
 

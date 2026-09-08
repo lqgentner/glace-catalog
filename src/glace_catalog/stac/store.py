@@ -477,7 +477,7 @@ def manifest_valid_percents(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
     columns = ["tile", "asset_key", "valid_percent"]
     for record in frame.loc[frame["valid_percent"].notna(), columns].to_dict("records"):
         tile, key = str(record["tile"]), str(record["asset_key"])
-        percents.setdefault(tile, {})[key] = float(record["valid_percent"])  # type: ignore[arg-type]
+        percents.setdefault(tile, {})[key] = float(record["valid_percent"])
     return percents
 
 
@@ -503,7 +503,7 @@ def copy_composites(
 ) -> CopyResult:
     """Copy a year's composites into the store, server-side.
 
-    Each file lands at ``{root}/{year}/{tile}/{asset_key}.tif`` through a
+    Each file lands at ``{root}/tiles/{year}/{tile}/{asset_key}.tif`` through a
     ``CopyObject``: no download, no upload, no egress, and the bytes and the
     compression the run chose are preserved exactly.
 

@@ -537,8 +537,8 @@ def year_catalog_document(
     A catalog, not a collection: Portolan forbids a collection inside a
     collection but explicitly allows "a catalog below a collection to organize
     its items (for example, a raster collection grouping items by year)". It
-    carries no assets, because a catalog may not have any — the year's manifest
-    and configuration are registered on the collection instead.
+    carries no assets, because a catalog may not have any — and the year's manifest
+    and configuration are not published at all (M-32).
     """
     return {
         "type": "Catalog",

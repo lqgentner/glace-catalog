@@ -23,7 +23,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import json
 import logging
 from pathlib import Path
@@ -31,11 +30,9 @@ import re
 import tempfile
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pystac
-from pystac.utils import str_to_datetime
 from upath import UPath
 
 from glace_catalog import stac
@@ -89,43 +86,20 @@ def read_year_index(layout: stac.StoreLayout, year: int) -> pa.Table:
         return pq.read_table(handle)
 
 
-def tiles_summary(tables: Sequence[pa.Table]) -> tuple[pystac.Extent, list[str], set[str]]:
-    """Extent, item hrefs and editions of the tile items, without resolving them.
+def tiles_summary(tables: Sequence[pa.Table]) -> tuple[int, set[str]]:
+    """Count the tile items and collect their editions, without resolving them.
 
-    A store over eleven Alpine years holds roughly 24 000 tile items. The
-    collection document needs their envelope and their links, not their contents,
-    so this reads the indexes rather than the item documents.
+    A store over eleven Alpine years holds roughly 24 000 tile items. All the
+    collection documents need from them is a count for the log and the assurance
+    that they agree on one edition, so this reads the indexes rather than the
+    item documents.
     """
-    bboxes: list[list[float]] = []
-    starts: list[datetime] = []
-    ends: list[datetime] = []
-    hrefs: list[str] = []
+    count = 0
     versions: set[str] = set()
     for table in tables:
-        payload = table.select(
-            ["bbox", "start_datetime", "end_datetime", "glace:mgrs_tile", "version"],
-        ).to_pylist()
-        for row in payload:
-            bbox = row["bbox"]
-            bboxes.append([bbox["xmin"], bbox["ymin"], bbox["xmax"], bbox["ymax"]])
-            # The index stores these as timestamps, not as the ISO strings the
-            # item documents carry.
-            start, end = _as_datetime(row["start_datetime"]), _as_datetime(row["end_datetime"])
-            starts.append(start)
-            ends.append(end)
-            hrefs.append(f"../{start.year}/{row['glace:mgrs_tile']}/item.json")
-            versions.add(row["version"])
-    array = np.array(bboxes)
-    spatial = pystac.SpatialExtent(
-        [[*array[:, :2].min(axis=0).tolist(), *array[:, 2:].max(axis=0).tolist()]],
-    )
-    temporal = pystac.TemporalExtent([[min(starts), max(ends)]])
-    return pystac.Extent(spatial=spatial, temporal=temporal), sorted(hrefs), versions
-
-
-def _as_datetime(value: datetime | str) -> datetime:
-    """Read a datetime from an index column, whether stored as a timestamp or a string."""
-    return value if isinstance(value, datetime) else str_to_datetime(value)
+        count += table.num_rows
+        versions.update(table.column("version").to_pylist())
+    return count, versions
 
 
 def read_mosaic_items(layout: stac.StoreLayout, years: Sequence[int]) -> list[pystac.Item]:
@@ -138,17 +112,6 @@ def read_mosaic_items(layout: stac.StoreLayout, years: Sequence[int]) -> list[py
             continue
         items.append(read_item(path))
     return items
-
-
-def collection_asset(
-    href: str,
-    *,
-    title: str,
-    roles: list[str],
-    media_type: str,
-) -> pystac.Asset:
-    """One collection-level asset, describing the collection as a whole."""
-    return pystac.Asset(href=href, title=title, media_type=media_type, roles=roles)
 
 
 def _load(path: Path) -> Document:
@@ -452,7 +415,7 @@ def main() -> None:
     years = published_years(layout)
 
     tables = [read_year_index(layout, year) for year in years]
-    _extent, tile_hrefs, versions = tiles_summary(tables)
+    tile_count, versions = tiles_summary(tables)
     if len(versions) > 1:
         msg = (
             f"the store's tile items carry editions {sorted(versions)}. A collection "
@@ -460,7 +423,7 @@ def main() -> None:
             "whole dataset for one."
         )
         raise SystemExit(msg)
-    logger.info("%d tile items across %d year(s)", len(tile_hrefs), len(years))
+    logger.info("%d tile items across %d year(s)", tile_count, len(years))
 
     mosaic_items = read_mosaic_items(layout, years)
     documents = patch_collections(

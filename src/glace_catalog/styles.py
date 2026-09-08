@@ -229,8 +229,9 @@ def load_styles(path: Path) -> tuple[dict[str, LayerStyle], dict[str, RgbStyle]]
             if not isinstance(channels, list) or len(channels) != 3:  # noqa: PLR2004
                 msg = f"{path}: layer {layer['id']!r} is 'channels' but has no three channels"
                 raise ValueError(msg)
+            red, green, blue = [(float(c["vmin"]), float(c["vmax"])) for c in channels]
             rgb[key] = RgbStyle(
-                ranges=tuple((float(c["vmin"]), float(c["vmax"])) for c in channels),  # type: ignore[arg-type]
+                ranges=(red, green, blue),
                 units=units,
                 decibel=decibel,
                 measured=measured,

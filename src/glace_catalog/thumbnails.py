@@ -217,9 +217,24 @@ def _range_reader(archive: Path | UPath) -> Iterator[Callable[[int, int], bytes]
 
 
 def _decode_tile(payload: bytes, compression: Compression) -> Image.Image:
-    """Decode one tile's bytes into an RGBA image."""
+    """Decode one tile's bytes into an RGBA image.
+
+    Raises
+    ------
+    ValueError
+        If the archive declares a compression other than ``NONE`` or ``GZIP``.
+        ``rio pmtiles`` writes neither BROTLI nor ZSTD, so an archive that does
+        was written by something else; failing here beats handing compressed
+        bytes to Pillow and reading its unrecognised-format error.
+    """
     if compression == Compression.GZIP:
         payload = gzip.decompress(payload)
+    elif compression != Compression.NONE:
+        msg = (
+            f"the archive's tiles are {compression.name}-compressed; only "
+            f"{Compression.NONE.name} and {Compression.GZIP.name} are supported"
+        )
+        raise ValueError(msg)
     with Image.open(io.BytesIO(payload)) as tile:
         return tile.convert("RGBA")
 

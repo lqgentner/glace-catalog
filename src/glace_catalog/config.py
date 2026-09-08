@@ -87,7 +87,7 @@ class Settings:
 
     def __init__(self) -> None:
         self.s3 = S3Settings()
-        self.locations = StoreSettings()  # type: ignore[call-arg]
+        self.locations = StoreSettings()
 
     def resolve_path(self, raw: str) -> AnyDir:
         """Resolve a local path or an ``s3://`` URI with the configured credentials.
