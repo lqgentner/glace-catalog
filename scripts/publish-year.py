@@ -42,6 +42,7 @@ from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+from freezebase.s3 import list_object_sizes
 import pandas as pd
 
 from glace_catalog import mosaics, stac, tiler, webmap
@@ -87,7 +88,7 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         raise SystemExit(msg)
 
     frame = stac.read_manifest(manifest_path)
-    listing = stac.list_objects(src)
+    listing = list_object_sizes(src)
     mismatches = stac.verify_manifest(frame, listing)
     if mismatches:
         for mismatch in mismatches[:50]:
@@ -136,7 +137,7 @@ def step_copy(
     repository's committed configuration.
     """
     layout.tile_year(args.year).mkdir(parents=True, exist_ok=True)
-    listing = stac.list_objects(src)
+    listing = list_object_sizes(src)
     result = stac.copy_composites(files, layout, args.year, listing, max_workers=args.max_workers)
     logger.info("copy: %s", result)
 

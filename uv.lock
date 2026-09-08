@@ -522,8 +522,7 @@ wheels = [
 
 [[package]]
 name = "freezebase"
-version = "0.7.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../freezebase" }
 dependencies = [
     { name = "affine" },
     { name = "geopandas" },
@@ -541,16 +540,53 @@ dependencies = [
     { name = "tenacity" },
     { name = "universal-pathlib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/17/07/3f1b6d61876e1b2e607d0979a1a3c86ab7c465ae4018f208a13d03a71538/freezebase-0.7.0.tar.gz", hash = "sha256:42ffc500da6011ddb2961f68d3e365a92cefcea3c0365b63eab25b1a3948e38f", size = 74052, upload-time = "2026-09-04T12:24:47.752Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/dd/b5/b8d33052644617f90042ece8f4693939b82bc6805d50e86d0c43733eb96b/freezebase-0.7.0-py3-none-any.whl", hash = "sha256:6464c602ba289bcc7c62052e59563f7f10def2c2f5c336e544dc02857ff78502", size = 40137, upload-time = "2026-09-04T12:24:46.36Z" },
-]
 
 [package.optional-dependencies]
 s3 = [
     { name = "boto3" },
     { name = "fsspec" },
+    { name = "pydantic-settings" },
     { name = "s3fs" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "affine", specifier = ">=2.4.0" },
+    { name = "boto3", marker = "extra == 's3'", specifier = ">=1.36" },
+    { name = "fsspec", marker = "extra == 's3'", specifier = ">=2026.2.0" },
+    { name = "geopandas", specifier = ">=1.1" },
+    { name = "mgrs", specifier = ">=1.4.4" },
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "odc-geo", specifier = ">=0.5.0" },
+    { name = "pandas", specifier = ">=2.3" },
+    { name = "platformdirs", specifier = ">=3.0" },
+    { name = "pyarrow", specifier = ">=17.0" },
+    { name = "pydantic-settings", marker = "extra == 's3'", specifier = ">=2.0" },
+    { name = "pyproj", specifier = ">=3.6.1" },
+    { name = "rasterio", specifier = ">=1.5.0" },
+    { name = "requests", specifier = ">=2.28" },
+    { name = "rich", specifier = ">=13.8" },
+    { name = "s3fs", marker = "extra == 's3'", specifier = ">=2026.7.0" },
+    { name = "shapely", specifier = ">=2.1.0" },
+    { name = "tenacity", specifier = ">=8.2" },
+    { name = "universal-pathlib", specifier = ">=0.3" },
+]
+provides-extras = ["s3"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pandas-stubs", specifier = ">=2.3" },
+    { name = "pyrefly", specifier = ">=1.2.0" },
+    { name = "pytest", specifier = ">=9.1" },
+    { name = "pytest-cov", specifier = ">=7.1" },
+    { name = "ruff", specifier = ">=0.16" },
+    { name = "types-geopandas", specifier = ">=1.1" },
+    { name = "types-requests", specifier = ">=2.33" },
+]
+docs = [
+    { name = "contextily", specifier = ">=1.7" },
+    { name = "great-docs", specifier = ">=0.17" },
+    { name = "matplotlib", specifier = ">=3.11" },
 ]
 
 [[package]]
@@ -701,7 +737,7 @@ requires-dist = [
     { name = "botocore", specifier = ">=1.36" },
     { name = "cmcrameri", specifier = ">=1.9" },
     { name = "defusedxml", specifier = ">=0.7.1" },
-    { name = "freezebase", extras = ["s3"], specifier = ">=0.7,<0.8" },
+    { name = "freezebase", extras = ["s3"], editable = "../freezebase" },
     { name = "fsspec", specifier = ">=2026.6.0" },
     { name = "geopandas", specifier = ">=1.1" },
     { name = "matplotlib", specifier = ">=3.7" },

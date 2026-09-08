@@ -26,40 +26,16 @@ half-way through a year.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING
 
-from freezebase.s3 import make_s3_upath
+from freezebase.settings import S3Settings
 from freezebase.utils import get_cache_dir
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from upath import UPath
+
+if TYPE_CHECKING:
+    from upath import UPath
 
 type AnyDir = Path | UPath
-
-
-class S3Settings(BaseSettings):
-    """S3 profile and botocore tuning from ``GLACE_S3_*`` environment variables.
-
-    Authentication is by named AWS profile only: ``GLACE_S3_PROFILE`` selects
-    a section of ``~/.aws/credentials`` (or of ``AWS_SHARED_CREDENTIALS_FILE``),
-    so no access key ever passes through the environment. Selecting a profile
-    explicitly also drops boto's environment-variable provider from the
-    credential chain, so a stray ``AWS_ACCESS_KEY_ID`` in a shell cannot sign
-    these requests. The endpoint is not read from the AWS config file and must
-    stay in ``GLACE_S3_ENDPOINT_URL``.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="GLACE_S3_", extra="ignore")
-
-    endpoint_url: str | None = None
-    profile: str | None = None
-
-    # boto3 >=1.36 defaults to "when_supported", which adds x-amz-checksum-*
-    # trailers that the UZH Ceph gateway rejects. Typed as the two values
-    # botocore accepts, so a typo in the environment is refused here rather
-    # than by a signing failure half-way through a copy, and so the values can
-    # be handed to `botocore.config.Config` without a cast.
-    request_checksum_calculation: Literal["when_required", "when_supported"] = "when_required"
-    response_checksum_validation: Literal["when_required", "when_supported"] = "when_required"
 
 
 class StoreSettings(BaseSettings):
@@ -82,10 +58,17 @@ class Settings:
     Directory values resolve to :class:`~pathlib.Path` when local and to
     :class:`~upath.UPath` carrying the S3 profile and endpoint when they start
     with ``s3://``, so downstream code does not branch on the storage backend.
+
+    The S3 side is :class:`freezebase.settings.S3Settings` under the
+    ``GLACE_S3_`` prefix: authentication is by named profile only, so no access
+    key passes through the environment; ``GLACE_S3_ENDPOINT_URL`` is optional
+    when the profile's config section carries the endpoint; and the two
+    checksum policies default to ``when_required``, which the UZH Ceph gateway
+    needs.
     """
 
     def __init__(self) -> None:
-        self.s3 = S3Settings()
+        self.s3 = S3Settings.from_env("GLACE_S3_")
         self.locations = StoreSettings()
 
     def resolve_path(self, raw: str) -> AnyDir:
@@ -104,20 +87,9 @@ class Settings:
         Raises
         ------
         ValueError
-            If ``raw`` is an ``s3://`` URI and the S3 endpoint or profile is unset.
+            If ``raw`` is an ``s3://`` URI and ``GLACE_S3_PROFILE`` is unset.
         """
-        if not raw.startswith("s3://"):
-            return Path(raw).expanduser()
-        if not (self.s3.endpoint_url and self.s3.profile):
-            msg = "An s3:// path needs GLACE_S3_ENDPOINT_URL and GLACE_S3_PROFILE."
-            raise ValueError(msg)
-        return make_s3_upath(
-            raw,
-            profile=self.s3.profile,
-            endpoint_url=self.s3.endpoint_url,
-            request_checksum_calculation=self.s3.request_checksum_calculation,
-            response_checksum_validation=self.s3.response_checksum_validation,
-        )
+        return self.s3.resolve_path(raw)
 
     @property
     def store_root(self) -> AnyDir:

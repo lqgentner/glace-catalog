@@ -19,9 +19,10 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
-from secrets import token_hex
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
+from freezebase.s3 import atomic_write_text, list_object_sizes
+from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
@@ -316,9 +317,6 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
 MULTIHASH_SHA256 = "1220"
 """Multihash prefix of a 32-byte sha256 digest, the form ``file:checksum`` requires."""
 
-HASH_CHUNK = 1 << 20
-"""Bytes read per chunk when hashing a file, so a gigabyte-scale COG is not read at once."""
-
 
 def multihash_sha256(payload: bytes) -> str:
     """Multihash-encoded sha256 of some bytes, the form ``file:checksum`` requires.
@@ -331,17 +329,13 @@ def multihash_sha256(payload: bytes) -> str:
 
 
 def multihash_sha256_file(path: Path | UPath) -> str:
-    """Multihash-encoded sha256 of a file, read in chunks rather than at once.
+    """Multihash-encoded sha256 of a file, streamed rather than read at once.
 
     Same encoding as :func:`multihash_sha256`, for the files this repository
     writes itself: an annual mosaic is hundreds of megabytes, and holding one in
     memory to hash it would undo the streaming the writer is careful about.
     """
-    digest = hashlib.sha256()
-    with UPath(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(HASH_CHUNK), b""):
-            digest.update(chunk)
-    return MULTIHASH_SHA256 + digest.hexdigest()
+    return MULTIHASH_SHA256 + file_sha256(path)
 
 
 def manifest_digest(frame: pd.DataFrame) -> str:
@@ -357,24 +351,6 @@ def manifest_digest(frame: pd.DataFrame) -> str:
             "\t".join(str(record[column]) for column in payload.columns).encode() + b"\n",
         )
     return digest.hexdigest()
-
-
-def list_objects(directory: Path | UPath) -> dict[str, int]:
-    """List one prefix as ``{filename: size}``.
-
-    One listing replaces one remote open per file, which is what makes checking
-    a 26 500-object year affordable at all. Only the size is taken: an ETag is
-    the MD5 for a single-part upload and something else entirely for a multipart
-    one, so keying on it would silently constrain how every writer uploads.
-    """
-    directory = UPath(directory)
-    entries: dict[str, int] = {}
-    for info in directory.fs.ls(str(directory.path), detail=True):
-        name = str(info["name"]).rsplit("/", 1)[-1]
-        if not name:
-            continue
-        entries[name] = int(info.get("size") or info.get("Size") or 0)
-    return entries
 
 
 @dataclass(frozen=True)
@@ -547,7 +523,7 @@ def copy_composites(
         How many files were copied and how many were already in place.
     """
     root = UPath(layout.root)
-    destinations = list_objects_recursive(layout.tile_year(year))
+    destinations = list_object_sizes(layout.tile_year(year), recursive=True)
     # An object store needs no directory, but a local store does, and creating
     # them once up front keeps that out of the copy pool.
     for tile in sorted({file.tile for file in files}):
@@ -573,27 +549,6 @@ def copy_composites(
     result = CopyResult(copied=copied, skipped=len(files) - copied)
     logger.info("Copied %d composites into %s: %s", len(files), layout.tile_year(year), result)
     return result
-
-
-def list_objects_recursive(directory: Path | UPath) -> dict[str, int]:
-    """List one prefix and everything under it as ``{relative path: size}``."""
-    directory = UPath(directory)
-    prefix = str(directory.path).rstrip("/") + "/"
-    entries: dict[str, int] = {}
-    if not directory.fs.exists(str(directory.path)):
-        return entries
-    # `detail=True` makes fsspec return `{path: info}`; its signature declares
-    # only the `detail=False` list, so the mapping has to be named here.
-    listing = cast(
-        "dict[str, dict[str, Any]]",
-        directory.fs.find(str(directory.path), detail=True),
-    )
-    for info in listing.values():
-        name = str(info["name"])
-        if not name.startswith(prefix):
-            continue
-        entries[name[len(prefix) :]] = int(info.get("size") or info.get("Size") or 0)
-    return entries
 
 
 def upload_tree(local: Path, destination: Path | UPath) -> int:
@@ -679,18 +634,7 @@ class BuildState:
             sort_keys=True,
             default=str,
         )
-        path = UPath(self.path)
-        if path.protocol == "s3":
-            # PutObject is atomic on its own.
-            path.write_text(payload)
-            return
-        partial = path.with_name(f"{path.name}.{token_hex(8)}.partial")
-        try:
-            partial.write_text(payload)
-            partial.replace(path)
-        except BaseException:
-            partial.unlink(missing_ok=True)
-            raise
+        atomic_write_text(self.path, payload)
 
     def invalidate_from(self, step: str) -> None:
         """Drop the fingerprint of ``step`` and of every step that follows it."""

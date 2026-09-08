@@ -103,7 +103,7 @@ def check_change_detection() -> dict[str, bool]:
 
 
 def check_content_types() -> dict[str, bool]:
-    """Check the suffix-to-content-type table, and what it refuses to guess."""
+    """Check the content types the store's suffixes are served as, via freezebase."""
     cases = {
         "tiles/2024/32TMS24/item.json": "application/json",
         "README.md": "text/markdown",
@@ -118,7 +118,7 @@ def check_content_types() -> dict[str, bool]:
         "tiles/2024/32TMS24/COH12_VV.TIF": (
             "image/tiff; application=geotiff; profile=cloud-optimized"
         ),
-        "notes.txt": "application/octet-stream",
+        "notes.txt": "text/plain",
         "LICENSE": "application/octet-stream",
     }
     wrong = {

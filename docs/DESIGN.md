@@ -428,9 +428,10 @@ struck through — git holds them.
 | R-1 | `src/glace_catalog/__init__.py` exists — a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | PMTiles are registered at collection level only. `build_mosaic_item` has no `pmtiles` parameter and items carry no `rel: "pmtiles"` link | 3 |
-| R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7,<0.8` from PyPI | 6 |
+| R-4 | No `[tool.uv.sources]` overrides once the dependencies are released. `freezebase[s3]>=0.7,<0.8`; **temporarily editable from `../freezebase`** for `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint, until the release that carries them (UPSTREAM.md F-5) | 6 |
 | R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the `ch` scope's default root stays that value and the fresh build lands there once it is empty | 4 |
-| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand | 4 |
+| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand. Each write is committed by hand and discarded on failure, so a broken transfer publishes nothing | 4 |
+| R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |
 | R-9 | Thumbnails are cut from the latest year's `coh12_rgb.pmtiles` archive, so they obey the committed style by construction: the whole scope for the mosaics, tile `32TMS24` (Aletsch) for the tiles, both framed 3:2 | 3 |

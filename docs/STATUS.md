@@ -23,6 +23,12 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
 Ordered by what blocks what. Everything not listed here is done.
 
+- **F-5 — Release freezebase and drop the editable override.** `pyproject.toml`
+  points `freezebase` at `../freezebase` until the release carrying
+  `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for`
+  and the profile-configured endpoint is on PyPI. *Verified when*
+  `[tool.uv.sources]` is gone, the floor names the release, and `uv sync`
+  reports freezebase from the registry.
 - **P-1 — Derive the glacier fractions.** No `glacier-fractions.parquet` exists
   on the bucket yet; the tiles collection registers it as an asset.
   *Verified when* `{GLACE_STORE_ROOT}/tiles/glacier-fractions.parquet` exists and

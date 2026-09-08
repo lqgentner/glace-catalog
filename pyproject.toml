@@ -43,6 +43,12 @@ dependencies = [
     "universal-pathlib>=0.2.6",
 ]
 
+# freezebase is consumed from the sibling checkout until the release that
+# carries S3Settings, list_object_sizes and the profile-configured endpoint
+# is on PyPI; drop this table and floor the release then (DESIGN.md R-4).
+[tool.uv.sources]
+freezebase = { path = "../freezebase", editable = true }
+
 [dependency-groups]
 # Tighter floors for development dependencies: they track the toolchain CI
 # actually runs. That matters most for ruff and pyrefly, whose output is

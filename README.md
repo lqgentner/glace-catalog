@@ -63,13 +63,14 @@ Building needs credentials for the private UZH bucket and the prefix the store
 is assembled under, read from `.env`:
 
 ```bash
-GLACE_S3_ENDPOINT_URL=   # the UZH S3 gateway
 GLACE_S3_PROFILE=        # a named profile in ~/.aws/credentials
+GLACE_S3_ENDPOINT_URL=   # the UZH S3 gateway, unless the profile's config section sets endpoint_url
 GLACE_STORE_ROOT=        # s3:// prefix the published tree is built under
 ```
 
 Authentication is by named profile only, so no access key passes through the
-environment. Publishing needs nothing here: the Source Cooperative credentials
+environment. The variables are read by `freezebase.settings.S3Settings`, which
+is what `deep-glacier-mapping` reads its own `GLACIERS_S3_*` with. Publishing needs nothing here: the Source Cooperative credentials
 live in the profile named in `catalog.publish.yaml`.
 
 ### 1. Once per region

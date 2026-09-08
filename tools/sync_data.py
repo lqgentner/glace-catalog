@@ -41,13 +41,12 @@ import sys
 from typing import TYPE_CHECKING, Protocol, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
-from freezebase.s3 import make_s3_upath
+from freezebase.s3 import content_type_for, list_object_sizes, make_s3_upath
 from tqdm import tqdm
 from upath import UPath
 import yaml
 
 from glace_catalog.config import settings
-from glace_catalog.stac.store import list_objects_recursive
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -56,28 +55,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 
 DEFAULT_WORKERS = 8
-DEFAULT_CONTENT_TYPE = "application/octet-stream"
 COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
-
-CONTENT_TYPES: dict[str, str] = {
-    ".json": "application/json",
-    ".md": "text/markdown",
-    ".parquet": "application/vnd.apache.parquet",
-    ".tif": "image/tiff; application=geotiff; profile=cloud-optimized",
-    ".pmtiles": "application/vnd.pmtiles",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".yaml": "application/yaml",
-}
-"""Content type per suffix, as the object is served to a browser or a client.
-
-Source Cooperative serves what the upload declared, so this table is what makes
-a COG open by range request instead of downloading, a README render instead of
-saving, and the item mirror recognisable as parquet. Anything unlisted goes up
-as an opaque byte stream rather than as a guess: s3fs would otherwise consult
-``mimetypes``, which knows none of the cloud-native suffixes.
-"""
 
 
 def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
@@ -146,11 +125,6 @@ def bucket_root(root: Path | UPath) -> UPath:
         )
         raise ValueError(msg)
     return path
-
-
-def content_type_for(relative: str) -> str:
-    """Content type of a store-relative path, by its suffix."""
-    return CONTENT_TYPES.get(PurePosixPath(relative).suffix.lower(), DEFAULT_CONTENT_TYPE)
 
 
 def is_build_state(relative: str) -> bool:
@@ -289,7 +263,7 @@ def list_subtree(root: UPath, subtree: str) -> dict[str, int]:
         Store-relative path to size. Relative to ``root``, not to the subtree,
         so the two sides compare and copy by the same names.
     """
-    listed = list_objects_recursive(root / subtree if subtree else root)
+    listed = list_object_sizes(root / subtree if subtree else root, recursive=True)
     if not subtree:
         return listed
     return {f"{subtree}/{name}": size for name, size in listed.items()}
@@ -318,8 +292,11 @@ class TwoPhaseFile(Protocol):
 def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
     """Stream one object from the private gateway to Source Cooperative.
 
-    The content type goes with the write: s3fs hands ``ContentType`` to the
-    upload it starts. The write is committed by hand rather than on close,
+    The content type goes with the write, from freezebase's table of what a
+    cloud-native object is served as: Source Cooperative serves what the upload
+    declared, which is what makes a COG open by range request instead of
+    downloading and a README render instead of saving. s3fs hands
+    ``ContentType`` to the upload it starts. The write is committed by hand rather than on close,
     because an fsspec file closed by a ``with`` block commits whatever it has
     even when the block is leaving on an exception: a read that failed
     half-way through a COG would otherwise complete the multipart upload and
