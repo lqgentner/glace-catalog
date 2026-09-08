@@ -14,6 +14,11 @@ and it is why there is no ``build_tiles_collection`` in this package.
 ``items.parquet`` — are written from the run and are not tracked. This module
 writes those.
 
+Both ``items.parquet`` files are held to the GeoParquet vector rules on top of
+being valid stac-geoparquet — spatially ordered rows, a ``bbox`` covering column
+with per-row-group statistics, bounded row groups — so every one of them is
+written by :func:`_write_mirror` and by nothing else.
+
 Structural links are relative, so one tree of bytes is valid in the repository,
 in a preview and in production. Item *asset* hrefs are relative too
 (``./coh12_vv.tif``): they sit beside the item that names them, and a consumer
@@ -26,19 +31,26 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-import tempfile
 from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urljoin
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pystac
 import stac_geoparquet.arrow
+
+# The metadata builder `stac_geoparquet.arrow.to_parquet` uses on its way to the
+# file. It is not re-exported, and the alternative is writing the WGS84 PROJJSON
+# and the covering declaration out by hand — a second copy of the library's
+# answer, free to drift from it. Every mirror this module writes is sorted and
+# grouped before it is written, so `to_parquet` itself cannot be the writer.
+from stac_geoparquet.arrow._to_parquet import create_parquet_metadata
 from upath import UPath
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -144,20 +156,22 @@ def item_dict(item: pystac.Item) -> Document:
 def write_stac_geoparquet(payloads: Sequence[Document], out_path: Path | UPath) -> None:
     """Write item dicts as a stac-geoparquet index.
 
-    Always through ``stac_geoparquet.arrow.to_parquet``, never a plain parquet
-    write: the geometry column needs the GeoParquet schema metadata, without
-    which a reader sees an opaque blob rather than a geometry.
+    The rows come from ``stac_geoparquet``, which turns the GeoJSON geometries
+    into WKB, derives the ``bbox`` covering column from each item's ``bbox``,
+    and builds the GeoParquet schema metadata that declares both; without that
+    metadata a reader sees an opaque blob rather than a geometry. The bytes are
+    written by :func:`_write_mirror`, because the file also has to be spatially
+    ordered and grouped, which ``to_parquet`` does not do.
     """
-    batches = stac_geoparquet.arrow.parse_stac_items_to_arrow(list(payloads))
-    out_path = UPath(out_path)
-    if out_path.protocol == "s3":
-        # stac-geoparquet writes through a path, so stage locally and put once.
-        with tempfile.TemporaryDirectory() as tmp:
-            staged = Path(tmp) / out_path.name
-            stac_geoparquet.arrow.to_parquet(batches, str(staged))
-            out_path.write_bytes(staged.read_bytes())
-    else:
-        stac_geoparquet.arrow.to_parquet(batches, str(out_path))
+    reader = stac_geoparquet.arrow.parse_stac_items_to_arrow(list(payloads))
+    table = reader.read_all()
+    table = table.replace_schema_metadata(
+        create_parquet_metadata(
+            table.schema,
+            schema_version=stac_geoparquet.arrow.DEFAULT_PARQUET_SCHEMA_VERSION,
+        ),
+    )
+    _write_mirror(table, out_path)
     logger.info("Geoparquet index with %d items saved to %s", len(payloads), out_path)
 
 
@@ -213,7 +227,9 @@ def concat_indexes(
     # concat_tables keeps the first table's schema metadata, which is where the
     # GeoParquet geometry declaration lives; the rebase must not drop it.
     combined = combined.replace_schema_metadata(tables[0].schema.metadata)
-    _write_table(combined, out_path)
+    # Written through the mirror writer rather than concatenated as-is, so the
+    # store-level file is ordered across the years instead of in year order.
+    _write_mirror(combined, out_path)
     logger.info("Wrote %s with %d rows", out_path, combined.num_rows)
     return combined.num_rows
 
@@ -269,11 +285,170 @@ def _mgrs_tile(item: pystac.Item) -> str:
     return str(item.properties["glace:mgrs_tile"])
 
 
-def _write_table(table: pa.Table, out_path: Path | UPath) -> None:
-    """Write an arrow table to parquet, locally or on the object store."""
+HILBERT_ORDER = 16
+"""Bits per axis of the Hilbert curve the mirror rows are sorted along.
+
+An order-16 curve divides each axis into 65 536 steps, which over the Alps'
+few degrees of longitude is a cell of a few metres — far finer than the 10 km
+tiles being ordered, so no two tiles share a key by accident.
+"""
+
+MIRROR_ROW_GROUP_SIZE = 2048
+"""Rows per row group in every mirror this module writes.
+
+GeoParquet caps a row group at 150 000 rows, so a single group would be legal
+for the whole store; it would also be useless. Per-row-group min/max statistics
+only let a reader skip bytes when there is more than one group, and rashid's
+ordering metrics measure nothing below five groups. At 2 048 rows the Alps'
+store-level mirror (~2 209 tiles over eleven years, ~24 000 rows) lands around
+twelve groups, and one Swiss year (143 tiles) still fits a single group, which
+is right: a file that small is one range request either way.
+"""
+
+_BBOX_CORNERS = ("xmin", "ymin", "xmax", "ymax")
+
+_BBOX_STRUCT = pa.struct([(corner, pa.float64()) for corner in _BBOX_CORNERS])
+
+
+def hilbert_index(x: int, y: int, *, order: int = HILBERT_ORDER) -> int:
+    """Position of a grid cell along the 2-D Hilbert curve.
+
+    The Hilbert curve visits every cell of a ``2**order`` square grid once, and
+    two cells close along the curve are close on the grid. Sorting rows by this
+    index is what gives a row group a small bounding box, which is what lets a
+    reader skip it.
+
+    Parameters
+    ----------
+    x, y
+        Cell coordinates, each in ``[0, 2**order)``.
+    order
+        Bits per axis.
+
+    Returns
+    -------
+    int
+        Distance along the curve, in ``[0, 4**order)``.
+    """
+    distance = 0
+    side = 1 << (order - 1)
+    while side > 0:
+        rx = 1 if x & side else 0
+        ry = 1 if y & side else 0
+        distance += side * side * ((3 * rx) ^ ry)
+        # Rotate the quadrant so the curve enters the next one the way it left
+        # this one; without it the four sub-curves do not join up.
+        if ry == 0:
+            if rx == 1:
+                x = side - 1 - x
+                y = side - 1 - y
+            x, y = y, x
+        side >>= 1
+    return distance
+
+
+def _with_covering_bbox(table: pa.Table) -> pa.Table:
+    """Return ``table`` with a float64 ``bbox`` struct declared as the covering.
+
+    ``stac_geoparquet`` already writes the column and the
+    ``geo.columns.geometry.covering.bbox`` declaration that names it, so this
+    keeps them rather than adding a second covering. What it does add is the
+    type: a batch of items whose bboxes are all whole numbers arrives as
+    ``int64``, and two years that disagree on the type cannot be concatenated
+    into one store-level mirror.
+
+    Raises
+    ------
+    ValueError
+        If the table carries no covering column, which would leave every row
+        group without the spatial statistics ``PTL-DAT-007`` requires.
+    """
+    index = table.schema.get_field_index("bbox")
+    geo = json.loads((table.schema.metadata or {}).get(b"geo", b"{}"))
+    columns = geo.get("columns", {})
+    covering = columns.get(geo.get("primary_column"), {}).get("covering", {}).get("bbox")
+    if index < 0 or not isinstance(covering, dict):
+        msg = (
+            "The mirror carries no bbox covering column declared in its GeoParquet "
+            "metadata, so its row groups would hold no spatial statistics."
+        )
+        raise ValueError(msg)
+    if table.schema.field(index).type == _BBOX_STRUCT:
+        return table
+    field = pa.field("bbox", _BBOX_STRUCT)
+    return table.set_column(index, field, table.column("bbox").cast(_BBOX_STRUCT))
+
+
+def _hilbert_sorted(table: pa.Table) -> pa.Table:
+    """Sort rows along a Hilbert curve over the bbox centres.
+
+    The curve is laid over the table's own total bounds, so the ordering is
+    scale-free: a Swiss year and an Alpine one are each ordered across their own
+    extent. Rows without a bbox have no position and cannot be out of spatial
+    order, so they go last rather than anywhere in particular.
+    """
+    bbox = table.column("bbox").combine_chunks()
+    corners = {
+        corner: bbox.field(corner).to_numpy(zero_copy_only=False) for corner in _BBOX_CORNERS
+    }
+    centre_x = (corners["xmin"] + corners["xmax"]) / 2
+    centre_y = (corners["ymin"] + corners["ymax"]) / 2
+    placed = np.isfinite(centre_x) & np.isfinite(centre_y)
+    if not placed.any():
+        return table
+    cells = 2**HILBERT_ORDER - 1
+    grid_x = _grid_coordinates(centre_x, placed, cells)
+    grid_y = _grid_coordinates(centre_y, placed, cells)
+    # 4**16 - 1 is the last cell on the curve, so the unplaced rows' key is one
+    # past it and sorts them last; both fit an int64 many times over.
+    keys = np.full(table.num_rows, 4**HILBERT_ORDER, dtype=np.int64)
+    keys[placed] = [
+        hilbert_index(int(x), int(y)) for x, y in zip(grid_x[placed], grid_y[placed], strict=True)
+    ]
+    order = np.argsort(keys, kind="stable")
+    return table.take(pa.array(order))
+
+
+def _grid_coordinates(values: np.ndarray, placed: np.ndarray, cells: int) -> np.ndarray:
+    """Map coordinates onto ``[0, cells]`` over the extent of the placed ones."""
+    low, high = values[placed].min(), values[placed].max()
+    span = high - low
+    if span <= 0:
+        return np.zeros(values.shape, dtype=np.int64)
+    scaled = np.rint((values - low) / span * cells)
+    return np.clip(np.nan_to_num(scaled), 0, cells).astype(np.int64)
+
+
+def _write_mirror(
+    table: pa.Table,
+    out_path: Path | UPath,
+    *,
+    row_group_size: int = MIRROR_ROW_GROUP_SIZE,
+) -> None:
+    """Write one item mirror, locally or on the object store.
+
+    The single writer for every parquet this module produces, because the
+    GeoParquet rules Portolan enforces (``PTL-DAT-006`` to ``PTL-DAT-008``) are
+    properties of the file, not of which mirror it happens to be: spatially
+    ordered rows, a bbox covering column, bounded row groups, and per-row-group
+    statistics over that column's four leaves. ``write_statistics`` is on by
+    default and is passed explicitly because the file is worthless without it.
+
+    Parameters
+    ----------
+    table
+        Rows to write, carrying the GeoParquet schema metadata.
+    out_path
+        Destination parquet file.
+    row_group_size
+        Rows per row group. The default is the store's; a caller passes a
+        smaller one only to reach several groups over a handful of rows.
+    """
+    table = _with_covering_bbox(table)
+    table = _hilbert_sorted(table)
     out_path = UPath(out_path)
     with out_path.open("wb") as handle:
-        pq.write_table(table, handle)
+        pq.write_table(table, handle, row_group_size=row_group_size, write_statistics=True)
 
 
 def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) -> dict[str, str]:
