@@ -371,9 +371,11 @@ def step_items(
         assets=mosaic_assets(state, frame),
         build_fingerprint=build_fingerprint,
     )
+    grid = scope.analysis_grid
     mosaic_item.properties["description"] = (
-        f"Annual mosaics of the GLACE composites for {args.year}, on the canonical "
-        "WebMercatorQuad grid every year of this collection shares."
+        f"Annual mosaics of the GLACE composites for {args.year}, on the fixed "
+        f"equal-area grid ({grid.crs}, {grid.resolution:g} m) every year of this "
+        "collection shares."
     )
 
     with tempfile.TemporaryDirectory() as tmp:

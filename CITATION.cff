@@ -15,8 +15,8 @@ abstract: >-
   is dominated by the acquisitions that resolve it best rather than by whichever
   orbit happened to observe it most often. Two collections are published:
   per-tile composites on the 10 m MGRS grid for analysis and machine learning,
-  and one annual mosaic per year on a fixed WebMercator grid for mapping and
-  inspection.
+  and one annual mosaic per year on a fixed equal-area grid (ETRS89-LAEA, 40 m)
+  for mapping, inspection and area statistics.
 authors:
   - family-names: Gentner
     given-names: Luis Q.
