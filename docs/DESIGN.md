@@ -297,8 +297,11 @@ bytes against a cited release.
 
 One version string per release. `DATASET_VERSION` in
 `src/glace_catalog/stac/items.py` is the source of truth; the STAC `version` on
-both collections and every item equals it, `CITATION.cff` repeats it, the git tag
-is `v{DATASET_VERSION}`, and `tests/test_version.py` fails if the four disagree.
+both collections repeats it, so does `CITATION.cff`, and the git tag is
+`v{DATASET_VERSION}`. `tests/test_version.py` fails if those four places
+disagree. Items are not among them because they cannot: `build_tile_item` and
+`build_mosaic_item` default their `version` argument to `DATASET_VERSION`, so an
+item carries the same string by construction.
 
 The release procedure, run by hand. Zenodo's GitHub bridge has to be enabled for
 this repository on zenodo.org by its owner before step 8 mints anything.
@@ -403,7 +406,7 @@ struck through — git holds them.
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | PMTiles are registered at collection level only. `build_mosaic_item` has no `pmtiles` parameter and items carry no `rel: "pmtiles"` link | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7,<0.8` from PyPI | 6 |
-| R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is deleted; the `ch` scope's default root stays that value and the fresh build lands there | 4 |
+| R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the `ch` scope's default root stays that value and the fresh build lands there once it is empty | 4 |
 | R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py` | 4 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |

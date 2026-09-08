@@ -77,13 +77,19 @@ live in the profile named in `catalog.publish.yaml`.
 
 Compute the per-tile glacier cover. It is measured once and reused by every
 year, so a tile cannot end up with different values in different years. The
-script lives in `deep-glacier-mapping`, which owns the inventories it reads:
+script lives in `deep-glacier-mapping`, which owns the inventories it reads, and
+**runs from that checkout** — it imports `glacier_mapping`, which this project's
+environment does not have:
 
 ```bash
-uv run --env-file .env python ../deep-glacier-mapping/scripts/inventories/derive-glacier-fractions.py \
+cd ../deep-glacier-mapping
+uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
     --scope ch --perimeter-tiles 143 \
-    --out "$GLACE_STORE_ROOT/tiles/glacier-fractions.parquet"
+    --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet
 ```
+
+Write the `--out` prefix in full: that checkout's `.env` does not define
+`GLACE_STORE_ROOT`, and the value has to match this repository's.
 
 ### 2. Once per year
 

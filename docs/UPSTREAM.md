@@ -35,10 +35,13 @@ The perimeter is passed as a tile count rather than imported, and the output
 belongs in the store the catalog publishes:
 
 ```bash
-uv run python scripts/inventories/derive-glacier-fractions.py \
+uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
     --scope ch --perimeter-tiles 143 \
-    --out "$GLACE_STORE_ROOT/tiles/glacier-fractions.parquet"
+    --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet
 ```
+
+Run it from your checkout, and write the prefix in full: it is the catalog's
+`GLACE_STORE_ROOT`, which your `.env` does not define.
 
 ## D-3 — The labels are yours, and are not a catalog
 
@@ -121,7 +124,7 @@ mismatches and the `file:checksum` of a published item verifies under
 | the `restat` retrofit for old composites | Superseded: the Swiss 2021–2024 archives were **regenerated** with s1bursts 0.5.0, because 0.4.0 had already changed median aggregation and QA-CQM. Verified here 2026-09-08 |
 | the pass-direction tag | `PASS_DIRECTION` (CEOS-ARD PFS SAR wording), published as `glace:pass_direction`. Fixed here 2026-09-04 |
 | **F-2** `subprocess_s3_env` | Moved into `freezebase/s3.py` beside `s3_env`; `glace_catalog.gdal_s3` deleted, 2026-09-04 |
-| **F-3** the VRT helpers | `freezebase/vrt.py`, in use by the mosaic chain |
+| **F-3** the VRT helpers | `freezebase/vrt.py`, released in freezebase 0.7.0 on 2026-09-04 and in use by the mosaic chain |
 | **F-4** cut releases, drop the editable overrides | freezebase 0.7.0 and s1bursts 0.5.0 are on PyPI; this repository floors `freezebase[s3]>=0.7,<0.8` and has no `[tool.uv.sources]`, 2026-09-08 |
 | **D-2** delete the pipeline copied out of `deep-glacier-mapping` | Done 2026-09-05. `rasterize-labels.py`, `derive-glacier-fractions.py` and `export-inventories.py` stayed there, under `scripts/inventories/` |
 

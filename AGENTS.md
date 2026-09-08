@@ -56,7 +56,7 @@ about.
 ## Gates
 
 ```bash
-python3 tests/run_all.py
+uv run python3 tests/run_all.py
 ```
 
 `tests/test_lint.py` runs `ruff format --check`, `ruff check` and `pyrefly
@@ -89,9 +89,10 @@ findings are structural consequences of that and are recorded in
   deployment target is diff noise and a merge conflict waiting to happen.
 - **Renderings are never `data`.** Every COG in the catalog is linear; the only
   display pixels are inside the PMTiles archives, which are 8-bit codes under a
-  fixed stretch and, for backscatter and QA-CQM, in decibels. They are registered
-  as `rel: "pmtiles"` links and `style` assets, never as a `data` asset, because
-  marking one `data` would let an analysis pipeline read a picture.
+  fixed stretch and, for backscatter and QA-CQM, in decibels. Each archive is
+  registered as a collection-level `rel: "pmtiles"` link, and the MapLibre style
+  beside it is a collection asset with the `style` role. Neither is ever a `data`
+  asset: marking one would let an analysis pipeline read a picture.
 
 ## Related repositories
 
