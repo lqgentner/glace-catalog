@@ -181,17 +181,23 @@ def pixel_bounds(bbox: Bbox, zoom: int) -> tuple[float, float, float, float]:
 
 
 def choose_zoom(bbox: Bbox, *, width: int, min_zoom: int, max_zoom: int) -> int:
-    """Highest zoom in an archive at which ``bbox`` is no wider than ``width`` pixels.
+    """Coarsest zoom in an archive at which ``bbox`` is at least ``width`` pixels wide.
 
-    Fetching a level finer than the output would download tiles only to throw
-    their detail away. If even the coarsest level in the archive is wider than
-    the output, that level is used and the crop is downsampled.
+    Downsampling loses nothing a viewer can see; upsampling invents nothing and
+    shows it, so the level read is the first one that already carries every
+    output pixel. Going finer still would only download tiles to throw their
+    detail away -- for the Swiss display extent the difference is z9's 24 tiles
+    against z10's 88, for the same 1200 px picture.
+
+    If even the archive's finest level is narrower than the output -- a small
+    box, such as a single MGRS tile at the maximum zoom -- that level is used
+    and the crop is scaled up, because there is nothing better to read.
     """
-    for zoom in range(max_zoom, min_zoom, -1):
+    for zoom in range(min_zoom, max_zoom):
         left, _, right, _ = pixel_bounds(bbox, zoom)
-        if right - left <= width:
+        if right - left >= width:
             return zoom
-    return min_zoom
+    return max_zoom
 
 
 @contextmanager
@@ -223,14 +229,14 @@ def _paste_tiles(
     header: HeaderDict,
     zoom: int,
     bounds: tuple[float, float, float, float],
-) -> tuple[Image.Image, tuple[int, int]]:
+) -> tuple[Image.Image, tuple[int, int], int]:
     """Composite every archive tile covering ``bounds`` onto a transparent canvas.
 
     Returns
     -------
     tuple
-        The canvas, and its own upper-left corner in pixels from the matrix
-        origin, so a caller can place ``bounds`` on it.
+        The canvas, its own upper-left corner in pixels from the matrix origin
+        so a caller can place ``bounds`` on it, and how many tiles were found.
     """
     left, top, right, bottom = bounds
     last = 2**zoom - 1
@@ -261,13 +267,8 @@ def _paste_tiles(
                 (x * TILE_PX - origin[0], y * TILE_PX - origin[1]),
             )
             found += 1
-    logger.debug(
-        "z%d: %d of %d tile(s) present",
-        zoom,
-        found,
-        len(x_range) * len(y_range),
-    )
-    return canvas, origin
+    logger.info("z%d: %d of %d tile(s) present", zoom, found, len(x_range) * len(y_range))
+    return canvas, origin, found
 
 
 def render_from_pmtiles(
@@ -298,7 +299,11 @@ def render_from_pmtiles(
     Raises
     ------
     ValueError
-        If the archive holds vector tiles, which are not an image.
+        If the archive holds vector tiles, which are not an image, or if not one
+        tile covering ``bbox_wgs84`` is in it. The second is the failure worth
+        catching: an empty read returns a perfectly valid fully transparent
+        picture, which would be published, checksummed and validated without a
+        word.
     """
     with _range_reader(archive) as get_bytes:
         reader = Reader(get_bytes)
@@ -314,17 +319,30 @@ def render_from_pmtiles(
             max_zoom=header["max_zoom"],
         )
         bounds = pixel_bounds(bbox_wgs84, zoom)
-        canvas, origin = _paste_tiles(reader, header, zoom, bounds)
+        canvas, origin, found = _paste_tiles(reader, header, zoom, bounds)
+
+    if not found:
+        msg = (
+            f"{archive} holds no tile covering {bbox_wgs84} at z{zoom}; "
+            "the box misses the archive's coverage, or the level is empty."
+        )
+        raise ValueError(msg)
 
     left, top, right, bottom = bounds
     height = max(1, round(width * (bottom - top) / (right - left)))
     # Crop and rescale in one resampling pass: `box` takes the fractional crop
     # in source pixels, so the frame is not first rounded to a whole pixel.
-    return canvas.resize(
+    #
+    # Through premultiplied alpha, so the transparent canvas behind the data
+    # cannot bleed a dark fringe into the edge of the perimeter. Pillow 12.3
+    # premultiplies internally and gives the same pixels either way; saying it
+    # here does not depend on that staying true.
+    scaled = canvas.convert("RGBa").resize(
         (width, height),
         Image.Resampling.LANCZOS,
         box=(left - origin[0], top - origin[1], right - origin[0], bottom - origin[1]),
     )
+    return scaled.convert("RGBA")
 
 
 def write_collection_thumbnails(
@@ -347,6 +365,14 @@ def write_collection_thumbnails(
         Published year to draw; normally the most recent one.
     scope
         Scope the store covers, for the mosaics collection's extent.
+
+    Raises
+    ------
+    ValueError
+        If either image comes back with nothing drawn on it. A blank thumbnail
+        is a publication failure that looks like a success everywhere else: the
+        PNG is valid, the checksum is over real bytes, and the collection
+        validates.
     """
     archive = layout.pmtiles(year) / f"{THUMBNAIL_LAYER}.pmtiles"
     if not archive.exists():
@@ -358,6 +384,9 @@ def write_collection_thumbnails(
         (layout.tiles_thumbnail, tile_bbox(THUMBNAIL_TILE)),
     ):
         image = render_from_pmtiles(archive, frame_3_2(bbox))
+        if image.getchannel("A").getextrema()[1] == 0:
+            msg = f"{destination} would be blank: nothing inside {bbox} is drawn in {archive}."
+            raise ValueError(msg)
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         payload = buffer.getvalue()

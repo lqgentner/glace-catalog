@@ -179,6 +179,18 @@ def contains(outer: Bbox, inner: Bbox) -> bool:
     )
 
 
+def refuses_empty_coverage(archive: Path) -> bool:
+    """Whether a box outside the archive's tiles is refused rather than drawn blank."""
+    west, south, east, north = block_bbox()
+    span = east - west
+    elsewhere: Bbox = (west + 4 * span, south, east + 4 * span, north)
+    try:
+        render_from_pmtiles(archive, elsewhere, width=2 * TILE_PX)
+    except ValueError:
+        return True
+    return False
+
+
 def _rendering_checks(archive: Path) -> dict[str, bool]:
     """Render the synthetic archive at three widths and check what came back."""
     bbox = block_bbox()
@@ -199,16 +211,23 @@ def _rendering_checks(archive: Path) -> dict[str, bool]:
     return {
         "the archive renders at its own zoom without scaling": native.size
         == (2 * TILE_PX, 2 * TILE_PX),
-        "a half-width render falls back to the coarser zoom": choose_zoom(
+        "a half-width render reads the coarse level, which already fills it": choose_zoom(
             bbox,
             width=TILE_PX,
             min_zoom=ZOOM - 1,
             max_zoom=ZOOM,
         )
         == ZOOM - 1,
-        "the finest zoom that fits the width is the one read": choose_zoom(
+        "a width the coarse level cannot fill reads the fine one": choose_zoom(
             bbox,
-            width=2 * TILE_PX,
+            width=TILE_PX + 44,
+            min_zoom=ZOOM - 1,
+            max_zoom=ZOOM,
+        )
+        == ZOOM,
+        "a width no level reaches reads the finest there is": choose_zoom(
+            bbox,
+            width=4 * TILE_PX,
             min_zoom=ZOOM - 1,
             max_zoom=ZOOM,
         )
@@ -226,9 +245,16 @@ def _rendering_checks(archive: Path) -> dict[str, bool]:
             close_to(framed, centre, color)
             for centre, color in zip(framed_centres, QUADRANTS, strict=True)
         ),
+        "a box the archive does not cover is refused": refuses_empty_coverage(archive),
         "the margins a frame adds are transparent": all(
             sample(framed, xy)[3] == 0 for xy in ((20, 400), (1180, 400))
         ),
+        # A margin sampled only at its middle would tolerate the frame being a
+        # hundred pixels out; sampling either side of the boundary pins it.
+        "the frame's edge is where the arithmetic puts it": all(
+            sample(framed, (x, 300))[3] == 0 for x in (195, 1005)
+        )
+        and all(sample(framed, (x, 300))[3] == OPAQUE for x in (205, 995)),
     }
 
 
