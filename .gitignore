@@ -54,7 +54,3 @@ catalog/**/thumbnail.png
 # uv
 .venv/
 
-# mypy daemon status files
-.dmypy.json
-.dmypy-*.json
-.mypy_cache/
