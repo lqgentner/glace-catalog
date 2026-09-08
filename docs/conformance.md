@@ -87,8 +87,10 @@ consumer at. Revisit if browsing the published tree proves genuinely painful.
 ### `PTL-AST-003` — `file:size` and `file:checksum` on collection assets
 
 *"every asset should carry file:size and file:checksum."* The collection-level
-assets (`items`, `glacier-fractions`, `thumbnail`) point at generated files whose
-bytes do not exist when the collection document is written by hand.
+assets (`items`, `glacier-fractions`, `thumbnail`, `style-default`) point at
+generated files whose bytes do not exist when the collection document is written
+by hand -- the style included, since the year in its `pmtiles://` sources is
+rewritten at finalize time, so the published bytes are not the tracked ones.
 `finalize-catalog.py` fills both fields from the real bytes — on the **store
 copy** of the document, which is what is published; the tracked document keeps
 the fields absent, and an asset whose bytes are missing at finalize time is

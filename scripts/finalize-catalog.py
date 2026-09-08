@@ -188,7 +188,7 @@ def patch_collections(
     return patched
 
 
-def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
+def repoint_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
     """Point every MapLibre style at the most recent published year.
 
     The styles are tracked source — their colours, opacity and legend blocks are
@@ -200,12 +200,14 @@ def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
 
     Returns
     -------
-    int
-        Number of style files written.
+    dict[str, pathlib.Path]
+        Staged path per style asset key, e.g. ``{"style-default": …}``. The
+        collection declares its digest over these bytes, not over the tracked
+        ones, so the caller needs to know where they landed.
     """
     out = staged / MOSAICS_DIR / "styles"
     out.mkdir(parents=True, exist_ok=True)
-    written = 0
+    written: dict[str, Path] = {}
     for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json")):
         style = json.loads(path.read_text())
         # Every source, not just one: `default.json` declares one per published
@@ -217,8 +219,8 @@ def repoint_styles(source_dir: Path, staged: Path, latest: int) -> int:
         for layer in style.get("layers", []):
             layer["id"] = re.sub(r"-\d{4}$", f"-{latest}", layer["id"])
         (out / path.name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
-        written += 1
-    logger.info("Repointed %d style(s) at %d", written, latest)
+        written[f"style-{path.stem}"] = out / path.name
+    logger.info("Repointed %d style(s) at %d", len(written), latest)
     return written
 
 
@@ -284,16 +286,12 @@ def write_documents(
             json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
         )
 
-        for directory, document in documents.items():
-            path = staged / directory / "collection.json"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
-
         # The prose travels with the documents that link it: PTL-FIL-001 wants
         # both files in every catalog and collection directory.
         for name in ("README.md", "AGENTS.md"):
             (staged / name).write_bytes((source_dir / name).read_bytes())
             for directory in documents:
+                (staged / directory).mkdir(parents=True, exist_ok=True)
                 (staged / directory / name).write_bytes(
                     (source_dir / directory / name).read_bytes(),
                 )
@@ -309,7 +307,16 @@ def write_documents(
                 if path.is_file():
                     (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
 
-        repoint_styles(source_dir, staged, latest)
+        # Before the documents are written: the mosaics collection declares a
+        # digest over the style it links, and the bytes a reader downloads are
+        # the repointed ones -- the tracked file names a different year.
+        stamp_style_assets(documents, repoint_styles(source_dir, staged, latest))
+
+        for directory, document in documents.items():
+            path = staged / directory / "collection.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
+
         upload_tree(staged, layout.root)
 
 
@@ -318,9 +325,10 @@ def stamped_asset_paths(
 ) -> dict[str, dict[str, Path | UPath]]:
     """Where each collection-level asset this run measures keeps its bytes.
 
-    Only the assets whose bytes this run writes are listed. The style
-    registration is not among them: the styles are staged and uploaded with the
-    documents, so at the moment a document is written they do not yet exist.
+    Only the assets whose bytes already sit in the store are listed. The styles
+    are not among them: they are staged and uploaded with the documents, so at
+    this point they do not yet exist -- :func:`stamp_style_assets` measures them
+    where they are written.
     """
     return {
         TILES_DIR: {
@@ -333,6 +341,29 @@ def stamped_asset_paths(
             "thumbnail": layout.mosaics_thumbnail,
         },
     }
+
+
+def stamp_style_assets(
+    documents: Mapping[str, Document],
+    styles: Mapping[str, Path],
+) -> None:
+    """Fill ``file:size`` and ``file:checksum`` on the staged MapLibre styles.
+
+    The style is the one collection asset whose published bytes are written
+    during this very run and differ from the tracked file: :func:`repoint_styles`
+    rewrites the year in every ``pmtiles://`` source, so the digest has to be of
+    the repointed copy. It is measured here rather than in
+    :func:`stamp_collection_assets`, which runs before the styles are staged.
+    """
+    for key, path in sorted(styles.items()):
+        asset = documents.get(MOSAICS_DIR, {}).get("assets", {}).get(key)
+        if asset is None:
+            logger.warning("%s declares no %s asset for %s", MOSAICS_DIR, key, path.name)
+            continue
+        payload = path.read_bytes()
+        asset["file:size"] = len(payload)
+        asset["file:checksum"] = multihash_sha256(payload)
+        logger.info("Stamped %s/%s: %d bytes", MOSAICS_DIR, key, len(payload))
 
 
 def stamp_collection_assets(

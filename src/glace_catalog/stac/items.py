@@ -461,6 +461,9 @@ class MosaicAsset:
         Media type of the file.
     size
         File size in bytes, if known.
+    checksum
+        Multihash-encoded sha256 of the file, published as ``file:checksum``
+        (``PTL-AST-003``). Measured on the staged bytes before upload.
     band
         Single-band description, for a raster asset.
     extra
@@ -473,6 +476,7 @@ class MosaicAsset:
     roles: list[str]
     media_type: str = pystac.MediaType.COG
     size: int | None = None
+    checksum: str | None = None
     band: dict[str, Any] | None = None
     extra: dict[str, Any] = dc_field(default_factory=dict)
 
@@ -488,6 +492,8 @@ class MosaicAsset:
             asset.extra_fields["bands"] = [self.band]
         if self.size is not None:
             asset.extra_fields["file:size"] = self.size
+        if self.checksum is not None:
+            asset.extra_fields["file:checksum"] = self.checksum
         asset.extra_fields.update(self.extra)
         return asset
 

@@ -101,7 +101,7 @@ def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
     return False
 
 
-def _mosaic_item() -> pystac.Item:
+def _mosaic_item(checksum: str | None = None) -> pystac.Item:
     """Build one year's mosaic item over a single asset."""
     return build_mosaic_item(
         get_scope("ch"),
@@ -110,7 +110,14 @@ def _mosaic_item() -> pystac.Item:
         bbox=[6.0, 45.8, 10.5, 47.8],
         start=datetime(2023, 7, 18, tzinfo=UTC),
         end=datetime(2023, 10, 16, tzinfo=UTC),
-        assets={"coh12_vv": MosaicAsset(href="coh12_vv.tif", title="x", roles=["data"])},
+        assets={
+            "coh12_vv": MosaicAsset(
+                href="coh12_vv.tif",
+                title="x",
+                roles=["data"],
+                checksum=checksum,
+            ),
+        },
     )
 
 
@@ -170,6 +177,16 @@ def main() -> int:
     checks["the mosaic item links no PMTiles archive"] = not mosaic.get_links("pmtiles")
     checks["the mosaic item declares no web-map-links extension"] = not any(
         "web-map-links" in uri for uri in mosaic.stac_extensions
+    )
+    # PTL-AST-003 wants a digest on every asset whose bytes the run wrote; the
+    # mosaics are hashed as they are staged, and an unmeasured asset says nothing
+    # rather than guessing.
+    digest = "1220" + "ab" * 32
+    checks["a measured mosaic asset publishes its digest"] = (
+        _mosaic_item(digest).assets["coh12_vv"].extra_fields.get("file:checksum") == digest
+    )
+    checks["an unmeasured one carries no digest field"] = (
+        "file:checksum" not in mosaic.assets["coh12_vv"].extra_fields
     )
     checks["the published range is the helper's"] = published_time_range(
         (date(2023, 7, 18), date(2023, 10, 15))

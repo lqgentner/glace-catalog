@@ -444,6 +444,7 @@ def mosaic_assets(
             title=f"{asset_key} annual mosaic",
             roles=["quality"] if "_qa_" in asset_key else ["data", "cloud-optimized"],
             size=detail.get("size"),
+            checksum=detail.get("checksum"),
             band=band,
             extra={"raster:spatial_resolution": detail.get("resolution")},
         )
