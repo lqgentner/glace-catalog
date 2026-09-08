@@ -23,6 +23,7 @@ half-way through a year.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from freezebase.s3 import make_s3_upath
 from freezebase.utils import get_cache_dir
@@ -50,9 +51,12 @@ class S3Settings(BaseSettings):
     profile: str | None = None
 
     # boto3 >=1.36 defaults to "when_supported", which adds x-amz-checksum-*
-    # trailers that the UZH Ceph gateway rejects.
-    request_checksum_calculation: str = "when_required"
-    response_checksum_validation: str = "when_required"
+    # trailers that the UZH Ceph gateway rejects. Typed as the two values
+    # botocore accepts, so a typo in the environment is refused here rather
+    # than by a signing failure half-way through a copy, and so the values can
+    # be handed to `botocore.config.Config` without a cast.
+    request_checksum_calculation: Literal["when_required", "when_supported"] = "when_required"
+    response_checksum_validation: Literal["when_required", "when_supported"] = "when_required"
 
 
 class StoreSettings(BaseSettings):

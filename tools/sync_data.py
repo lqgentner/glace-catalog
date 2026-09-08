@@ -39,6 +39,8 @@ import sys
 from typing import IO, TYPE_CHECKING, Any, Protocol
 
 import boto3
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from tqdm import tqdm
 from upath import UPath
 import yaml
@@ -431,14 +433,48 @@ def transfer(
         return [name for name in moved if name is not None]
 
 
-def source_client() -> SourceClient:
+def gateway_config() -> Config:
+    """Botocore configuration for the private gateway, from ``GLACIERS_S3_*``.
+
+    All four ``GLACIERS_S3_*`` knobs have to reach the client, not just the
+    profile and the endpoint: boto3 >= 1.36 defaults both checksum settings to
+    ``when_supported``, which puts ``x-amz-checksum`` trailers on the wire and a
+    ``ChecksumMode`` header on ``GetObject``, and the UZH Ceph gateway rejects
+    them. ``config.py`` hands the same two values to ``make_s3_upath`` for the
+    listing side, so this is what keeps the reads and the listing speaking the
+    same dialect.
+    """
+    return Config(
+        request_checksum_calculation=settings.s3.request_checksum_calculation,
+        response_checksum_validation=settings.s3.response_checksum_validation,
+    )
+
+
+def source_client(session: Any = None) -> SourceClient:
     """Build the read client for the private gateway from ``GLACIERS_S3_*``.
 
-    The same profile and endpoint the store's :class:`~upath.UPath` carries, so
-    the listing and the reads cannot end up authenticated differently.
+    The same profile, endpoint and checksum settings the store's
+    :class:`~upath.UPath` carries, so the listing and the reads cannot end up
+    authenticated or encoded differently.
+
+    Parameters
+    ----------
+    session
+        Session to build the client from. Defaults to the configured profile's;
+        the gate passes a recording stand-in rather than opening a socket.
+
+    Returns
+    -------
+    SourceClient
+        Client for ``GetObject`` against the private bucket.
     """
-    session = boto3.Session(profile_name=settings.s3.profile)
-    return session.client("s3", endpoint_url=settings.s3.endpoint_url)
+    if session is None:
+        session = boto3.Session(profile_name=settings.s3.profile)
+    return session.client(
+        "s3",
+        endpoint_url=settings.s3.endpoint_url,
+        config=gateway_config(),
+    )
 
 
 def target_client(target: Target) -> TargetClient:
@@ -446,10 +482,31 @@ def target_client(target: Target) -> TargetClient:
 
     No ``endpoint_url`` is passed: the profile carries the S3 proxy's endpoint,
     and it is that endpoint which makes the bucket the account name and the key
-    start with the product.
+    start with the product. No checksum overrides either -- those exist for the
+    UZH gateway, and the proxy was verified against a client with boto3's
+    defaults.
     """
     session = boto3.Session(profile_name=target.profile)
     return session.client("s3")
+
+
+def positive_int(raw: str) -> int:
+    """Parse a pool size, refusing zero and below.
+
+    Raises
+    ------
+    argparse.ArgumentTypeError
+        If ``raw`` is not a whole number of at least one.
+    """
+    try:
+        value = int(raw)
+    except ValueError:
+        msg = f"{raw} is not a whole number."
+        raise argparse.ArgumentTypeError(msg) from None
+    if value < 1:
+        msg = f"{value} is not a usable pool size; give at least 1."
+        raise argparse.ArgumentTypeError(msg)
+    return value
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -467,7 +524,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--workers",
-        type=int,
+        type=positive_int,
         default=DEFAULT_WORKERS,
         help=f"size of the transfer pool (default {DEFAULT_WORKERS})",
     )
@@ -479,22 +536,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     subtree = args.prefix.strip("/")
 
+    # Everything up to the plan is configuration and two remote listings, and
+    # every way they fail -- an absent profile, a rejected credential, an
+    # unreachable endpoint -- is a message for the person running this, not a
+    # traceback.
     try:
         target = read_target()
         root = bucket_root(settings.store_root)
-    except (OSError, ValueError) as error:
+        source_bucket, source_prefix = split_s3_uri(str(root))
+        listing_root = root / subtree if subtree else root
+        listed = list_objects_recursive(listing_root)
+        client = target_client(target)
+        published = list_published(client, target, subtree)
+    except (BotoCoreError, ClientError, OSError, ValueError) as error:
         print(f"error  {error}", file=sys.stderr)
         return 1
 
-    source_bucket, source_prefix = split_s3_uri(str(root))
-    listed = list_objects_recursive(root / subtree if subtree else root)
     source = {f"{subtree}/{name}" if subtree else name: size for name, size in listed.items()}
-
-    client = target_client(target)
-    published = list_published(client, target, subtree)
     plan = plan_sync(source, published, force=args.force)
-    for line in summary_lines(plan, str(root / subtree if subtree else root), target):
+    for line in summary_lines(plan, str(listing_root), target):
         print(line)
+    if not source:
+        print(f"note   {listing_root} holds no objects; check --prefix and the store root")
 
     if not args.confirm:
         print("\ndry run; re-run with --confirm to upload")

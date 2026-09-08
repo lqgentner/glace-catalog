@@ -17,6 +17,7 @@ Run: python3 tests/test_sync_data.py
 
 from __future__ import annotations
 
+from argparse import ArgumentTypeError
 from contextlib import redirect_stderr
 from io import BytesIO, StringIO
 import os
@@ -34,6 +35,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault("GLACE_SOURCE_ROOT", str(ROOT / "does-not-exist" / "source"))
 os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
 
+from botocore.exceptions import ProfileNotFound  # noqa: E402
 import sync_data  # noqa: E402
 
 if TYPE_CHECKING:
@@ -302,6 +304,97 @@ def check_failure_is_reported() -> dict[str, bool]:
     }
 
 
+class FakeSession:
+    """A boto3 session recording what a client would be built from."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def client(self, service_name: str, **kwargs: Any) -> FakeSource:
+        """Record the request and hand back something client-shaped."""
+        self.calls.append((service_name, kwargs))
+        return FakeSource()
+
+
+def check_source_client_config() -> dict[str, bool]:
+    """Check that all four gateway knobs reach the client, not just two.
+
+    boto3 >= 1.36 sends ``x-amz-checksum`` trailers and a ``ChecksumMode``
+    header unless told otherwise, and the UZH Ceph gateway rejects both. The
+    listing side gets the settings through ``make_s3_upath``; this is the read
+    side getting the same ones.
+    """
+    session = FakeSession()
+    sync_data.source_client(session)
+    service, kwargs = session.calls[0]
+    config = kwargs.get("config")
+    return {
+        "the client is built once, for s3": len(session.calls) == 1 and service == "s3",
+        "the endpoint comes from the settings": kwargs.get("endpoint_url")
+        == sync_data.settings.s3.endpoint_url,
+        "the request checksum setting reaches botocore": config is not None
+        and config.request_checksum_calculation
+        == sync_data.settings.s3.request_checksum_calculation
+        == "when_required",
+        "the response checksum setting reaches botocore": config is not None
+        and config.response_checksum_validation
+        == sync_data.settings.s3.response_checksum_validation
+        == "when_required",
+    }
+
+
+def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> sync_data.Target:
+    """Fail the way an absent ``source-coop`` profile does."""
+    del path
+    raise ProfileNotFound(profile="source-coop")
+
+
+def check_setup_failures_are_messages() -> dict[str, bool]:
+    """Check that a missing profile is one line and exit 1, not a traceback.
+
+    Every failure between the configuration and the plan -- an absent profile,
+    a rejected credential, an unreachable endpoint -- reaches a person who has
+    to fix a credential file, so none of them may arrive as a stack trace.
+    """
+    checks: dict[str, bool] = {}
+    original = sync_data.read_target
+    sync_data.read_target = _no_profile
+    reported = StringIO()
+    try:
+        with redirect_stderr(reported):
+            code = sync_data.main([])
+    finally:
+        sync_data.read_target = original
+    message = reported.getvalue()
+    checks["a botocore failure exits non-zero"] = code == 1
+    checks["it prints one line naming the profile"] = (
+        len(message.strip().splitlines()) == 1 and "source-coop" in message
+    )
+
+    # The store root this gate runs with is local, which is the other way the
+    # same guard fires.
+    reported = StringIO()
+    with redirect_stderr(reported):
+        code = sync_data.main([])
+    checks["a local store root exits non-zero"] = code == 1
+    checks["it names GLACE_STORE_ROOT"] = "GLACE_STORE_ROOT" in reported.getvalue()
+    return checks
+
+
+def check_workers_floor() -> dict[str, bool]:
+    """Check that a pool of zero threads is refused at the command line."""
+    checks: dict[str, bool] = {}
+    for raw in ("0", "-4", "many"):
+        try:
+            sync_data.positive_int(raw)
+        except ArgumentTypeError:
+            checks[f"--workers {raw} is refused"] = True
+        else:
+            checks[f"--workers {raw} is refused"] = False
+    checks["--workers 4 is a pool of four"] = sync_data.positive_int("4") == 4
+    return checks
+
+
 DRY_RUN = """\
 source:  s3://s1-bursts/data/glace-ch
 target:  s3://lqgentner/glace-ch  (profile source-coop)
@@ -343,6 +436,9 @@ def main() -> int:
         check_local_root,
         check_listing_and_transfer,
         check_failure_is_reported,
+        check_source_client_config,
+        check_setup_failures_are_messages,
+        check_workers_floor,
         check_summary,
     ):
         checks.update(group())
