@@ -30,11 +30,18 @@ same collection documents that are committed here:
 0 error(s), 15 warning(s), 0 info(s) across 30 files     # 25-item year
 ```
 
-Re-run this against the built store before every publication:
+Re-run this against the built store before every publication. rashid takes a
+local catalog directory only, so mirror the store's documents first (the asset
+hrefs are absolute public URLs, so the bytes checked are the published ones):
 
 ```bash
-rashid check "$GLACE_STORE_ROOT" --schema --data
+uv run --env-file .env python tools/mirror_docs.py /tmp/glace-docs
+uv run rashid check /tmp/glace-docs --schema --data --live \
+    --live-base-url https://data.source.coop/lqgentner/glace-ch
 ```
+
+Run on 2026-09-08 over the four published Swiss years: 0 errors, 4 warnings
+(`PTL-CAT-001`, accepted below) across 583 files.
 
 ## Accepted Deviations
 
@@ -146,4 +153,4 @@ tested rather than assumed. Open work is tracked in [`STATUS.md`](STATUS.md).
 | `PTL-DAT-010` | a COG band with nodata declares its valid percent | **satisfied for both writers**, from the same headers and the same pass; the publisher keys the QA-NUM count to the data asset it counts for, and every mosaic band is float32 with a NaN sentinel |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks and fails when the ordering is removed |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **implemented and gated**, through rashid's `_check_mirror` over an in-memory catalog graph of 400 and then 800 items |
-| `PTL-LIV-001..005` | the host honours range requests and CORS | **untested.** Source Cooperative is expected to satisfy it — a manual check returned 206 for a range request — and `rashid check --live` against `public_base` is what will say so (STATUS.md P-4) |
+| `PTL-LIV-001..005` | the host honours range requests and CORS | **passes** on Source Cooperative: `rashid check --live` over the published Swiss catalog, 2026-09-08, 0 errors |

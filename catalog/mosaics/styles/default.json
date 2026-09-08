@@ -136,12 +136,12 @@
           "measured": false,
           "channels": [
             {
-              "band": "COH12 VV",
+              "band": "VV",
               "vmin": 0.1,
               "vmax": 0.8
             },
             {
-              "band": "COH12 VH",
+              "band": "VH",
               "vmin": 0.1,
               "vmax": 0.6
             },
@@ -393,12 +393,12 @@
           "measured": false,
           "channels": [
             {
-              "band": "RTC VV",
+              "band": "VV",
               "vmin": -18.5,
               "vmax": -5.0
             },
             {
-              "band": "RTC VH",
+              "band": "VH",
               "vmin": -26.0,
               "vmax": -11.0
             },

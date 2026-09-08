@@ -12,10 +12,10 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | catalog documents | root + both collections written, **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)) |
 | gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, links, sync, stac-check, rashid |
 | source composites | Swiss 2021–2024 **regenerated with s1bursts 0.5.0** and verified 2026-09-08 through `load_and_verify_manifest`: 1 716 files across 143 tiles per year, every row carrying a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
-| build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, asset stamps, validate) implemented; never yet run end to end |
+| build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, asset stamps, validate); run end to end over 2021–2024 on 2026-09-08 |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | rendered from the latest year's `coh12_rgb.pmtiles`, gated by `tests/test_thumbnails.py` |
-| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; never yet run against the real target |
+| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published, live rashid 0 errors |
 | published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared |
 | scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps` (DESIGN.md §8) |
 
@@ -32,12 +32,13 @@ Ordered by what blocks what. Everything not listed here is done.
   Cooperative still holds the old flat tree, and publishing never deletes.
   *Verified when* listing that prefix returns nothing.
 - **P-3 — Build the four Swiss years end to end**, then finalize with the public
-  base URL. *Verified when* `rashid check "$GLACE_STORE_ROOT" --schema --data`
-  reports 0 errors over the built tree.
-- **P-4 — Publish, then check the host.** `PTL-LIV-001..005` (range requests,
-  CORS) are untested; Source Cooperative is expected to satisfy them.
-  *Verified when* `rashid check "$GLACE_STORE_ROOT" --live --live-base-url
-  https://data.source.coop/lqgentner/glace-ch` reports 0 errors.
+  base URL. *Done 2026-09-08*: 2021–2024 built and finalized; the
+  `mirror_docs.py` + `rashid check --schema --data` pass in
+  [`conformance.md`](conformance.md) reports 0 errors.
+- **P-4 — Publish, then check the host.** *Done 2026-09-08*: synced with
+  `--force`, and `rashid check --live --live-base-url
+  https://data.source.coop/lqgentner/glace-ch` over the mirrored documents
+  reports 0 errors, so `PTL-LIV-001..005` hold on Source Cooperative.
 - **P-5 — Overview depth at Alpine size.** `PTL-DAT-011` wants overviews down to
   one tile; the Alps mosaic needs more levels than a Swiss test COG produced.
   *Verified when* the mosaic writer asserts the level count and
