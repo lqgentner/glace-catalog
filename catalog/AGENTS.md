@@ -16,7 +16,7 @@ catalog.json
 ├── tiles/collection.json      one item per (MGRS tile, year), 12 COGs each
 │   ├── items.parquet          ← query here, not the tree
 │   └── {year}/catalog.json → {tile}/item.json
-└── mosaics/collection.json    one item per year, 12 analysis + 2 display COGs
+└── mosaics/collection.json    one item per year, 12 analysis COGs + PMTiles
     ├── items.parquet
     └── {year}/item.json
 ```

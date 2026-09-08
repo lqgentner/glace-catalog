@@ -12,8 +12,8 @@
     "https://stac-extensions.github.io/version/v1.2.0/schema.json"
   ],
   "id": "glace-ch-mosaics",
-  "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed WebMercator grid",
-  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto the WebMercatorQuad grid at zoom 13 (19.109 m, about 13.2 m on the ground at 46.5 degrees north). Every year sits on the same fixed grid, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Aligning to the tile matrix also means the COGs' internal overview levels land exactly on zoom 12, 11 and below: each file is itself a tile pyramid, and a browser reading it at low zoom fetches a decimated overview rather than full-resolution pixels it would discard. Twelve single-band analysis rasters per year, in linear units. Drawing is served separately by PMTiles archives registered on this collection, with MapLibre styles alongside them. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
+  "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed equal-area grid",
+  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction; WebMercator, where a nominal 19.109 m pixel is about 13.2 m on the ground at 46.5 degrees north, cannot do that. Every year sits on the same fixed extent, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with 256-pixel blocks and averaged internal overviews. Drawing is served separately by PMTiles archives registered on this collection, tiled on the WebMercatorQuad grid at zoom 13 with MapLibre styles alongside them; both products are resampled from the 10 m tiles, so neither is derived from the other. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -140,7 +140,7 @@
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "coh12_vv",
@@ -156,7 +156,7 @@
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "coh12_vh",
@@ -168,12 +168,12 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "RTC VV annual mosaic",
-      "description": "Linear power. Warp averaging and the internal overviews both average in the linear domain, where the mean is physically meaningful; a decibel raster averaged the same way would give log-domain means below zoom 13 and silently a different quantity from the level above.",
+      "description": "Linear power. Warp averaging and the internal overviews both average in the linear domain, where the mean is physically meaningful; a decibel raster averaged the same way would give log-domain means in every overview level and silently a different quantity from the level above.",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "rtc_vv",
@@ -189,7 +189,7 @@
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "rtc_vh",
@@ -205,7 +205,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "num_obs_mean",
@@ -220,7 +220,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "cqm",
@@ -235,7 +235,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "num_obs_mean",
@@ -250,7 +250,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "cqm",
@@ -265,7 +265,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "num_obs_mean",
@@ -280,7 +280,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "cqm",
@@ -295,7 +295,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "num_obs_mean",
@@ -310,7 +310,7 @@
       "roles": [
         "quality"
       ],
-      "raster:spatial_resolution": 19.109257071294063,
+      "raster:spatial_resolution": 40.0,
       "bands": [
         {
           "name": "cqm",
@@ -340,7 +340,7 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.png",
       "type": "image/png",
       "title": "GLACE mosaics preview",
-      "description": "Rendered from the most recent year's rtc_rgb mosaic under the same fixed stretch the render definitions declare.",
+      "description": "Rendered from the most recent year's coh12_rgb web-map archive, so the preview obeys the committed MapLibre style by construction.",
       "roles": [
         "thumbnail"
       ]

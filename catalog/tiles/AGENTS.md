@@ -67,8 +67,8 @@ both dates inside the window.
 ## Pairing with the mosaics
 
 `glace-ch-mosaics` holds the same measurements warped onto one fixed
-WebMercator grid, one item per year. Join on the year. Do not join on geometry:
-the tiles are per-UTM-zone and the mosaics are WebMercator.
+equal-area grid, one item per year. Join on the year. Do not join on geometry:
+the tiles are per-UTM-zone and the mosaics are ETRS89-LAEA.
 
 ## Gotchas
 

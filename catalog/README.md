@@ -15,7 +15,7 @@ Two collections:
 | collection | one item per | grid | what it is for |
 | --- | --- | --- | --- |
 | [tiles](tiles/) | (MGRS tile, year) | 10 m, MGRS / UTM | analysis, machine learning, per-tile reads |
-| [mosaics](mosaics/) | year | 19.109 m, WebMercatorQuad z13 | mapping, inspection, change over time |
+| [mosaics](mosaics/) | year | 40 m, ETRS89-LAEA (EPSG:3035) | mapping, inspection, change over time |
 
 Both cover the same pixels. The tiles are the archive; the mosaics are one warp
 of it onto a fixed grid that every year shares, so the series stacks and

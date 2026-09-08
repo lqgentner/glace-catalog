@@ -8,8 +8,8 @@ published to [Source Cooperative](https://source.coop/lqgentner) as a
 > **What is published today is `glace-ch`, a rehearsal.** It covers Switzerland
 > and exists to exercise publication while the Alpine composites are produced.
 > The dataset is **`glace-alps`**; every mention of Switzerland in this
-> repository is placeholder text. See [`docs/MIGRATION.md`](docs/MIGRATION.md)
-> §11 for the swap checklist.
+> repository is placeholder text. [`docs/STATUS.md`](docs/STATUS.md) carries the
+> swap checklist and what is still open.
 
 The catalog metadata lives in git so that it has a change history, a review
 step, and a way for someone who spots a wrong license or a bad description to
@@ -22,7 +22,7 @@ src/glace_catalog/ the library that builds it
 scripts/          the build commands
 tools/            sync_data.py, which publishes the built store
 tests/            the gates, incl. rashid conformance
-docs/             MIGRATION.md (living), UPSTREAM.md, conformance.md
+docs/             DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 ```
 
 ## Quick start
@@ -43,9 +43,10 @@ rather than skips.
 | --- | --- |
 | what publishes, and to which bucket | `catalog.publish.yaml` |
 | where the build reads and writes | `GLACE_SOURCE_ROOT`, `GLACE_STORE_ROOT` in `.env` |
-| the layout of a built store, and why | [`docs/MIGRATION.md`](docs/MIGRATION.md) §3 |
+| the layout of a built store, and why | [`docs/DESIGN.md`](docs/DESIGN.md) §2 |
+| every design decision, with its reason | [`docs/DESIGN.md`](docs/DESIGN.md) §9 |
+| what is done and what is open | [`docs/STATUS.md`](docs/STATUS.md) |
 | what other repos must change | [`docs/UPSTREAM.md`](docs/UPSTREAM.md) |
-| the transition from the old flat store | [`docs/MIGRATION.md`](docs/MIGRATION.md) |
 | accepted validator findings | [`docs/conformance.md`](docs/conformance.md) |
 
 Data never lands in this repository. `.gitignore` refuses `.tif` and `.parquet`,
@@ -58,7 +59,19 @@ composite COGs, annual mosaics of them, web-map archives, and the STAC documents
 describing all of it. Two regions are defined, `ch` and `alps`, each with a
 fixed grid and a default root in `src/glace_catalog/scopes.py`.
 
-Building needs credentials for the private source bucket, read from `.env`.
+Building needs credentials for the private source bucket and the two locations
+it works between, all read from `.env`:
+
+```bash
+GLACIERS_S3_ENDPOINT_URL=   # the UZH S3 gateway
+GLACIERS_S3_PROFILE=        # a named profile in ~/.aws/credentials
+GLACE_SOURCE_ROOT=          # s3:// prefix holding the composite archives
+GLACE_STORE_ROOT=           # s3:// prefix the published tree is built under
+```
+
+Authentication is by named profile only, so no access key passes through the
+environment. Publishing needs nothing here: the Source Cooperative credentials
+live in the profile named in `catalog.publish.yaml`.
 
 ### 1. Once per region
 
@@ -68,7 +81,8 @@ script lives in `deep-glacier-mapping`, which owns the inventories it reads:
 
 ```bash
 uv run --env-file .env python ../deep-glacier-mapping/scripts/inventories/derive-glacier-fractions.py \
-    --scope ch --out s3://s1-bursts/data/glace-ch/glacier-fractions.parquet
+    --scope ch --perimeter-tiles 143 \
+    --out "$GLACE_STORE_ROOT/tiles/glacier-fractions.parquet"
 ```
 
 ### 2. Once per year
@@ -122,11 +136,12 @@ uv run --env-file .env python scripts/finalize-catalog.py --scope ch \
 ```
 
 This patches the two collection documents with what depends on the run — year
-links, temporal extent, PMTiles links — concatenates
-the per-year slices into each collection's `items.parquet`, repoints the
-MapLibre styles at the newest year, and validates the result. It never touches
-the prose, providers, license or `item_assets`: those are source, edited here
-and reviewed.
+links, temporal extent, PMTiles links — concatenates the per-year slices into
+each collection's `items.parquet`, renders both collection thumbnails, stamps
+`file:size` and `file:checksum` on the assets it wrote, repoints the MapLibre
+styles at the newest year, and validates the result. It never touches the prose,
+providers, license or `item_assets`: those are source, edited here and
+reviewed.
 
 `--base-url` is the address the store will be served from. It is baked into
 every asset href, so **run this with the public address before publishing**,
@@ -142,10 +157,25 @@ object from the private bucket to that profile's prefix:
 ```bash
 uv run --env-file .env python tools/sync_data.py            # dry run, uploads nothing
 uv run --env-file .env python tools/sync_data.py --confirm  # the whole store
+uv run --env-file .env python tools/sync_data.py --prefix tiles/2024 --confirm
 ```
+
+The dry run prints what would be uploaded and why; `--prefix` restricts the run
+to one subtree, `--force` re-uploads objects that already match on size, and
+`--workers` sizes the transfer pool. Build state (anything whose name starts with
+a dot) never leaves the store.
 
 Publishing never deletes. Removing a file from the store leaves the object in
 the bucket; delete it separately if that is what you meant.
+
+## Citing
+
+Cite a **release**, not the bucket: Source Cooperative is not immutable, and a
+release names one edition of the pixels that a reader can check their bytes
+against through each asset's `file:checksum`. Releases are git tags archived on
+Zenodo, and `CITATION.cff` at the repository root is the machine-readable form —
+GitHub's "Cite this repository" button reads it. **The DOI arrives with the first
+release**; until then, cite the version and the repository URL.
 
 ## Contributing
 

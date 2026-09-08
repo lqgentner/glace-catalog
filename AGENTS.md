@@ -10,7 +10,8 @@ own agent guides are `catalog/AGENTS.md` and one per collection; read those to
 every mention of Switzerland in `catalog/` is placeholder text with a removal
 date. `src/glace_catalog/scopes.py` is the seam: it already carries both scopes
 as committed constants, so the swap is a scope change below it and a prose
-rewrite above it. `docs/MIGRATION.md` §11 is the checklist.
+rewrite above it. `docs/DESIGN.md` §8 says what changes; `docs/STATUS.md` carries
+the checklist.
 
 ## The one rule
 
@@ -30,16 +31,27 @@ under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
 documents and data alike: the store *is* the published tree, and its collection
 documents are the tracked ones that `finalize-catalog` patched on the way in.
 Syncing the tracked `catalog/` over them would strip those patches, which is why
-nothing does. Change detection is size against size from one listing per side;
-`--force` re-uploads regardless. Build state (`.build-state.json`,
-`.items.parquet`, anything whose name starts with a dot) never leaves the store.
+nothing does. Nothing is staged anywhere in between; a `GetObject` body on the
+private gateway is handed straight to `upload_fileobj` on the target. Change
+detection is size against size from one listing per side; `--force` re-uploads
+regardless. Build state (`.build-state.json`, `.items.parquet`, anything whose
+name starts with a dot) never leaves the store.
+
+**Source Cooperative is addressed through its S3 proxy.** The `source-coop`
+profile carries `endpoint_url = https://data.source.coop`, and against that
+endpoint the bucket is the *account* (`lqgentner`) and the key starts with the
+*product* (`glace-ch/…`) — which is why `write_prefix` is
+`s3://lqgentner/glace-ch` and not one of the AWS-native bucket names, which
+reject these credentials. Public reads use `https://data.source.coop/...` or
+anonymous S3 against `eu-central-1.opendata.source.coop`, which is the form the
+`alternate` hrefs carry.
 
 Publishing never deletes. Removing a file from the store leaves the object in
 the bucket; delete it separately if that is what you meant.
 
 `portolan push` is **not** used here and must not be mixed in — it tracks
-uploads in `versions.json` keyed on sha256, which the template publisher knows
-nothing about.
+uploads in `versions.json` keyed on sha256, which `sync_data.py` knows nothing
+about.
 
 ## Gates
 
@@ -47,6 +59,8 @@ nothing about.
 python3 tests/run_all.py
 ```
 
+`tests/test_lint.py` runs `ruff format --check`, `ruff check` and `pyrefly
+check` under `preset = "strict"`; a missing tool fails rather than skips.
 `rashid` is the Portolan conformance gate; `stac-check` is advisory. Where they
 disagree, rashid wins. Do not widen the `ACCEPTED` set in
 `tests/test_conformance.py` to make CI pass — add a row to
@@ -73,24 +87,27 @@ findings are structural consequences of that and are recorded in
 - **The `self` link is not in the tracked tree.** The publish step writes it
   from `public_base`. A tracked file whose correct content depends on the
   deployment target is diff noise and a merge conflict waiting to happen.
-- **`visual` assets are never `data`.** The false-colour rasters are 8-bit
-  display codes under a fixed stretch and `rtc_rgb` is in dB while everything
-  else is linear. Marking one `data` would let an analysis pipeline read a
-  picture.
+- **Renderings are never `data`.** Every COG in the catalog is linear; the only
+  display pixels are inside the PMTiles archives, which are 8-bit codes under a
+  fixed stretch and, for backscatter and QA-CQM, in decibels. They are registered
+  as `rel: "pmtiles"` links and `style` assets, never as a `data` asset, because
+  marking one `data` would let an analysis pipeline read a picture.
 
 ## Related repositories
 
 **If you are working in one of them, read [`docs/UPSTREAM.md`](docs/UPSTREAM.md),
-not this file and not MIGRATION.md.** It is the per-repository work order: what
-to change, why, and how to know it worked.
-
+not this file.** It is the per-repository work order: what to change, why, and
+how to know it worked.
 
 - `../deep-glacier-mapping` — composite production, labels, ML. Produces what
-  this catalog publishes.
-- `../s1bursts` — the Sentinel-1 pipeline. Its COG writer emits the embedded
-  band statistics `PTL-DAT-009` needs and the digest `file:checksum` publishes;
-  both are on main and unreleased. It does **not** write the run manifest — that
-  is the composite driver's job (M-31, `docs/UPSTREAM.md` D-4).
+  this catalog publishes, including the run manifest (M-31, `docs/UPSTREAM.md`
+  D-4).
+- `../s1bursts` — the Sentinel-1 pipeline. Its COG writer emits the embedded band
+  statistics `PTL-DAT-009` needs and the digest `file:checksum` publishes, both
+  released in 0.5.0.
 - `../freezebase` — geo and IO helpers, including the VRT chain the mosaics use.
 
-Both first-party libraries are consumed as released versions from PyPI.
+**s1bursts is not a dependency of this repository**: it is the writer whose
+output this repository reads, and nothing here imports it. `freezebase` is a
+dependency and is consumed from PyPI, floored at `>=0.7,<0.8`; there are no
+editable installs and `uv.lock` is tracked.

@@ -1,7 +1,8 @@
 # GLACE mosaics — agent guide
 
-One item per year on a fixed WebMercatorQuad z13 grid. Twelve analysis rasters
-and two display rasters per year.
+One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at 40 m. Twelve
+analysis rasters per year; drawing is served by the PMTiles archives registered
+on this collection.
 
 ## The grid is the point
 
@@ -9,9 +10,8 @@ Every year shares one hard-coded extent, resolution and transform. Two things
 follow, and both are what this collection exists for:
 
 1. **Temporal stacking is free.** No reprojection, no alignment, no resampling.
-2. **Each COG is a tile pyramid.** The grid is WebMercatorQuad z13, so internal
-   overviews land on z12, z11 and below. A zoomed-out read fetches a decimated
-   overview, not full-resolution pixels.
+2. **Areas are pixel counts.** The grid is equal-area, so summing pixels gives an
+   area without a latitude correction. Do not do this on a WebMercator raster.
 
 ```python
 import odc.stac, pystac
@@ -41,9 +41,9 @@ time and get the same picture with the numbers still underneath.
 ## `*_qa_num` is a mean here
 
 On the 10 m tiles it is an integer count of contributing acquisitions. Warping
-to 19.109 m averages roughly 3.6 source pixels, so the mosaic band is a float32
-**mean** and is named `num_obs_mean`. It is not the same quantity as the tile
-band of the same asset key.
+to 40 m averages sixteen source pixels, so the mosaic band is a float32 **mean**
+and is named `num_obs_mean`. It is not the same quantity as the tile band of the
+same asset key.
 
 ## Rendering parameters
 
@@ -60,10 +60,13 @@ The stretch is fixed rather than per-year deliberately: a percentile stretch
 recomputed per year gives every year its own scale, and a real change in
 coherence then renders as no change at all.
 
-The QA stretches (`*_qa_num` 0–30, `*_qa_cqm` ±6 dB) are **provisional** —
-internally consistent across years but not yet checked against rendered tiles.
+The QA stretches are `*_qa_num` 0–70 and `*_qa_cqm` ±3 dB, measured against the
+published Swiss 2021–2024 mosaics. One count range is shared by both products, so
+that RTC seeing more acquisitions than COH12 stays visible rather than being
+normalised away. They are Swiss numbers and are re-derived before the Alps.
 
 ## Related
 
 `glace-ch-tiles` is the archive these are derived from: same measurements at
-10 m in each tile's own UTM zone, one item per (tile, year). Pair on the year.
+10 m in each tile's own UTM zone, one item per (tile, year). Pair on the year,
+not on geometry.
