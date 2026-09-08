@@ -24,9 +24,9 @@ constrain how anything may ever write. ``--force`` is the way out when a
 truncated object of the right size has to be replaced. Nothing is ever deleted:
 removing a file from the store leaves the object published.
 
-    uv run --env-file .env python tools/sync_data.py                 # dry run
-    uv run --env-file .env python tools/sync_data.py --confirm       # upload
-    uv run --env-file .env python tools/sync_data.py --prefix tiles/2024 --confirm
+    uv run --env-file .env tools/sync_data.py                 # dry run
+    uv run --env-file .env tools/sync_data.py --confirm       # upload
+    uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
 """
 
 from __future__ import annotations

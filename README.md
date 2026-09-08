@@ -29,7 +29,7 @@ docs/             DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 
 ```bash
 uv sync --all-groups
-uv run python3 tests/run_all.py     # every gate
+uv run tests/run_all.py             # every gate
 uv run rashid check catalog/        # Portolan conformance alone
 ```
 
@@ -83,7 +83,7 @@ environment does not have:
 
 ```bash
 ( cd ../deep-glacier-mapping &&
-  uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
+  uv run --env-file .env scripts/inventories/derive-glacier-fractions.py \
       --scope ch --perimeter-tiles 143 \
       --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet )
 ```
@@ -104,7 +104,7 @@ every file.
 Publish the year:
 
 ```bash
-uv run --env-file .env python scripts/publish-year.py 2024 \
+uv run --env-file .env scripts/publish-year.py 2024 \
     --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch --scope ch
 ```
 
@@ -143,7 +143,7 @@ grid or the settings move, it rebuilds rather than leaving a stale result.
 ### 3. After adding or changing any year
 
 ```bash
-uv run --env-file .env python scripts/finalize-catalog.py --scope ch \
+uv run --env-file .env scripts/finalize-catalog.py --scope ch \
     --base-url https://data.source.coop/lqgentner/glace-ch
 ```
 
@@ -167,9 +167,9 @@ The built store is the published tree, so one command streams it object by
 object from the private bucket to that profile's prefix:
 
 ```bash
-uv run --env-file .env python tools/sync_data.py            # dry run, uploads nothing
-uv run --env-file .env python tools/sync_data.py --confirm  # the whole store
-uv run --env-file .env python tools/sync_data.py --prefix tiles/2024 --confirm
+uv run --env-file .env tools/sync_data.py            # dry run, uploads nothing
+uv run --env-file .env tools/sync_data.py --confirm  # the whole store
+uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
 ```
 
 The dry run prints what would be uploaded and why; `--prefix` restricts the run
@@ -191,7 +191,7 @@ release**; until then, cite the version and the repository URL.
 
 ## Contributing
 
-Wrong metadata is a pull request. Run `uv run python3 tests/run_all.py` before
+Wrong metadata is a pull request. Run `uv run tests/run_all.py` before
 pushing — a contribution that fails CI costs a round trip.
 
 ## License

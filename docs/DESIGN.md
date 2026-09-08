@@ -274,7 +274,7 @@ the only point at which they can reach the file's own header.
 ## 6. Gates
 
 ```bash
-uv run python3 tests/run_all.py                            # every gate
+uv run tests/run_all.py                                    # every gate
 uv run rashid check catalog/ --schema --no-data            # conformance, tracked tree
 uv run rashid check "$GLACE_STORE_ROOT" --schema --data    # the real claim
 uv run rashid check "$GLACE_STORE_ROOT" --live \
@@ -331,7 +331,7 @@ this repository on zenodo.org by its owner before step 8 mints anything.
 
 1. Bump `DATASET_VERSION`, the two `collection.json` and `CITATION.cff`.
 2. Build and finalize the store.
-3. `uv run --env-file .env python tools/sync_data.py --confirm`.
+3. `uv run --env-file .env tools/sync_data.py --confirm`.
 4. `uv run rashid check "$GLACE_STORE_ROOT" --live --live-base-url` the
    `public_base` from `catalog.publish.yaml`.
 5. Commit `date-released` in `CITATION.cff`.

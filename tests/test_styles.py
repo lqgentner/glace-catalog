@@ -28,7 +28,7 @@ and carry their reasoning beside them.
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_styles.py
+Run: uv run tests/test_styles.py
 """
 
 from pathlib import Path

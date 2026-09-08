@@ -4,7 +4,7 @@ Conformance means passing [rashid](https://github.com/portolan-sdi/rashid), not
 claiming to conform, so it runs in CI:
 
 ```bash
-python3 tests/test_conformance.py
+uv run tests/test_conformance.py
 ```
 
 That gate fails on any error-severity finding whose rule is not listed below.
@@ -35,7 +35,7 @@ local catalog directory only, so mirror the store's documents first (the asset
 hrefs are absolute public URLs, so the bytes checked are the published ones):
 
 ```bash
-uv run --env-file .env python tools/mirror_docs.py /tmp/glace-docs
+uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
 uv run rashid check /tmp/glace-docs --schema --data --live \
     --live-base-url https://data.source.coop/lqgentner/glace-ch
 ```

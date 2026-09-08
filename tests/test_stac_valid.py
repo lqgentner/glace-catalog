@@ -54,7 +54,7 @@ next stac-check release flips this gate without anyone watching for it.
 Fails when stac-check is absent. A skip reports a green run for objects
 that no validator read. The failure message gives the install command.
 
-Run: python3 tests/test_stac_valid.py
+Run: uv run tests/test_stac_valid.py
 """
 import json
 import re

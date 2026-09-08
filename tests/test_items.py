@@ -17,7 +17,7 @@ are registered on the mosaics collection, never on an item.
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_items.py
+Run: uv run tests/test_items.py
 """
 
 from __future__ import annotations

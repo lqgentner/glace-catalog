@@ -23,7 +23,7 @@ anything.
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_mirror.py
+Run: uv run tests/test_mirror.py
 """
 
 from __future__ import annotations

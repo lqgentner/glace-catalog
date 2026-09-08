@@ -16,7 +16,7 @@ Each tool is resolved from the active interpreter's environment first
 (``python -m ruff``), then from PATH. A tool that is absent **fails** rather
 than skips: a skipped gate reports a green run for code nothing read.
 
-Run: python3 tests/test_lint.py
+Run: uv run tests/test_lint.py
 """
 
 from pathlib import Path

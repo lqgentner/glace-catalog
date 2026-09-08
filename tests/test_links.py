@@ -10,7 +10,7 @@ git. Set CI_LIGHT=1 there. It exempts asset hrefs with a data suffix, and
 nothing else. Every structural link still resolves. Leave CI_LIGHT unset
 locally, where the bytes are on disk, and the gate checks every href.
 
-Run: python3 tests/test_links.py
+Run: uv run tests/test_links.py
 """
 import json
 import os

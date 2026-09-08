@@ -4,7 +4,7 @@
 The list is explicit rather than globbed so that the gates are visible in one
 place and adding one is a deliberate edit. Run from anywhere:
 
-    python3 tests/run_all.py
+    uv run tests/run_all.py
 """
 
 from pathlib import Path

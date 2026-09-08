@@ -13,7 +13,7 @@ the file is staged locally before upload and hashing it there costs nothing.
 Writes a tiny raster into a temporary directory. Reads no data and needs no
 network.
 
-Run: python3 tests/test_mosaic_stats.py
+Run: uv run tests/test_mosaic_stats.py
 """
 
 from __future__ import annotations

@@ -17,7 +17,7 @@ matters: at 46 degrees north a 3:2 box in degrees is not a 3:2 picture.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
-Run: python3 tests/test_thumbnails.py
+Run: uv run tests/test_thumbnails.py
 """
 
 from __future__ import annotations

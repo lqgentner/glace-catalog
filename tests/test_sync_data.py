@@ -12,7 +12,7 @@ last thing a person reads before typing ``--confirm``.
 Both sides of a transfer are in-memory filesystems, because the tool only ever
 asks a root for a listing, a reader and a writer. Nothing here opens a socket.
 
-Run: python3 tests/test_sync_data.py
+Run: uv run tests/test_sync_data.py
 """
 
 from __future__ import annotations

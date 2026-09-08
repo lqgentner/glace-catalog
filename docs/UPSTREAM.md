@@ -35,7 +35,7 @@ The perimeter is passed as a tile count rather than imported, and the output
 belongs in the store the catalog publishes:
 
 ```bash
-uv run --env-file .env python scripts/inventories/derive-glacier-fractions.py \
+uv run --env-file .env scripts/inventories/derive-glacier-fractions.py \
     --scope ch --perimeter-tiles 143 \
     --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet
 ```

@@ -16,7 +16,7 @@ None of it describes a measurement, which is why it sits beside the items rather
 than inside them.
 
 Usage:
-    uv run --env-file .env python scripts/finalize-catalog.py \\
+    uv run --env-file .env scripts/finalize-catalog.py \\
         --scope ch --base-url https://<host>/glace-ch
 """
 

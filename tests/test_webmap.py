@@ -17,7 +17,7 @@ inspected on the way through.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
-Run: python3 tests/test_webmap.py
+Run: uv run tests/test_webmap.py
 """
 
 from __future__ import annotations

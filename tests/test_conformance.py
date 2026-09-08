@@ -19,7 +19,7 @@ Fails when rashid is absent, or when its version is outside the required range.
 A skip reports a green run for a catalog that no validator read. The failure
 message gives the one command that installs a usable rashid.
 
-Run: python3 tests/test_conformance.py
+Run: uv run tests/test_conformance.py
 """
 import json
 import re

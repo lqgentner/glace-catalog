@@ -13,7 +13,7 @@ The string itself must look like a release: ``MAJOR.MINOR`` with an optional
 patch. That rules out the values a hand edit produces -- ``1``, ``v1.0``,
 ``1.0-rc1`` -- any of which would make the tag ``v{version}`` wrong.
 
-Run: python3 tests/test_version.py
+Run: uv run tests/test_version.py
 """
 
 import json

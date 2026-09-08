@@ -58,7 +58,7 @@ about.
 ## Gates
 
 ```bash
-uv run python3 tests/run_all.py
+uv run tests/run_all.py
 ```
 
 `tests/test_lint.py` runs `ruff format --check`, `ruff check` and `pyrefly

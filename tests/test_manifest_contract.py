@@ -15,7 +15,7 @@ The column list below is copied verbatim from
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_manifest_contract.py
+Run: uv run tests/test_manifest_contract.py
 """
 
 from __future__ import annotations

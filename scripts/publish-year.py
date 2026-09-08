@@ -27,7 +27,7 @@ that spans years, so ``finalize-catalog.py`` owns them. That is what makes addin
 a year later leave every existing year untouched.
 
 Usage:
-    uv run --env-file .env python scripts/publish-year.py 2024 \\
+    uv run --env-file .env scripts/publish-year.py 2024 \\
         --src  s3://s1-bursts/data/alps-total/2024/s1-comp-ch \\
         --scope ch \\
         --steps copy,vrt,mosaics,pmtiles,items

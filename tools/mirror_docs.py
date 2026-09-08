@@ -7,7 +7,7 @@ built tree lives on the object store. The documents are small — every
 hrefs are absolute public URLs, so a local copy of the documents alone is enough
 for ``--schema``, ``--data`` and ``--live`` to check what is actually published::
 
-    uv run --env-file .env python tools/mirror_docs.py /tmp/glace-docs
+    uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
     uv run rashid check /tmp/glace-docs --schema --data --live
         --live-base-url https://data.source.coop/lqgentner/glace-ch
 

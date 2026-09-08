@@ -17,7 +17,7 @@ the scope's own arithmetic. PNG tiles, so the comparison is exact.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
-Run: python3 tests/test_tiler.py
+Run: uv run tests/test_tiler.py
 """
 
 from __future__ import annotations
