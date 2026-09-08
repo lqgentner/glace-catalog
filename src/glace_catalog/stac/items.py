@@ -46,6 +46,12 @@ DATASET_VERSION = "1.0"
 
 Bump the major part when the pixels change meaning, so that a value stored under
 one edition can never be reinterpreted under a later reading.
+
+A release is one version string, and this is where it is bumped. Both
+``catalog/*/collection.json`` and ``CITATION.cff`` restate it and follow this
+value; ``tests/test_version.py`` fails when any of them disagrees. Tag
+``v{DATASET_VERSION}`` only after the store is published and finalized, because
+the tag is what a citation resolves to.
 """
 
 MGRS_EXTENSION_URI = "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
