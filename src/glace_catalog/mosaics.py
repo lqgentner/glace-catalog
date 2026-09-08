@@ -384,6 +384,20 @@ def chain_env(vrts: YearVrts) -> Generator[None]:
         yield
 
 
+def _parse_vrt(text: str) -> ET.Element:
+    """Parse VRT XML, through the hardened parser.
+
+    Two parsers appear in this module and they do not overlap. Anything *read*
+    goes through ``defusedxml``, which refuses the entity-expansion and external
+    entity constructs the stdlib parser accepts; a VRT is written by GDAL but
+    read back from wherever the store lives, so it is input. Anything *built*
+    uses ``xml.etree.ElementTree``, which has no parser in it — defusedxml
+    deliberately ships no serializer, and element construction is not an attack
+    surface. Parsing is confined here so no caller has to know that.
+    """
+    return DefusedET.fromstring(text)
+
+
 def tagged_vrt(
     src_vrt: Path | UPath,
     dst_vrt: Path,
@@ -402,8 +416,7 @@ def tagged_vrt(
     pathlib.Path
         The tagged VRT.
     """
-    tree = DefusedET.fromstring(UPath(src_vrt).read_text())
-    root = tree
+    root = _parse_vrt(UPath(src_vrt).read_text())
     if tags:
         metadata = ET.Element("Metadata")
         for key, value in sorted(tags.items()):
