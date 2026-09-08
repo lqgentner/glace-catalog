@@ -27,6 +27,12 @@
       "title": "Catalog agent guide"
     },
     {
+      "rel": "icon",
+      "href": "./_assets/glace-wordmark.svg",
+      "type": "image/svg+xml",
+      "title": "GLACE wordmark"
+    },
+    {
       "rel": "child",
       "href": "./tiles/collection.json",
       "type": "application/json",

@@ -49,6 +49,8 @@ reading the collection document first.
 README_NAME = "README.md"
 AGENTS_NAME = "AGENTS.md"
 THUMBNAIL_NAME = "thumbnail.png"
+ASSETS_DIR = "_assets"
+"""Root directory of files the catalog documents link but do not describe."""
 
 TILES_DIR = "tiles"
 MOSAICS_DIR = "mosaics"
@@ -185,9 +187,14 @@ class StoreLayout:
         return self.root / AGENTS_NAME
 
     @property
-    def logo(self) -> Path | UPath:
-        """Catalog logo, linked ``rel: "icon"`` from the root catalog."""
-        return self.root / "_assets" / "logo.png"
+    def icon(self) -> Path | UPath:
+        """Catalog wordmark, linked ``rel: "icon"`` from the root catalog.
+
+        An SVG rather than a raster: registries and browsers display it at
+        whatever size they render a catalog card at (``PTL-LNK-007``), and it
+        is the same file the viewer draws its header from.
+        """
+        return self.root / ASSETS_DIR / "glace-wordmark.svg"
 
     # -- tiles collection ------------------------------------------------
 

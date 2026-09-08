@@ -44,6 +44,7 @@ from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import PMTILES_LINK_REL, extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
 from glace_catalog.stac.store import (
+    ASSETS_DIR,
     YEAR_INDEX_NAME,
     upload_tree,
 )
@@ -340,6 +341,17 @@ def write_documents(
                 (staged / directory / name).write_bytes(
                     (source_dir / directory / name).read_bytes(),
                 )
+
+        # `_assets/` holds what the documents link but do not describe -- the
+        # wordmark the root catalog carries as its `rel: "icon"`. It travels
+        # with them because a registry that renders the icon reads the document
+        # and the file from the same tree.
+        assets = source_dir / ASSETS_DIR
+        if assets.is_dir():
+            (staged / ASSETS_DIR).mkdir(parents=True, exist_ok=True)
+            for path in sorted(assets.iterdir()):
+                if path.is_file():
+                    (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
 
         repoint_styles(source_dir, staged, latest)
         upload_tree(staged, layout.root)
