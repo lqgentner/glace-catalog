@@ -30,7 +30,6 @@ import re
 import tempfile
 from typing import TYPE_CHECKING
 
-from freezebase.raster import rasterio_open
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -46,22 +45,15 @@ from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
 from glace_catalog.stac.store import (
     ASSETS_DIR,
     YEAR_INDEX_NAME,
+    multihash_sha256,
     upload_tree,
 )
+from glace_catalog.thumbnails import write_collection_thumbnails
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(Path(__file__).stem)
-
-THUMBNAIL_WIDTH = 1200
-
-#: Fixed value range of the thumbnail's three bands, in decibels.
-#:
-#: This is the one stretch that survives whichever way the COG-versus-PMTiles
-#: decision goes: the thumbnail is rendered here, so it needs a range here even
-#: if every other stretch moves into the viewer's configuration.
-THUMBNAIL_RANGES = ((-18.5, -5.0), (-26.0, -11.0), (4.0, 14.0))
 
 
 def published_years(layout: stac.StoreLayout) -> list[int]:
@@ -357,55 +349,60 @@ def write_documents(
         upload_tree(staged, layout.root)
 
 
-def render_thumbnail(layout: stac.StoreLayout, years: Sequence[int]) -> bool:
-    """Render the store thumbnail from the most recent year's false-colour mosaic.
+def stamped_asset_paths(
+    layout: stac.StoreLayout,
+) -> dict[str, dict[str, Path | UPath]]:
+    """Where each collection-level asset this run measures keeps its bytes.
 
-    Under the PMTiles branch this could borrow ``rtc_rgb``'s stretch; under the
-    COG one there is no such layer, so the range is fixed here in
-    :data:`THUMBNAIL_RANGES` and stays wherever the rest of the stretches go.
+    Only the assets whose bytes this run writes are listed. The style
+    registration is not among them: the styles are staged and uploaded with the
+    documents, so at the moment a document is written they do not yet exist.
     """
-    from PIL import Image  # noqa: PLC0415
+    return {
+        TILES_DIR: {
+            "items": layout.tiles_index,
+            "glacier-fractions": layout.glacier_fractions,
+            "thumbnail": layout.tiles_thumbnail,
+        },
+        MOSAICS_DIR: {
+            "items": layout.mosaics_index,
+            "thumbnail": layout.mosaics_thumbnail,
+        },
+    }
 
-    year = max(years)
-    sources = [layout.mosaic_year(year) / f"rtc_{pol}.tif" for pol in ("vv", "vh")]
-    if not all(path.exists() for path in sources):
-        logger.warning("No RTC mosaics for %d; thumbnail not rendered", year)
-        return False
 
-    bands = []
-    for path in sources:
-        with rasterio_open(path) as src:
-            scale = max(1, src.width // THUMBNAIL_WIDTH)
-            bands.append(
-                src.read(
-                    1,
-                    out_shape=(src.height // scale, src.width // scale),
-                    masked=True,
-                ),
-            )
-    with np.errstate(divide="ignore", invalid="ignore"):
-        vv, vh = (10.0 * np.log10(np.where(band > 0, band, np.nan)) for band in bands)
-    channels = (vv, vh, vv - vh)
-    rgba = np.zeros((*vv.shape, 4), dtype="uint8")
-    for index, (channel, (vmin, vmax)) in enumerate(zip(channels, THUMBNAIL_RANGES, strict=True)):
-        # Nodata is transparent, so its colour is irrelevant; zero it before the
-        # cast rather than casting a NaN, which is undefined.
-        scaled = np.nan_to_num((channel - vmin) / (vmax - vmin) * 255, nan=0.0)
-        rgba[..., index] = np.clip(scaled, 0, 255).astype("uint8")
-    rgba[..., 3] = np.where(np.isfinite(vv), 255, 0).astype("uint8")
+def stamp_collection_assets(
+    documents: Mapping[str, Document],
+    layout: stac.StoreLayout,
+) -> None:
+    """Fill ``file:size`` and ``file:checksum`` on the collection-level assets.
 
-    with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp) / "thumbnail.png"
-        Image.fromarray(rgba, mode="RGBA").save(staged)
-        layout.mosaics_thumbnail.write_bytes(staged.read_bytes())
-    logger.info(
-        "Wrote %s from %d (%dx%d)",
-        layout.mosaics_thumbnail,
-        year,
-        rgba.shape[1],
-        rgba.shape[0],
-    )
-    return True
+    The assets a collection declares over itself -- its item mirror, its
+    thumbnail and, for the tiles, the glacier fractions -- are written by this
+    run rather than by the pipeline, so no manifest carries their digests. They
+    are measured here, from the bytes as they now sit in the store, which is
+    what closes ``PTL-AST-003``: a reader can check a downloaded mirror against
+    the release that cites it, the same way the item assets already allow
+    (R-16).
+
+    Runs after the indexes and the thumbnails are written and before the
+    documents are staged; an asset whose bytes are absent is left unstamped with
+    a warning rather than stamped with a stale or guessed value, which Portolan
+    treats as worse than an absent field.
+    """
+    paths = stamped_asset_paths(layout)
+    for directory, document in documents.items():
+        for key, asset in document.get("assets", {}).items():
+            path = paths[directory].get(key)
+            if path is None:
+                continue
+            if not path.exists():
+                logger.warning("%s has no bytes for its %s asset at %s", directory, key, path)
+                continue
+            payload = path.read_bytes()
+            asset["file:size"] = len(payload)
+            asset["file:checksum"] = multihash_sha256(payload)
+            logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
 
 
 def validate(layout: stac.StoreLayout) -> None:
@@ -471,6 +468,21 @@ def main() -> None:
         mosaic_items,
     )
     documents["mosaics"]["links"] += pmtiles_links(layout, years, args.base_url)
+
+    # The indexes and the thumbnails are written before the documents are staged
+    # because the documents declare their size and digest, and those can only be
+    # measured on bytes that exist.
+    stac.concat_indexes(
+        [layout.year_index(year) for year in years],
+        layout.tiles_index,
+        base_url=args.base_url,
+    )
+    if mosaic_items:
+        stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=args.base_url)
+    if not args.skip_thumbnail:
+        write_collection_thumbnails(layout, years[-1], scope=scope)
+
+    stamp_collection_assets(documents, layout)
     write_documents(
         args.source,
         layout,
@@ -479,16 +491,6 @@ def main() -> None:
         latest=years[-1],
     )
 
-    stac.concat_indexes(
-        [layout.year_index(year) for year in years],
-        layout.tiles_index,
-        base_url=args.base_url,
-    )
-    if mosaic_items:
-        stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=args.base_url)
-
-    if not args.skip_thumbnail:
-        render_thumbnail(layout, years)
     if not args.skip_validate:
         validate(layout)
 

@@ -314,6 +314,16 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
     return frame
 
 
+def multihash_sha256(payload: bytes) -> str:
+    """Multihash-encoded sha256 of some bytes, the form ``file:checksum`` requires.
+
+    ``1220`` is the multihash prefix for a 32-byte sha256 digest: the same
+    encoding the run manifest carries for every composite, so a checksum this
+    writes and one the pipeline measured are read the same way.
+    """
+    return "1220" + hashlib.sha256(payload).hexdigest()
+
+
 def manifest_digest(frame: pd.DataFrame) -> str:
     """Content digest of a manifest, as the fingerprint the copy step keys on.
 
