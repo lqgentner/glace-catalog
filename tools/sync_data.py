@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import shutil
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
 from freezebase.s3 import make_s3_upath
@@ -91,7 +92,11 @@ def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
     -------
     UPath
         The ``write_prefix``, authenticated with the ``profile``. No endpoint is
-        passed: the profile's config section carries it.
+        passed: the profile's config section carries it. The checksum policy
+        is freezebase's ``when_required``, which sends no ``x-amz-checksum``
+        trailers, the setting an S3-compatible proxy is least likely to
+        reject; boto3's own default, ``when_supported``, was what the proxy
+        was originally tried with.
 
     Raises
     ------
@@ -290,19 +295,59 @@ def list_subtree(root: UPath, subtree: str) -> dict[str, int]:
     return {f"{subtree}/{name}": size for name, size in listed.items()}
 
 
+class TwoPhaseFile(Protocol):
+    """A write handle whose close uploads and whose commit publishes."""
+
+    def write(self, data: bytes, /) -> int:
+        """Buffer bytes, uploading a part when the buffer fills."""
+        ...
+
+    def close(self) -> None:
+        """Upload what is left in the buffer."""
+        ...
+
+    def commit(self) -> None:
+        """Complete the object."""
+        ...
+
+    def discard(self) -> None:
+        """Abort the upload."""
+        ...
+
+
 def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
     """Stream one object from the private gateway to Source Cooperative.
 
     The content type goes with the write: s3fs hands ``ContentType`` to the
-    upload it starts, single-part or multipart alike.
+    upload it starts. The write is committed by hand rather than on close,
+    because an fsspec file closed by a ``with`` block commits whatever it has
+    even when the block is leaving on an exception: a read that failed
+    half-way through a COG would otherwise complete the multipart upload and
+    publish a truncated object under the right name. With ``autocommit`` off,
+    closing only uploads the last part; ``commit`` completes the object and
+    ``discard`` aborts it, so a failure leaves nothing behind.
     """
     reader_path = source_root / relative
     writer_path = target_root / relative
-    with (
-        reader_path.open("rb") as reader,
-        writer_path.open("wb", ContentType=content_type_for(relative)) as writer,
-    ):
-        shutil.copyfileobj(reader, writer, COPY_CHUNK)
+    # The reader opens first: a source that cannot be read starts no upload.
+    with reader_path.open("rb") as reader:
+        # fsspec types the handle as a plain binary file; the two-phase calls
+        # are what every AbstractBufferedFile, and so every S3File, provides.
+        writer = cast(
+            "TwoPhaseFile",
+            writer_path.open("wb", ContentType=content_type_for(relative), autocommit=False),
+        )
+        try:
+            shutil.copyfileobj(reader, writer, COPY_CHUNK)
+            writer.close()
+            writer.commit()
+        except BaseException:
+            # The library's own order: a file is closed before it is discarded.
+            with suppress(Exception):
+                writer.close()
+            with suppress(Exception):
+                writer.discard()
+            raise
 
 
 def transfer(

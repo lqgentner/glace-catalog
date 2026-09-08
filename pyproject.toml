@@ -10,6 +10,8 @@ license.file = "LICENSE"
 dynamic = ["version"]
 
 dependencies = [
+    # tools/sync_data.py names botocore's exceptions; boto itself arrives via freezebase[s3].
+    "botocore>=1.36",
     "cmcrameri>=1.9",
     "defusedxml>=0.7.1",
     "freezebase[s3]>=0.7,<0.8",

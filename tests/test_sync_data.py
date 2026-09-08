@@ -19,12 +19,12 @@ from __future__ import annotations
 
 from argparse import ArgumentTypeError
 from contextlib import redirect_stderr
-from io import StringIO
+from io import BytesIO, StringIO
 import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, override
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -283,6 +283,133 @@ def check_failure_is_reported() -> dict[str, bool]:
     }
 
 
+class TwoPhaseWriter(BytesIO):
+    """A write handle with s3fs's lifecycle: close uploads, commit publishes.
+
+    ``memory://`` commits at open and closes as a no-op, so it cannot show
+    whether the tool commits by hand and discards on failure. This records the
+    order of the calls and only stores the bytes on ``commit``.
+    """
+
+    def __init__(self, store: dict[str, bytes], path: str, **kwargs: Any) -> None:
+        super().__init__()
+        self.store = store
+        self.path = path
+        self.kwargs = kwargs
+        self.calls: list[str] = []
+
+    @override
+    def close(self) -> None:
+        """Record the close; the buffer stays readable for ``commit``."""
+        self.calls.append("close")
+
+    def commit(self) -> None:
+        """Publish the bytes."""
+        self.calls.append("commit")
+        self.store[self.path] = self.getvalue()
+
+    def discard(self) -> None:
+        """Abort the upload."""
+        self.calls.append("discard")
+
+
+class TwoPhaseTarget:
+    """Route every write on the in-memory target through :class:`TwoPhaseWriter`."""
+
+    def __init__(self, failing_read: str | None = None) -> None:
+        self.store: dict[str, bytes] = {}
+        self.writers: dict[str, TwoPhaseWriter] = {}
+        self.failing_read = failing_read
+        self._original = MemoryFileSystem._open  # noqa: SLF001 - the seam under test
+
+    def __enter__(self) -> Self:
+        """Wrap the opener: two-phase writers, and one reader that breaks."""
+        original = self._original
+        target = self
+
+        def opener(fs: MemoryFileSystem, path: str, mode: str = "rb", **kwargs: Any) -> Any:
+            if "w" in mode:
+                writer = TwoPhaseWriter(target.store, path, **kwargs)
+                target.writers[path] = writer
+                return writer
+            handle = original(fs, path, mode, **kwargs)
+            if target.failing_read and path.endswith(target.failing_read):
+                return BrokenReader(handle.getvalue())
+            return handle
+
+        MemoryFileSystem._open = opener  # noqa: SLF001 # pyrefly: ignore[bad-assignment]
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Restore the opener."""
+        MemoryFileSystem._open = self._original  # noqa: SLF001
+
+
+class BrokenReader(BytesIO):
+    """A reader that serves its first chunk and fails on the second."""
+
+    def __init__(self, data: bytes) -> None:
+        super().__init__(data)
+        self.reads = 0
+
+    @override
+    def read(self, size: int | None = -1, /) -> bytes:
+        """Fail the way a dropped connection does, after some bytes moved."""
+        self.reads += 1
+        if self.reads > 1:
+            msg = "connection reset"
+            raise OSError(msg)
+        return super().read(size)
+
+
+def check_commit_is_explicit() -> dict[str, bool]:
+    """Check that a transfer commits after closing and a failed one only discards.
+
+    An fsspec file closed by a ``with`` block commits whatever it holds even on
+    an exception, which would publish a truncated COG under the right name.
+    """
+    small = {"tiles/collection.json": 2_048, "tiles/2024/32TMS24/coh12_vv.tif": 3 * 8 << 20}
+    source_root = memory_root(small)
+    target_root = memory_root({})
+    checks: dict[str, bool] = {}
+
+    with TwoPhaseTarget() as target:
+        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+    good = target.writers[f"{target_root.path}/tiles/collection.json"]
+    checks["a good transfer does not fail"] = not failed
+    checks["the writer is opened without autocommit"] = good.kwargs.get("autocommit") is False
+    checks["the content type still travels with the write"] = (
+        good.kwargs.get("ContentType") == "application/json"
+    )
+    checks["a good transfer closes, then commits, and never discards"] = good.calls == [
+        "close",
+        "commit",
+    ]
+    checks["the committed bytes are whole"] = all(
+        len(target.store[f"{target_root.path}/{name}"]) == size for name, size in small.items()
+    )
+
+    reported = StringIO()
+    with TwoPhaseTarget(failing_read="coh12_vv.tif") as target, redirect_stderr(reported):
+        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+    broken = target.writers[f"{target_root.path}/tiles/2024/32TMS24/coh12_vv.tif"]
+    checks["a read that breaks half-way is reported"] = failed == [
+        "tiles/2024/32TMS24/coh12_vv.tif",
+    ]
+    checks["the reason reaches stderr"] = "connection reset" in reported.getvalue()
+    checks["the broken transfer is closed and discarded, never committed"] = broken.calls == [
+        "close",
+        "discard",
+    ]
+    checks["nothing is published under the broken object's name"] = (
+        f"{target_root.path}/tiles/2024/32TMS24/coh12_vv.tif" not in target.store
+    )
+    checks["the other object still committed"] = (
+        f"{target_root.path}/tiles/collection.json" in target.store
+    )
+    return checks
+
+
 def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> UPath:
     """Fail the way an absent ``source-coop`` profile does."""
     del path
@@ -376,6 +503,7 @@ def main() -> int:
         check_local_root,
         check_listing_and_transfer,
         check_failure_is_reported,
+        check_commit_is_explicit,
         check_setup_failures_are_messages,
         check_workers_floor,
         check_summary,
