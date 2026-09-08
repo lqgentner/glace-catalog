@@ -70,6 +70,9 @@ def published_years(layout: stac.StoreLayout) -> list[int]:
     one is published with the slice of the item mirror ``publish-year`` wrote
     beside its items.
     """
+    if not layout.tiles.exists():
+        msg = f"No {TILES_DIR}/ under {layout.root}. Run publish-year.py first."
+        raise SystemExit(msg)
     years: list[int] = []
     entries = {entry.name: entry for entry in layout.tiles.iterdir()}
     for name in sorted(entries):
@@ -80,7 +83,7 @@ def published_years(layout: stac.StoreLayout) -> list[int]:
         else:
             logger.warning("%s has no %s; skipping", name, YEAR_INDEX_NAME)
     if not years:
-        msg = f"No published years under {layout.root}. Run publish-year.py first."
+        msg = f"No published years under {layout.tiles}. Run publish-year.py first."
         raise SystemExit(msg)
     logger.info("Found %d published year(s): %s", len(years), ", ".join(map(str, years)))
     return years
