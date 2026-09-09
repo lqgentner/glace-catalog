@@ -133,6 +133,11 @@ def check_registration(
     checks["the href is the year's file under styles/"] = (
         styles["style-2023"]["href"] == "./styles/2023.json"
     )
+    # The tracked entry describes the template; a published entry describes one
+    # year's style, so its prose is written here rather than copied.
+    checks["a published style does not describe itself as the template"] = (
+        "template" not in styles["style-2023"]["description"]
+    )
 
 
 def check_coverage(

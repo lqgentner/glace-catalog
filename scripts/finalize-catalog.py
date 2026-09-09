@@ -250,10 +250,14 @@ def register_style_assets(document: Document, years: Sequence[int], latest: int)
     """Replace the tracked style registrations with one entry per template and year.
 
     The tracked document registers the template it keeps beside it; what the
-    store holds is the per-year copies :func:`repoint_styles` writes. Title,
-    description and media type come from the tracked entry, so the reviewed prose
-    is still the published prose, and only the latest year keeps the ``default``
-    role: a client that asks for one style gets the newest.
+    store holds is the per-year copies :func:`repoint_styles` writes. Title and
+    media type come from the tracked entry, so the reviewed naming is the
+    published naming, and the ``default`` role follows the template that carries
+    it, on the latest year only: a client that asks for one style gets the newest.
+
+    The description is written here rather than copied, because the tracked
+    entry's prose describes a *template* and each published entry describes one
+    year's style.
     """
     assets: dict[str, Document] = document.get("assets", {})
     templates = {key: asset for key, asset in assets.items() if "style" in asset.get("roles", [])}
@@ -266,17 +270,18 @@ def register_style_assets(document: Document, years: Sequence[int], latest: int)
         stem = key.removeprefix("style-")
         for year in years:
             asset_key, name = style_asset(stem, year)
-            entry = {
+            is_default = year == latest and "default" in template.get("roles", [])
+            generated[asset_key] = {
                 "href": f"./styles/{name}",
                 "type": template.get("type", "application/vnd.mapbox.style+json"),
                 "title": f"{template['title']} ({year})",
-                "roles": ["style", "default"]
-                if year == latest and stem == "default"
-                else ["style"],
+                "description": (
+                    f"Every published web-map layer of {year}, the first visible and the rest "
+                    "hidden. Each layer's metadata.portolan:legend carries the colour ramp and "
+                    "value range baked into its archive, which is where those constants live."
+                ),
+                "roles": ["style", "default"] if is_default else ["style"],
             }
-            if template.get("description"):
-                entry["description"] = template["description"]
-            generated[asset_key] = entry
 
     first = next(iter(templates))
     rebuilt: dict[str, Document] = {}

@@ -250,11 +250,15 @@ def main() -> int:
     # The item carries the archives as `visual` assets; the link with
     # `pmtiles:layers` stays on the collection (PORTO-FMT-011), which is
     # `finalize-catalog`'s job. So the item declares no web-map-links extension,
-    # whose version the collection alone is the source of.
+    # whose version the collection alone is the source of. Checked on the item
+    # that actually carries the renderings, since that is where a link or an
+    # extension declaration would creep in.
+    built = _publisher().visual_assets(_pmtiles_state())
+    rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()
-    checks["the mosaic item links no PMTiles archive"] = not mosaic.get_links("pmtiles")
+    checks["the mosaic item links no PMTiles archive"] = not rendered.get_links("pmtiles")
     checks["the mosaic item declares no web-map-links extension"] = not any(
-        "web-map-links" in uri for uri in mosaic.stac_extensions
+        "web-map-links" in uri for uri in rendered.stac_extensions
     )
     # PTL-AST-003 wants a digest on every asset whose bytes the run wrote; the
     # mosaics are hashed as they are staged, and an unmeasured asset says nothing
@@ -286,13 +290,11 @@ def main() -> int:
         "/store/mosaics/2024/coh12_vv_viz.pmtiles"
     )
     checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
-    built = _publisher().visual_assets(_pmtiles_state())
     checks["visual_assets keys by rendering key"] = list(built) == [
         "coh12_rgb_viz",
         "coh12_vv_viz",
     ]
-    item = _mosaic_item(extra=built)
-    viz = item.assets["coh12_vv_viz"]
+    viz = rendered.assets["coh12_vv_viz"]
     checks["a rendering is an item asset with the visual role"] = viz.roles == ["visual"]
     checks["a rendering is not data"] = "data" not in (viz.roles or [])
     checks["a rendering declares its own grid"] = viz.extra_fields.get("proj:code") == "EPSG:3857"
@@ -304,7 +306,8 @@ def main() -> int:
     checks["a rendering says what it is"] = "Not for analysis" in (viz.description or "")
     # A false-colour archive has no COG of its own; it names the two it composes.
     checks["a false-colour rendering points at both polarizations"] = (
-        "read coh12_vv.tif and coh12_vh.tif" in (item.assets["coh12_rgb_viz"].description or "")
+        "read coh12_vv.tif and coh12_vh.tif"
+        in (rendered.assets["coh12_rgb_viz"].description or "")
     )
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

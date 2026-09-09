@@ -420,7 +420,6 @@ struck through — git holds them.
 | M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links, as `visual` item assets (M-34), with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors | 3 |
 | M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 3 |
 | M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year, once per published year (M-35) | 3 |
-| M-22 | ~~Web-map archives live at `mosaics/pmtiles/{year}/`, not beside the COGs they render~~ — **superseded by M-34** | 2 |
 | M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem. A rendering carries `_viz`, which says what the file is rather than where it sits (M-34) | 2 |
 | M-24 | **The annual analysis mosaic is on ETRS89-LAEA at 40 m.** WebMercator is not equal-area, so any area statistic on it needs an undeclared correction | 3 |
 | M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
@@ -432,11 +431,11 @@ struck through — git holds them.
 | M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes; arranging rows in this catalog's vocabulary belongs to the composite driver | 4 |
 | M-32 | **The run manifest and configuration are not published.** Both live beside the source archive; the items carry every value a reader needs | 2 |
 | M-33 | **One time range per year**, from the committed compositing window; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 2 |
-| M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders. Supersedes M-22: the archives are no longer collection-level products, and the suffix keeps the stems apart. The collection-level `rel: "pmtiles"` link stays, because that is where `pmtiles:layers` lives | 2, 3 |
+| M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders. The archives are no longer collection-level products, and the suffix keeps the stems apart. The collection-level `rel: "pmtiles"` link stays, because that is where `pmtiles:layers` lives | 2, 3 |
 | M-35 | **One published style per year**, `styles/{year}.json` written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy fourteen legend blocks per year and let them drift; one file for every year would be 154 sources with one visible | 3 |
 | R-1 | `src/glace_catalog/__init__.py` exists — a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
-| R-3 | PMTiles are registered at collection level only. `build_mosaic_item` has no `pmtiles` parameter and items carry no `rel: "pmtiles"` link | 3 |
+| R-3 | PMTiles are **linked** at collection level only: `build_mosaic_item` has no `pmtiles` parameter and an item carries no `rel: "pmtiles"` link. The archive is an asset of the year item all the same (M-34) — the link is what stays collection-level, because that is where `pmtiles:layers` is defined | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7.1,<0.8` from PyPI; 0.7.1 carries `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint (UPSTREAM.md F-5) | 6 |
 | R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the `ch` scope's default root stays that value and the fresh build lands there once it is empty | 4 |
 | R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand. Each write is committed by hand and discarded on failure, so a broken transfer publishes nothing | 4 |
