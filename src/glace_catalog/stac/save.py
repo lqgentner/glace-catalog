@@ -48,6 +48,11 @@ import stac_geoparquet.arrow
 from stac_geoparquet.arrow._to_parquet import create_parquet_metadata
 from upath import UPath
 
+# The module, not the name: metadata imports the naming module through this
+# package, so under one import order this package is still initializing when
+# metadata is. Resolving `vocabulary` at call time keeps both orders working.
+from glace_catalog import metadata
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
@@ -506,11 +511,9 @@ def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) ->
 
 def _collection_title(collection_id: str) -> str:
     """Short human title for a link to one of the store's collections."""
-    if collection_id.endswith("-mosaics"):
-        return "GLACE mosaics"
     if collection_id.startswith("labels-"):
         return "GLACE labels"
-    return "GLACE tiles"
+    return metadata.vocabulary().collection_short_title(_collection_dir(collection_id))
 
 
 def _collection_dir(collection_id: str) -> str:
@@ -545,84 +548,30 @@ def year_catalog_document(
         "stac_version": "1.1.0",
         "stac_extensions": [portolan_schema],
         "id": f"{collection_id}-{year}",
-        "title": f"GLACE tiles {year}",
+        "title": _year_title(collection_id, year),
         "description": (
-            f"The {len(item_hrefs_and_titles)} MGRS tiles composited in {year}, one item "
-            "each, every item carrying that tile's twelve single-band composites. "
-            "For anything beyond browsing, query the collection's items.parquet "
-            "instead: it holds every year in one file, so a filter costs one range "
-            "request rather than one HTTP fetch per tile."
+            f"The MGRS squares composited in {year}, one item each, every item carrying "
+            "that square's twelve single-band composites."
         ),
         "links": [
             _link("root", f"../../{CATALOG_NAME}", scope_title),
             _link("parent", "../collection.json", _collection_title(collection_id)),
-            _link("describedby", "./README.md", f"GLACE tiles {year} documentation")
+            _link(
+                "describedby",
+                "./README.md",
+                f"{_year_title(collection_id, year)} documentation",
+            )
             | {"type": "text/markdown"},
-            _link("agents", "./AGENTS.md", f"GLACE tiles {year} agent guide")
+            _link("agents", "./AGENTS.md", f"{_year_title(collection_id, year)} agent guide")
             | {"type": "text/markdown"},
             *[_link("item", href, title, item=True) for href, title in item_hrefs_and_titles],
         ],
     }
 
 
-def year_catalog_prose(year: int, n_items: int) -> tuple[str, str]:
-    """Render the ``README.md`` and ``AGENTS.md`` a year sub-catalog owes.
-
-    Portolan requires both in every catalog directory (``PTL-FIL-001``) and
-    requires them linked (``PTL-FIL-002``, ``PTL-FIL-003``). They are generated
-    rather than written because there are one per year per scope and the only
-    thing that distinguishes them is the year — but they are kept short and
-    specific rather than padded, so that a reader who opens one learns something.
-
-    Returns
-    -------
-    tuple of str
-        ``(README.md, AGENTS.md)`` contents.
-    """
-    readme = f"""# GLACE tiles {year}
-
-The {n_items} MGRS tiles composited in {year}. Each item carries twelve
-single-band Cloud-Optimized GeoTIFFs at 10 m, in that tile's own UTM zone.
-
-This sub-catalog exists to group the year's items for browsing. It holds no
-assets of its own — a STAC catalog may not have any — and adds no metadata:
-everything about the pixels is on the items, and everything about the run that
-wrote them is in each GeoTIFF's tags.
-
-## Reading it
-
-Do not walk this catalog: one HTTP request per tile, to learn what one range
-request already holds. `../items.parquet` covers every year in one file, so
-selecting this year is a predicate rather than a different URL. The
-[collection README](../README.md) has the worked query.
-
-## License
-
-CC-BY-4.0. Contains modified Copernicus Sentinel data.
-
-## Provenance
-
-Produced at the University of Zurich, Department of Geography, from Copernicus
-Sentinel-1 SLC data. Per-file provenance is embedded in each GeoTIFF's tags and
-mirrored into the item properties, including the software versions, the DEM and
-the compositing window and parameters.
-"""
-    agents = f"""# GLACE tiles {year} — agent guide
-
-A browse-only grouping of {n_items} tile items. It carries no assets and adds no
-metadata; everything below it is described by the
-[tiles collection](../collection.json), whose `AGENTS.md` is the one to read.
-
-**Query `../items.parquet`, not this catalog.** It covers every year in one
-file, so filtering by year is a predicate rather than a different URL. Walking
-these item links costs one HTTP request each and tells you nothing the mirror
-does not.
-
-The year in this path is the **composite window**, not an acquisition date. Each
-item carries `start_datetime` and `end_datetime` giving the window its
-composites were drawn from.
-"""
-    return readme, agents
+def _year_title(collection_id: str, year: int) -> str:
+    """Title of one year sub-catalog, e.g. ``GLACE tiles 2024``."""
+    return f"{_collection_title(collection_id)} {year}"
 
 
 def write_year_items(
@@ -636,6 +585,7 @@ def write_year_items(
     scope_title: str,
     portolan_schema: str,
     year: int,
+    year_prose: tuple[str, str],
 ) -> list[Path]:
     """Write one year's generated documents into a locally staged tree.
 
@@ -661,6 +611,9 @@ def write_year_items(
         Portolan profile schema URI the year sub-catalog declares.
     year
         Year being written.
+    year_prose
+        The year sub-catalog's ``README.md`` and ``AGENTS.md``, rendered by
+        :func:`glace_catalog.documents.render_year_prose`.
 
     Returns
     -------
@@ -690,7 +643,7 @@ def write_year_items(
             collection_id=tiles_collection_id,
         )
         (tiles_dir / CATALOG_NAME).write_text(json.dumps(catalog, indent=2) + "\n")
-        readme, agents = year_catalog_prose(year, len(listed))
+        readme, agents = year_prose
         (tiles_dir / "README.md").write_text(readme)
         (tiles_dir / "AGENTS.md").write_text(agents)
         written += [tiles_dir / CATALOG_NAME, tiles_dir / "README.md", tiles_dir / "AGENTS.md"]
@@ -718,7 +671,7 @@ def read_item(path: Path | UPath) -> pystac.Item:
 
 def year_child_link(year: int) -> dict[str, str]:
     """Build the ``child`` link a tiles collection carries for one published year."""
-    return _link("child", f"./{year}/{CATALOG_NAME}", f"GLACE tiles {year}")
+    return _link("child", f"./{year}/{CATALOG_NAME}", f"{_collection_title('-tiles')} {year}")
 
 
 def mosaic_item_link(year: int) -> dict[str, str]:
@@ -730,6 +683,6 @@ def mosaic_item_link(year: int) -> dict[str, str]:
     return _link(
         "item",
         f"./{year}/{ITEM_NAME}",
-        f"GLACE annual mosaic, {year}",
+        f"{_collection_title('-mosaics')}, {year}",
         item=True,
     )

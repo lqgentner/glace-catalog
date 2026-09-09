@@ -47,6 +47,8 @@ import pandas as pd
 
 from glace_catalog import mosaics, stac, tiler, webmap
 from glace_catalog.config import settings
+from glace_catalog.documents import render_year_prose
+from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.save import write_year_items
@@ -418,9 +420,10 @@ def step_items(
             staged_mosaics,
             tiles_collection_id=scope.tiles_collection_id,
             mosaics_collection_id=scope.mosaics_collection_id,
-            scope_title=scope.catalog_title,
+            scope_title=vocabulary().catalog.short_title,
             portolan_schema=PORTOLAN_SCHEMA,
             year=args.year,
+            year_prose=render_year_prose(vocabulary(), args.year),
         )
         # Root-relative hrefs, so the year's slice survives a bucket move
         # untouched; finalize-catalog rebases them onto the published URL.
@@ -446,18 +449,19 @@ def mosaic_assets(
     state: stac.BuildState,
     frame: pd.DataFrame,
 ) -> dict[str, stac.MosaicAsset]:
-    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing."""
+    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing.
+
+    Title, description and roles are the collection's ``item_assets`` entry for
+    the same key, from the vocabulary; the band, the digest and the resolution
+    are what the step measured.
+    """
     written = state.details.get("mosaics", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for asset_key, detail in sorted(written.items()):
-        is_num = asset_key.endswith("_qa_num")
-        band: dict[str, Any] = {
-            "name": asset_key,
-            "data_type": "float32",
-            "nodata": "nan",
-        }
+        entry = vocabulary().item_asset(asset_key, "mosaics")
+        band: dict[str, Any] = dict(entry["bands"][0])
         unit = frame.loc[frame["asset_key"] == asset_key, "band_unit"]
-        if not is_num and len(unit) and str(unit.iloc[0]):
+        if not asset_key.endswith("_qa_num") and len(unit) and str(unit.iloc[0]):
             band["unit"] = str(unit.iloc[0])
         # The five statistics the writer embedded in the COG, republished as the
         # raster extension's `bands[].statistics` rather than measured again.
@@ -466,8 +470,9 @@ def mosaic_assets(
             band["statistics"] = statistics
         assets[asset_key] = stac.MosaicAsset(
             href=f"{asset_key}.tif",
-            title=f"{asset_key} annual mosaic",
-            roles=["quality"] if "_qa_" in asset_key else ["data", "cloud-optimized"],
+            title=entry["title"],
+            description=entry["description"],
+            roles=list(entry["roles"]),
             size=detail.get("size"),
             checksum=detail.get("checksum"),
             band=band,
@@ -476,45 +481,30 @@ def mosaic_assets(
     return assets
 
 
-def _read_instead(stem: str) -> str:
-    """Which COG to read for the values a rendering only pictures.
-
-    A false-colour archive has no COG of its own: it composes the two
-    polarizations, so it names both.
-    """
-    if stem.endswith("_rgb"):
-        base = stem.removesuffix("_rgb")
-        return f"read {base}_vv.tif and {base}_vh.tif"
-    return f"read {stem}.tif"
-
-
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
 
     One asset per archive, with the ``visual`` role and never ``data``: the pixels
     are an 8-bit stretch of the mosaic, backscatter in decibels, and an analysis
-    pipeline that read one would be reading a picture. The archive's own header
-    carries bounds and zoom range; the asset carries the grid, the digest, and a
-    sentence saying which COG to read instead.
+    pipeline that read one would be reading a picture. Title and description come
+    from the vocabulary, the same entry the collection's ``item_assets`` carries,
+    with the zoom range the step actually tiled; the archive's own header carries
+    bounds and zoom range too, and the asset adds the grid and the digest.
     """
     written = state.details.get("pmtiles", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for key, detail in sorted(written.items()):
-        stem = stac.data_key(key)
-        stretch = f"{detail['vmin']:g}-{detail['vmax']:g}"
-        ramp = f" through {detail['cmap']}" if detail.get("cmap") else ""
-        units = f" {detail['units']}" if detail.get("units") else ""
+        entry = vocabulary().viz_asset(
+            key,
+            min_zoom=int(detail["min_zoom"]),
+            max_zoom=int(detail["max_zoom"]),
+        )
         assets[key] = stac.MosaicAsset(
             href=detail["url"],
-            title=f"{stem} web-map tiles",
-            description=(
-                f"Pre-styled 8-bit WebP rendering of {stem} on WebMercatorQuad "
-                f"z{detail['min_zoom']}-z{detail['max_zoom']}, stretched {stretch}{units}{ramp} "
-                f"as the collection's style for {detail['year']} declares. "
-                f"Not for analysis: {_read_instead(stem)}."
-            ),
-            roles=["visual"],
-            media_type="application/vnd.pmtiles",
+            title=entry["title"],
+            description=entry["description"],
+            roles=list(entry["roles"]),
+            media_type=entry["type"],
             size=detail.get("size_bytes"),
             checksum=detail.get("checksum"),
             extra={"proj:code": "EPSG:3857"},

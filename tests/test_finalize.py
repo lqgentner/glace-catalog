@@ -84,6 +84,9 @@ def check_links(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
     checks["pmtiles:layers names the data stem's style layer"] = links[1]["pmtiles:layers"] == [
         "glace-coh12_vv-2024"
     ]
+    checks["the link is titled by the vocabulary"] = (
+        links[1]["title"] == "Coherence VV – PMTiles, 2024"
+    )
 
 
 def check_styles(

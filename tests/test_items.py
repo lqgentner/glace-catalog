@@ -31,6 +31,7 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING
 
+from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import (
     MosaicAsset,
@@ -211,7 +212,7 @@ def _staging_is_cleared() -> bool:
         return removed == 2 and sorted(p.name for p in staged.iterdir()) == ["notes.txt"]
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     """Run the gate."""
     names = {
         "coh12_vv": f"S1_COH12_LRW_{TILE}_VV_{WINDOW}.tif",
@@ -315,11 +316,29 @@ def main() -> int:
     ).startswith("1220")
     checks["a rendering is a PMTiles archive"] = viz.media_type == "application/vnd.pmtiles"
     checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
-    checks["a rendering says what it is"] = "Not for analysis" in (viz.description or "")
-    # A false-colour archive has no COG of its own; it names the two it composes.
-    checks["a false-colour rendering points at both polarizations"] = (
+    checks["a rendering says what it is"] = "A picture, not a measurement" in (
+        viz.description or ""
+    )
+    # A false-color archive has no COG of its own; it names the two it composes.
+    checks["a false-color rendering points at both polarizations"] = (
         "read coh12_vv.tif and coh12_vh.tif"
         in (rendered.assets["coh12_rgb_viz"].description or "")
+    )
+    # Every title is the vocabulary's, so an item and its collection's
+    # `item_assets` cannot name one file two ways.
+    words = vocabulary()
+    checks["a tile asset is titled by the vocabulary"] = (
+        item.assets["coh12_vv"].title == words.asset_title("coh12_vv") == "Coherence VV"
+    )
+    checks["a tile asset is described by the vocabulary"] = (
+        item.assets["rtc_vv"].description == words.item_asset("rtc_vv", "tiles")["description"]
+    )
+    checks["a tile data asset keeps its sar:product_type"] = (
+        item.assets["rtc_vv"].extra_fields.get("sar:product_type") == "RTC"
+    )
+    checks["a rendering is titled by the vocabulary"] = viz.title == "Coherence VV – PMTiles"
+    checks["a rendering's description carries the tiled zoom range"] = "z5-z13" in (
+        viz.description or ""
     )
     checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
 

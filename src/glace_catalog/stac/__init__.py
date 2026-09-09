@@ -50,7 +50,6 @@ from glace_catalog.stac.save import (
     mosaic_item_link,
     write_stac_geoparquet,
     year_catalog_document,
-    year_catalog_prose,
     year_child_link,
 )
 from glace_catalog.stac.store import (
@@ -131,6 +130,5 @@ __all__ = [
     "viz_key",
     "write_stac_geoparquet",
     "year_catalog_document",
-    "year_catalog_prose",
     "year_child_link",
 ]

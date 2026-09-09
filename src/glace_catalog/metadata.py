@@ -16,6 +16,7 @@ after a remeasurement. The vocabulary is the fix: one origin, and
 from __future__ import annotations
 
 from dataclasses import dataclass
+import functools
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -527,3 +528,13 @@ def load_vocabulary(root: Path = METADATA_DIR) -> Vocabulary:
     assets = _load_yaml(root / "assets.yaml")
     catalog = _catalog_config(_load_yaml(root / "catalog.yaml"))
     return Vocabulary(assets, catalog)
+
+
+@functools.cache
+def vocabulary() -> Vocabulary:
+    """Return the checkout's vocabulary, read once.
+
+    The build reads it for every title it writes, and the files do not change
+    under a run.
+    """
+    return load_vocabulary()

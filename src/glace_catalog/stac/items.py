@@ -20,6 +20,10 @@ from freezebase.mgrs import MGRSGeoBox
 import pystac
 from pystac.utils import datetime_to_str
 
+# The module, not the name: metadata imports the naming module through this
+# package, so under one import order this package is still initializing when
+# metadata is. Resolving `vocabulary` at call time keeps both orders working.
+from glace_catalog import metadata
 from glace_catalog.stac.naming import (
     POLARIZATIONS,
     PRODUCTS,
@@ -127,13 +131,6 @@ def _apply_common_metadata(item: pystac.Item, geobox: MGRSGeoBox, tile: str) -> 
     item.stac_extensions.extend([MGRS_EXTENSION_URI, PROJECTION_EXTENSION_URI])
 
 
-def _method_label(file: CompositeFile) -> str:
-    """Human-readable compositing method of a composite, from its filename."""
-    if file.orbit is None:
-        return "LRW composite"
-    return f"{'ascending' if file.orbit == 'A' else 'descending'} pass composite"
-
-
 def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:
     """Return the one compositing window a set of composites shares, as inclusive days.
 
@@ -219,20 +216,25 @@ def _asset(
     file: CompositeFile,
     info: RasterInfo,
     *,
-    title: str,
-    roles: list[str],
     valid_percent: float | None = None,
 ) -> pystac.Asset:
-    """Build one asset, describing its pixels entirely from the raster's own metadata."""
+    """Build one asset: its name from the vocabulary, its pixels from the raster's own metadata.
+
+    Title, description and roles are the collection's ``item_assets`` entry for
+    the same key, asked of the same vocabulary, so an item and its collection
+    cannot name one file two ways. The raster's own ``LAYER_DESCRIPTION`` stays
+    in its tags.
+    """
     require_valid(file, info)
+    entry = metadata.vocabulary().item_asset(file.asset_key, "tiles")
     asset = pystac.Asset(
         # Relative to the item that owns it, which is what keeps the store
         # relocatable: moving the bucket edits one self href, not every asset.
         href=file.published_name,
-        title=title,
-        description=info.tags.get("LAYER_DESCRIPTION"),
+        title=entry["title"],
+        description=entry["description"],
         media_type=pystac.MediaType.COG,
-        roles=roles,
+        roles=list(entry["roles"]),
     )
     band: dict[str, Any] = {"name": info.band_name} if info.band_name else {}
     band["data_type"] = info.data_type
@@ -268,32 +270,14 @@ def _data_asset(
     info: RasterInfo,
     valid_percent: float | None,
 ) -> pystac.Asset:
-    is_coh = file.product.startswith("COH")
-    if is_coh:
-        baseline = info.tags.get("TEMPORAL_BASELINE_DAYS") or file.product.removeprefix("COH")
-        quantity = f"{baseline}-day repeat-pass coherence"
-    else:
-        quantity = "RTC backscatter"
-    asset = _asset(
-        file,
-        info,
-        title=f"{quantity} {file.polarization}, {_method_label(file)}",
-        roles=["data", "cloud-optimized"],
-        valid_percent=valid_percent,
-    )
+    asset = _asset(file, info, valid_percent=valid_percent)
     asset.extra_fields["sar:polarizations"] = [file.polarization]
-    asset.extra_fields["sar:product_type"] = "COH" if is_coh else "RTC"
+    asset.extra_fields["sar:product_type"] = metadata.vocabulary().sar_product_type(file.asset_key)
     return asset
 
 
 def _qa_asset(file: CompositeFile, info: RasterInfo) -> pystac.Asset:
-    layer = info.tags.get("QA_LAYER", f"QA-{file.qa}")
-    return _asset(
-        file,
-        info,
-        title=f"{layer} ({file.product} {file.polarization}, {_method_label(file)})",
-        roles=["quality"],
-    )
+    return _asset(file, info)
 
 
 def _unanimous_raster_tag(
@@ -501,16 +485,6 @@ class MosaicAsset:
             asset.extra_fields["file:checksum"] = self.checksum
         asset.extra_fields.update(self.extra)
         return asset
-
-
-def _band_title(asset_key: str) -> str:
-    """Human-readable name of one asset key, e.g. ``COH12 VH observation count``."""
-    product, pol, *qa = asset_key.upper().split("_")
-    quantity = "12-day repeat-pass coherence" if product.startswith("COH") else "RTC backscatter"
-    if not qa:
-        return f"{quantity} {pol}"
-    role = "observation count" if qa[-1] == "NUM" else "composite quality metric"
-    return f"{quantity} {pol}, {role}"
 
 
 def build_mosaic_item(

@@ -38,6 +38,7 @@ from upath import UPath
 
 from glace_catalog import stac
 from glace_catalog.config import settings
+from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import PMTILES_LINK_REL, extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
@@ -133,17 +134,17 @@ def patch_collections(
 ) -> dict[str, Document]:
     """Patch the tracked collection documents with what has actually been published.
 
-    **These documents are source, not output.** Their prose, providers, license,
-    ``item_assets``, ``renders`` and style registrations are written by hand and
-    reviewed in git; nothing here touches them. What this adds is only what
-    depends on the run: the links to the years that exist and the temporal
-    extent. The run's manifest and configuration stay beside the source archive
-    and in the pipeline repository; every value a reader needs from them is on
-    the items as tags, ``file:size`` and ``file:checksum``.
+    **These documents are rendered from ``metadata/`` and reviewed in git, not
+    written here.** Their prose, providers, license, ``item_assets``, ``renders``
+    and style registrations come from ``scripts/render-catalog.py``; nothing
+    here touches them. What this adds is only what depends on the run: the
+    links to the years that exist and the temporal extent. The run's manifest
+    and configuration stay beside the source archive and in the pipeline
+    repository; every value a reader needs from them is on the items as tags,
+    ``file:size`` and ``file:checksum``.
 
-    That split is the whole reason the catalog is kept in git. A generator that
-    rewrote the descriptions would make every publication a diff nobody can
-    review, and would put the dataset's prose in Python string literals.
+    That split is what keeps a publication reviewable: rendering is a
+    commit-time step with a diff, and publication never rewrites prose.
 
     Parameters
     ----------
@@ -357,7 +358,7 @@ def pmtiles_links(
                     "rel": PMTILES_LINK_REL,
                     "href": f"{base}/{MOSAICS_DIR}/{year}/{archive.name}",
                     "type": "application/vnd.pmtiles",
-                    "title": f"{layer} web-map tiles, {year}",
+                    "title": vocabulary().pmtiles_link_title(archive.stem, year),
                     "pmtiles:layers": [f"glace-{layer}-{year}"],
                 },
             )
