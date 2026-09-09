@@ -1,11 +1,13 @@
 """Web-map tiling of the annual mosaics into PMTiles archives.
 
 Colour-maps a display-grid mosaic into RGBA and packs it into one PMTiles
-archive per layer. Nothing is written beside them: what a reader needs in order
-to draw a legend lives in the committed MapLibre style (M-27), and what it needs
-in order to find an archive is a ``rel="pmtiles"`` link on the mosaics
-collection (M-26). The ``layers.json`` manifest both used to travel in is
-retired.
+archive per layer, named ``{layer}_viz.pmtiles`` so it sits beside the COG it
+renders without sharing its stem. Nothing is written beside them: what a reader
+needs in order to draw a legend lives in the committed MapLibre style (M-27),
+and what it needs in order to find an archive is a ``rel="pmtiles"`` link on the
+mosaics collection (M-26) and an asset with the ``visual`` role on the year
+item, which ``publish-year`` writes from the record this module returns. The
+``layers.json`` manifest both used to travel in is retired.
 
 The source is the **VRT chain's canonical-grid mosaic**, which already sits on
 the WebMercatorQuad grid at the maximum zoom. That retires the double resampling
@@ -47,6 +49,8 @@ from rasterio.warp import transform_bounds
 
 from glace_catalog.mosaics import chain_env
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.stac.naming import viz_filename
+from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import (
     DEFAULT_STYLE_PATH,
     LayerStyle,
@@ -125,6 +129,7 @@ class LayerInfo:
     start_date: str
     end_date: str
     colors: list[str] = field(default_factory=list)
+    checksum: str = ""
 
 
 def native_max_zoom(res_m: float, lat_deg: float) -> int:
@@ -343,8 +348,8 @@ def build_pmtiles(
         Destination ``.pmtiles`` file. Must be local — packing an archive needs
         random writes.
     layer_id
-        Identifier of the layer, which is also the archive's filename stem. The
-        two are the same by rule, so the viewer can derive one from the other.
+        Identifier of the layer. The archive is named ``viz_filename(layer_id)``,
+        so a reader derives the data stem by stripping the suffix.
     year
         Composite year, for the manifest entry.
     style
@@ -443,6 +448,7 @@ def build_pmtiles(
         )
 
     size = out_path.stat().st_size
+    checksum = multihash_sha256_file(out_path)
     logger.info("Wrote %s: %d tiles, %.1f MB", out_path.name, written, size / 1e6)
     product, polarization = _split_layer_id(layer_id)
     return LayerInfo(
@@ -460,6 +466,7 @@ def build_pmtiles(
         units=style.units,
         source=str(src_vrt),
         size_bytes=size,
+        checksum=checksum,
         colors=colors,
         start_date=start_date,
         end_date=end_date,
@@ -572,7 +579,7 @@ def build_layers(
     def build_one(layer_id: str, style: LayerStyle | RgbStyle, source: Path | UPath) -> LayerInfo:
         return build_pmtiles(
             source,
-            out_dir / f"{layer_id}.pmtiles",
+            out_dir / viz_filename(layer_id),
             layer_id=layer_id,
             year=year,
             style=style,

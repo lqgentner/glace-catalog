@@ -35,6 +35,7 @@ from rasterio.enums import ColorInterp
 
 from glace_catalog.mosaics import YearVrts
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, zoom_resolution
+from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import LayerStyle
 from glace_catalog.tiler import tile_bounds
 from glace_catalog.webmap import (
@@ -135,16 +136,19 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     checks["the scratch rasters are gone"] = not any((work / "scratch").iterdir())
     checks["nothing but archives is staged"] = sorted(
         path.name for path in (work / "pmtiles").iterdir()
-    ) == ["coh12_vh.pmtiles", "coh12_vv.pmtiles"]
+    ) == ["coh12_vh_viz.pmtiles", "coh12_vv_viz.pmtiles"]
 
     info = built[1]
     archive = work / "pmtiles" / info.url
     checks["the manifest entry names the archive and its range"] = (
-        info.url == "coh12_vv.pmtiles"
+        info.url == "coh12_vv_viz.pmtiles"
         and info.size_bytes == archive.stat().st_size
         and (info.vmin, info.vmax, info.cmap) == (VMIN, VMAX, CMAP)
         and info.min_zoom == 11
         and info.max_zoom == MOSAIC_ZOOM
+    )
+    checks["the manifest entry carries the archive's digest"] = info.checksum == (
+        multihash_sha256_file(archive)
     )
     west, south, east, north = info.bounds
     checks["the manifest bounds are the mosaic's, near Interlaken"] = (
@@ -164,7 +168,7 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     checks["the NaN tile is not in the archive"] = (
         read_tile(archive, ORIGIN_X + 1, ORIGIN_Y + 1) is None
     )
-    sibling = read_tile(work / "pmtiles" / "coh12_vh.pmtiles", ORIGIN_X, ORIGIN_Y)
+    sibling = read_tile(work / "pmtiles" / "coh12_vh_viz.pmtiles", ORIGIN_X, ORIGIN_Y)
     checks["the layer warped alongside renders the same pixels"] = (
         tile is not None and sibling is not None and bool((tile == sibling).all())
     )
