@@ -7,7 +7,7 @@
   "sources": {
     "src-coh12_rgb": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_rgb.pmtiles",
+      "url": "pmtiles://../2024/coh12_rgb_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -15,7 +15,7 @@
     },
     "src-coh12_vv": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vv.pmtiles",
+      "url": "pmtiles://../2024/coh12_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -23,7 +23,7 @@
     },
     "src-coh12_vh": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vh.pmtiles",
+      "url": "pmtiles://../2024/coh12_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -31,7 +31,7 @@
     },
     "src-rtc_rgb": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_rgb.pmtiles",
+      "url": "pmtiles://../2024/rtc_rgb_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -39,7 +39,7 @@
     },
     "src-rtc_vv": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vv.pmtiles",
+      "url": "pmtiles://../2024/rtc_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -47,7 +47,7 @@
     },
     "src-rtc_vh": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vh.pmtiles",
+      "url": "pmtiles://../2024/rtc_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -55,7 +55,7 @@
     },
     "src-coh12_vv_qa_num": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vv_qa_num.pmtiles",
+      "url": "pmtiles://../2024/coh12_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -63,7 +63,7 @@
     },
     "src-coh12_vh_qa_num": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vh_qa_num.pmtiles",
+      "url": "pmtiles://../2024/coh12_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -71,7 +71,7 @@
     },
     "src-rtc_vv_qa_num": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vv_qa_num.pmtiles",
+      "url": "pmtiles://../2024/rtc_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -79,7 +79,7 @@
     },
     "src-rtc_vh_qa_num": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vh_qa_num.pmtiles",
+      "url": "pmtiles://../2024/rtc_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -87,7 +87,7 @@
     },
     "src-coh12_vv_qa_cqm": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vv_qa_cqm.pmtiles",
+      "url": "pmtiles://../2024/coh12_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -95,7 +95,7 @@
     },
     "src-coh12_vh_qa_cqm": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/coh12_vh_qa_cqm.pmtiles",
+      "url": "pmtiles://../2024/coh12_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -103,7 +103,7 @@
     },
     "src-rtc_vv_qa_cqm": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vv_qa_cqm.pmtiles",
+      "url": "pmtiles://../2024/rtc_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
@@ -111,7 +111,7 @@
     },
     "src-rtc_vh_qa_cqm": {
       "type": "raster",
-      "url": "pmtiles://../pmtiles/2024/rtc_vh_qa_cqm.pmtiles",
+      "url": "pmtiles://../2024/rtc_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,

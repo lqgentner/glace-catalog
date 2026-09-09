@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import logging
 from pathlib import Path
@@ -46,6 +47,7 @@ from glace_catalog.stac.store import (
     multihash_sha256,
     upload_tree,
 )
+from glace_catalog.styles import YEAR_IN_TEXT
 from glace_catalog.thumbnails import write_collection_thumbnails
 
 if TYPE_CHECKING:
@@ -188,20 +190,33 @@ def patch_collections(
     return patched
 
 
-def repoint_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
-    """Point every MapLibre style at the most recent published year.
+def style_asset(stem: str, year: int) -> tuple[str, str]:
+    """Asset key and filename of the published style of one template and year.
+
+    The template named ``default`` drops its stem, so the collection's default
+    style is ``styles/2024.json`` under ``style-2024`` rather than
+    ``styles/default-2024.json``. A second template keeps its stem.
+    """
+    if stem == "default":
+        return f"style-{year}", f"{year}.json"
+    return f"style-{stem}-{year}", f"{stem}-{year}.json"
+
+
+def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict[str, Path]:
+    """Write one published MapLibre style per year, from the tracked template.
 
     The styles are tracked source — their colours, opacity and legend blocks are
     reviewed, and under M-27 they are what the *build* reads to bake an archive —
-    but the year in each ``pmtiles://`` source is the one part that follows from
-    the run rather than from a design decision, so it is the one part rewritten
-    here. The stretch is per product and does not vary by year, which is what
-    lets one style describe every published year.
+    but the year is the one part that follows from the run rather than from a
+    design decision, so it is the one part rewritten here. The stretch is per
+    product and does not vary by year, which is why one reviewed template can
+    describe every published year; writing a copy per year is what makes every
+    ``pmtiles:layers`` id resolve to a layer some published style actually draws.
 
     Returns
     -------
     dict[str, pathlib.Path]
-        Staged path per style asset key, e.g. ``{"style-default": …}``. The
+        Staged path per style asset key, e.g. ``{"style-2024": …}``. The
         collection declares its digest over these bytes, not over the tracked
         ones, so the caller needs to know where they landed.
     """
@@ -209,19 +224,105 @@ def repoint_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Pat
     out.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
     for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json")):
-        style = json.loads(path.read_text())
-        # Every source, not just one: `default.json` declares one per published
-        # layer so that a client switches by visibility rather than by loading
-        # another style.
-        for source in style.get("sources", {}).values():
-            source["url"] = re.sub(r"/\d{4}/", f"/{latest}/", source["url"])
-        style["name"] = re.sub(r"\(\d{4}\)", f"({latest})", style["name"])
-        for layer in style.get("layers", []):
-            layer["id"] = re.sub(r"-\d{4}$", f"-{latest}", layer["id"])
-        (out / path.name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
-        written[f"style-{path.stem}"] = out / path.name
-    logger.info("Repointed %d style(s) at %d", len(written), latest)
+        template = json.loads(path.read_text())
+        for year in years:
+            style = deepcopy(template)
+            # Every source, not just one: `default.json` declares one per
+            # published layer so that a client switches by visibility rather
+            # than by loading another style.
+            for source in style.get("sources", {}).values():
+                source["url"] = re.sub(r"/\d{4}/", f"/{year}/", source["url"])
+                if source.get("attribution"):
+                    # The Copernicus wording is per year, so a style describing
+                    # 2022 must not credit 2024.
+                    source["attribution"] = YEAR_IN_TEXT.sub(str(year), source["attribution"])
+            style["name"] = re.sub(r"\(\d{4}\)", f"({year})", style["name"])
+            for layer in style.get("layers", []):
+                layer["id"] = re.sub(r"-\d{4}$", f"-{year}", layer["id"])
+            key, name = style_asset(path.stem, year)
+            (out / name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
+            written[key] = out / name
+    logger.info("Wrote %d style(s) over %d year(s)", len(written), len(years))
     return written
+
+
+def register_style_assets(document: Document, years: Sequence[int], latest: int) -> None:
+    """Replace the tracked style registrations with one entry per template and year.
+
+    The tracked document registers the template it keeps beside it; what the
+    store holds is the per-year copies :func:`repoint_styles` writes. Title,
+    description and media type come from the tracked entry, so the reviewed prose
+    is still the published prose, and only the latest year keeps the ``default``
+    role: a client that asks for one style gets the newest.
+    """
+    assets: dict[str, Document] = document.get("assets", {})
+    templates = {key: asset for key, asset in assets.items() if "style" in asset.get("roles", [])}
+    if not templates:
+        logger.warning("%s registers no style asset", MOSAICS_DIR)
+        return
+
+    generated: dict[str, Document] = {}
+    for key, template in templates.items():
+        stem = key.removeprefix("style-")
+        for year in years:
+            asset_key, name = style_asset(stem, year)
+            entry = {
+                "href": f"./styles/{name}",
+                "type": template.get("type", "application/vnd.mapbox.style+json"),
+                "title": f"{template['title']} ({year})",
+                "roles": ["style", "default"]
+                if year == latest and stem == "default"
+                else ["style"],
+            }
+            if template.get("description"):
+                entry["description"] = template["description"]
+            generated[asset_key] = entry
+
+    first = next(iter(templates))
+    rebuilt: dict[str, Document] = {}
+    for key, asset in assets.items():
+        if key == first:
+            rebuilt.update(generated)
+        if key not in templates:
+            rebuilt[key] = asset
+    document["assets"] = rebuilt
+
+
+def check_style_coverage(document: Document, styles: Mapping[str, Path]) -> None:
+    """Refuse a published archive link whose layer no published style draws.
+
+    ``pmtiles:layers`` is a promise that a client switching that layer on finds
+    it in the collection's style. Before one style was written per year, 42 of
+    the 56 ids named a layer no published style held, and the only symptom was a
+    legend that never appeared.
+
+    Raises
+    ------
+    SystemExit
+        On the first linked layer id absent from its year's style.
+    """
+    drawn: dict[str, set[str]] = {}
+    for path in styles.values():
+        match = re.search(r"(\d{4})", path.stem)
+        if match is None:
+            continue
+        style = json.loads(path.read_text())
+        ids = drawn.setdefault(match[1], set())
+        ids.update(str(layer["id"]) for layer in style.get("layers", []))
+
+    for link in document.get("links", []):
+        if link.get("rel") != PMTILES_LINK_REL:
+            continue
+        href = str(link.get("href", ""))
+        year = re.search(r"/(\d{4})/", href)
+        if year is None:
+            msg = f"{href} is registered as a web-map archive but names no year"
+            raise SystemExit(msg)
+        ids = drawn.get(year[1], set())
+        for layer_id in link.get("pmtiles:layers", []):
+            if layer_id not in ids:
+                msg = f"{href} names {layer_id}, which styles/{year[1]}.json does not draw"
+                raise SystemExit(msg)
 
 
 def pmtiles_links(
@@ -265,7 +366,7 @@ def write_documents(
     documents: Mapping[str, Document],
     *,
     base_url: str,
-    latest: int,
+    years: Sequence[int],
 ) -> None:
     """Stage the patched source documents and upload them.
 
@@ -308,9 +409,14 @@ def write_documents(
                     (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
 
         # Before the documents are written: the mosaics collection declares a
-        # digest over the style it links, and the bytes a reader downloads are
-        # the repointed ones -- the tracked file names a different year.
-        stamp_style_assets(documents, repoint_styles(source_dir, staged, latest))
+        # digest over the styles it links, and the bytes a reader downloads are
+        # the per-year copies -- the tracked template names one year only.
+        styles = repoint_styles(source_dir, staged, years)
+        register_style_assets(documents[MOSAICS_DIR], years, max(years))
+        stamp_style_assets(documents, styles)
+        # The links are already on the document, so this is the last chance to
+        # catch one naming a layer no published style draws.
+        check_style_coverage(documents[MOSAICS_DIR], styles)
 
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
@@ -349,11 +455,11 @@ def stamp_style_assets(
 ) -> None:
     """Fill ``file:size`` and ``file:checksum`` on the staged MapLibre styles.
 
-    The style is the one collection asset whose published bytes are written
-    during this very run and differ from the tracked file: :func:`repoint_styles`
-    rewrites the year in every ``pmtiles://`` source, so the digest has to be of
-    the repointed copy. It is measured here rather than in
-    :func:`stamp_collection_assets`, which runs before the styles are staged.
+    The styles are the collection assets whose published bytes are written during
+    this very run and differ from the tracked file: :func:`repoint_styles` writes
+    one copy per year, so each digest has to be of the copy a reader downloads. It
+    is measured here rather than in :func:`stamp_collection_assets`, which runs
+    before the styles are staged.
     """
     for key, path in sorted(styles.items()):
         asset = documents.get(MOSAICS_DIR, {}).get("assets", {}).get(key)
@@ -483,7 +589,7 @@ def main() -> None:
         layout,
         documents,
         base_url=args.base_url,
-        latest=years[-1],
+        years=years,
     )
 
     if not args.skip_validate:
