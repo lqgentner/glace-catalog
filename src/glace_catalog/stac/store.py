@@ -26,7 +26,7 @@ from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
-from glace_catalog.stac.naming import CompositeFile, parse_composite_name
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
@@ -139,21 +139,19 @@ class StoreLayout:
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
             |-- items.parquet  thumbnail.png  styles/
-            |-- pmtiles/{year}/{layer}.pmtiles
-            `-- {year}/item.json + 12 analysis COGs
+            `-- {year}/item.json + 12 analysis COGs + 14 web-map archives
 
     One thing is deliberately not mirrored from the old flat layout: there is no
     per-year directory shared by both collections, because a year is not a thing
     either collection owns.
 
-    The web-map archives sit under ``mosaics/pmtiles/{year}/`` rather than beside
-    the rasters they render, for two reasons. They are registered as
-    *collection*-level links, so putting them inside an item's own directory
-    would place a collection-level product under an item; and the stems would
-    otherwise collide — ``coh12_vv.tif`` is linear float32 and
-    ``coh12_vv.pmtiles`` is a pre-stretched 8-bit rendering, the backscatter ones
-    in decibels. Two files one letter apart holding different quantities is the
-    kind of thing that reads fine until someone compares them.
+    The web-map archives sit beside the rasters they render, in the year's own
+    item directory, because each one is an asset of that year's item. The
+    ``_viz`` suffix keeps the two products apart in a listing: ``coh12_vv.tif``
+    is linear float32 and ``coh12_vv_viz.pmtiles`` is a pre-stretched 8-bit
+    rendering, the backscatter ones in decibels, and two files one letter apart
+    holding different quantities is the kind of thing that reads fine until
+    someone compares them.
 
     Dotfiles are build state, never published: ``.build-state.json`` records what
     a step already did, and ``.items.parquet`` is the year's slice of the item
@@ -287,14 +285,14 @@ class StoreLayout:
         """MapLibre GL style assets of the mosaics collection."""
         return self.mosaics / "styles"
 
-    def pmtiles(self, year: int) -> Path | UPath:
-        """Directory of one year's web-map archives.
+    def viz(self, year: int, asset_key: str) -> Path | UPath:
+        """One year's web-map archive of ``asset_key``, beside the COG it renders.
 
-        Deliberately not inside the year's item directory: these are registered
-        as collection-level links, and keeping them apart stops
-        ``coh12_vv.pmtiles`` sitting beside the ``coh12_vv.tif`` it renders.
+        Same directory, distinct stem: ``coh12_vv_viz.pmtiles`` next to
+        ``coh12_vv.tif``. The archive is an asset of the year item with the
+        ``visual`` role and, on the collection, a ``rel="pmtiles"`` link.
         """
-        return self.mosaics / "pmtiles" / str(year)
+        return self.mosaic_year(year) / viz_filename(asset_key)
 
 
 def read_manifest(path: Path | UPath) -> pd.DataFrame:

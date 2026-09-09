@@ -294,7 +294,9 @@ def step_pmtiles(
         # `staged` is uploaded, and a warp interrupted half-way must not be.
         scratch=args.cache / "glace-store" / str(args.year) / "rgba",
     )
-    stac.store.upload_tree(staged, layout.pmtiles(args.year))
+    # Into the year's item directory, beside the COGs: the archives are assets of
+    # that item, and `upload_tree` merges rather than replaces.
+    stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return layers
 
 
@@ -608,6 +610,7 @@ def main() -> None:
                     layer.url.removesuffix(".pmtiles"): {
                         "url": layer.url,
                         "size_bytes": layer.size_bytes,
+                        "checksum": layer.checksum,
                         "bounds": layer.bounds,
                         "min_zoom": layer.min_zoom,
                         "max_zoom": layer.max_zoom,

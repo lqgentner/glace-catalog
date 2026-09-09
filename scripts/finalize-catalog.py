@@ -239,17 +239,17 @@ def pmtiles_links(
     base = base_url.rstrip("/")
     links: list[Document] = []
     for year in years:
-        directory = layout.pmtiles(year)
+        directory = layout.mosaic_year(year)
         if not directory.exists():
             continue
         for archive in sorted(directory.iterdir()):
-            if archive.suffix != ".pmtiles":
+            if archive.suffix != ".pmtiles" or not archive.stem.endswith(stac.VIZ_SUFFIX):
                 continue
-            layer = archive.stem
+            layer = stac.data_key(archive.stem)
             links.append(
                 {
                     "rel": PMTILES_LINK_REL,
-                    "href": f"{base}/{MOSAICS_DIR}/pmtiles/{year}/{archive.name}",
+                    "href": f"{base}/{MOSAICS_DIR}/{year}/{archive.name}",
                     "type": "application/vnd.pmtiles",
                     "title": f"{layer} web-map tiles, {year}",
                     "pmtiles:layers": [f"glace-{layer}-{year}"],

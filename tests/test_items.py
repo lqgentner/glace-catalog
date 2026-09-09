@@ -41,6 +41,7 @@ from glace_catalog.stac.naming import (
     viz_filename,
     viz_key,
 )
+from glace_catalog.stac.store import StoreLayout
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
@@ -209,6 +210,11 @@ def main() -> int:
         checks["a key without the suffix is refused"] = False
     except ValueError:
         checks["a key without the suffix is refused"] = True
+    layout = StoreLayout(Path("/store"))
+    checks["a rendering sits in its year's item directory"] = layout.viz(2024, "coh12_vv") == Path(
+        "/store/mosaics/2024/coh12_vv_viz.pmtiles"
+    )
+    checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

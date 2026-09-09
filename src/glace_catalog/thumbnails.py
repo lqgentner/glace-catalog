@@ -389,7 +389,7 @@ def write_collection_thumbnails(
         PNG is valid, the checksum is over real bytes, and the collection
         validates.
     """
-    archive = layout.pmtiles(year) / f"{THUMBNAIL_LAYER}.pmtiles"
+    archive = layout.viz(year, THUMBNAIL_LAYER)
     if not archive.exists():
         logger.warning("%s does not exist; thumbnails not rendered", archive)
         return
