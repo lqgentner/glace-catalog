@@ -97,6 +97,36 @@ class CompositeFile:
         return f"{self.asset_key}.tif"
 
 
+VIZ_SUFFIX = "_viz"
+"""Suffix that marks a rendering: ``coh12_vv_viz.pmtiles`` is the web-map
+archive of ``coh12_vv.tif``. The two sit in one directory, so the stem has to
+say which is the measurement and which is the picture."""
+
+
+def viz_key(asset_key: str) -> str:
+    """Asset key of the rendering of one data asset."""
+    return f"{asset_key}{VIZ_SUFFIX}"
+
+
+def viz_filename(asset_key: str) -> str:
+    """Filename of the rendering of one data asset, beside its COG."""
+    return f"{viz_key(asset_key)}.pmtiles"
+
+
+def data_key(key: str) -> str:
+    """Return the data asset a rendering key belongs to.
+
+    Raises
+    ------
+    ValueError
+        If ``key`` is not a rendering key.
+    """
+    if not key.endswith(VIZ_SUFFIX):
+        msg = f"{key!r} is not a rendering key; expected the {VIZ_SUFFIX!r} suffix"
+        raise ValueError(msg)
+    return key[: -len(VIZ_SUFFIX)]
+
+
 def by_asset_key(file: CompositeFile) -> str:
     """Sort key ordering composite files by the asset key they publish under.
 

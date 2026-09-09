@@ -34,7 +34,13 @@ from glace_catalog.stac.items import (
     build_tile_item,
     published_time_range,
 )
-from glace_catalog.stac.naming import CompositeFile, parse_composite_name
+from glace_catalog.stac.naming import (
+    CompositeFile,
+    data_key,
+    parse_composite_name,
+    viz_filename,
+    viz_key,
+)
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
@@ -191,6 +197,18 @@ def main() -> int:
     checks["the published range is the helper's"] = published_time_range(
         (date(2023, 7, 18), date(2023, 10, 15))
     ) == (datetime(2023, 7, 18, tzinfo=UTC), datetime(2023, 10, 16, tzinfo=UTC))
+    checks["a rendering's key is the data stem plus _viz"] = viz_key("coh12_vv") == "coh12_vv_viz"
+    checks["a rendering's filename follows its key"] = (
+        viz_filename("rtc_vh_qa_cqm") == "rtc_vh_qa_cqm_viz.pmtiles"
+    )
+    checks["the data stem is recoverable from the rendering key"] = (
+        data_key("coh12_rgb_viz") == "coh12_rgb"
+    )
+    try:
+        data_key("coh12_vv")
+        checks["a key without the suffix is refused"] = False
+    except ValueError:
+        checks["a key without the suffix is refused"] = True
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")
