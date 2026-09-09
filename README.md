@@ -17,9 +17,10 @@ open a pull request instead of finding an email address. The data does not: it
 is built onto object storage and referenced by URL.
 
 ```
-catalog/          the published tree — STAC JSON, README.md, AGENTS.md
+metadata/         the source: catalog.yaml, assets.yaml, the markdown templates
+catalog/          the published tree, rendered from metadata/ and committed
 src/glace_catalog/ the library that builds it
-scripts/          the build commands
+scripts/          the build commands, incl. render-catalog.py
 tools/            sync_data.py, which publishes the built store
 tests/            the gates, incl. rashid conformance
 docs/             DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
@@ -41,6 +42,8 @@ rather than skips.
 
 | what | where |
 | --- | --- |
+| every title, description and display stretch | `metadata/assets.yaml`; `metadata/catalog.yaml` holds the catalog's identity and prose |
+| the README and AGENTS.md templates | `metadata/templates/` |
 | what publishes, and to which bucket | `catalog.publish.yaml` |
 | where the build writes | `GLACE_STORE_ROOT` in `.env`; the composites it reads are `publish-year.py --src` |
 | the layout of a built store, and why | [`docs/DESIGN.md`](docs/DESIGN.md) §2 |
@@ -51,6 +54,21 @@ rather than skips.
 
 Data never lands in this repository. `.gitignore` refuses `.tif` and `.parquet`,
 and publication reads the built store on object storage, never this checkout.
+
+## Editing the metadata
+
+`catalog/` is generated output that is committed, so that the rendered tree is
+what a reviewer diffs, what rashid checks in CI, and what a release archives on
+Zenodo. Edit the source and render:
+
+```bash
+$EDITOR metadata/assets.yaml metadata/catalog.yaml metadata/templates/...
+uv run scripts/render-catalog.py            # writes catalog/
+uv run tests/test_render.py                 # the gate CI runs: catalog/ matches its source
+```
+
+A hand edit under `catalog/` fails that gate. The same vocabulary names every
+asset the build writes, so an item and its collection cannot disagree.
 
 ## Building a store
 
@@ -152,8 +170,8 @@ links, temporal extent, PMTiles links — concatenates the per-year slices into
 each collection's `items.parquet`, renders both collection thumbnails, stamps
 `file:size` and `file:checksum` on the assets it wrote, repoints the MapLibre
 styles at the newest year, and validates the result. It never touches the prose,
-providers, license or `item_assets`: those are source, edited here and
-reviewed.
+providers, license or `item_assets`: those are rendered from `metadata/` and
+reviewed in git.
 
 `--base-url` is the address the store will be served from. It is baked into
 every asset href, so **run this with the public address before publishing**,
@@ -191,7 +209,8 @@ release**; until then, cite the version and the repository URL.
 
 ## Contributing
 
-Wrong metadata is a pull request. Run `uv run tests/run_all.py` before
+Wrong metadata is a pull request against `metadata/`, followed by
+`uv run scripts/render-catalog.py`. Run `uv run tests/run_all.py` before
 pushing — a contribution that fails CI costs a round trip.
 
 ## License

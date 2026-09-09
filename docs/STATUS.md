@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-09-09.** Update this in the same commit as the change it describes;
+**As of 2026-09-09, evening.** Update this in the same commit as the change it describes;
 a stale status record is worse than none, because the next person trusts it. The
 design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
@@ -9,8 +9,8 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | | state |
 | --- | --- |
 | repository | scaffolded from `portolan-sdi/portolan-catalog-template`; the vendored publishers are gone (R-8) |
-| catalog documents | root + both collections written, **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)) |
-| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, sync, stac-check, rashid |
+| catalog documents | rendered from `metadata/` (R-18) and committed under `tests/test_render.py`; **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)). Reviewed in the Portolan browser 2026-09-09: asset titles unified across collections, items, links and style; `renders` re-synced with the remeasured stretches; QA assets badged `cloud-optimized`; projection extension dropped |
+| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, sync, stac-check, rashid |
 | source composites | Swiss 2021–2024 **regenerated with s1bursts 0.5.0** and verified 2026-09-08 through `load_and_verify_manifest`: 1 716 files across 143 tiles per year, every row carrying a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, styles per year, asset stamps, coverage check, validate); run end to end over 2021–2024 on 2026-09-09 with the archives in the item directories, one style per year and the remeasured stretches |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
@@ -65,11 +65,16 @@ Ordered by what blocks what. Everything not listed here is done.
   *Verified when* `publish-year.py --steps copy` on an Alpine year reports zero
   mismatches.
 - **P-8 — Re-measure the display ranges for the Alps.** Every stretch in
-  `default.json` was remeasured on the warped Swiss 2021–2024 display mosaics on
-  2026-09-09 (2–98 %, averaged over the years); `glace-alps` covers
+  `metadata/assets.yaml` was remeasured on the warped Swiss 2021–2024 display
+  mosaics on 2026-09-09 (2–98 %, averaged over the years); `glace-alps` covers
   2015–2025, which holds more of the S1A+S1B era. *Verified when* the ranges in
-  `catalog/mosaics/styles/default.json` are re-derived from published Alpine
-  mosaics.
+  `metadata/assets.yaml` are re-derived from published Alpine mosaics and
+  `catalog/` re-rendered.
+- **P-18 — Thumbnails over a basemap.** The browser review asked for a single
+  tile in front of a contextily basemap for the tiles collection, and the whole
+  mosaic over one for the mosaics, both framed 3:2. `thumbnails.py` cuts from
+  the archive alone today. *Verified when* both thumbnails show a basemap and
+  `tests/test_thumbnails.py` is green.
 - **P-9 — First release: the DOI fields.** Enable the Zenodo bridge for this
   repository on zenodo.org, cut the release (DESIGN.md §7), then add `sci:doi`
   (the concept DOI) and `sci:citation` to `catalog/catalog.json`,
@@ -105,6 +110,7 @@ grep -rn 'Switzerland\|Swiss\|glace-ch' --include='*.json' --include='*.md' \
      --include='*.yaml' --include='*.py' . | grep -v '^./.git'
 ```
 
-The substantive files are the two `collection.json`, `catalog/catalog.json`,
-`catalog.publish.yaml` and the six `README.md` / `AGENTS.md` under `catalog/`.
-The rest are constants, comments and the measured Swiss numbers in `docs/`.
+The substantive files are `metadata/catalog.yaml` (`scope`, `region`, `years`,
+`title`, the preliminary notice) and `catalog.publish.yaml`; then
+`uv run scripts/render-catalog.py` rewrites `catalog/`. The rest are constants,
+comments and the measured Swiss numbers in `docs/` and `metadata/assets.yaml`.

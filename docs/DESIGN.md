@@ -155,10 +155,13 @@ running it as a subprocess meant one worker pool, one environment and one
 `rio` executable per archive. The archive itself is written by the `pmtiles`
 package's own writer. What is owned here is the warp of one tile.
 
-**The style is committed, not generated.** `mosaics/styles/default.json` holds
-every published layer of one year — colour, opacity and legend stops are design
-decisions that belong in review. The only generated part is the year, and
-`finalize-catalog` writes one published copy per year from that template:
+**The style is rendered from the vocabulary and committed.**
+`mosaics/styles/default.json` holds every published layer of one year; its
+ramps, ranges and legend stops come from `metadata/assets.yaml`, where each
+number sits beside the reasoning for it, and `scripts/render-catalog.py` writes
+the file (R-18). The design decisions are reviewed in the source; the rendered
+file is what the build reads and what a client downloads. `finalize-catalog`
+writes one published copy per year from that template:
 `styles/{year}.json`, registered as `style-{year}`, the newest of them also
 carrying the `default` role as Portolan requires of the one a client should load.
 One style per year is what makes every `pmtiles:layers` id resolve — with a
@@ -166,7 +169,9 @@ single published style, 42 of the 56 Swiss ids named a layer no style held — a
 the stretch is per product and fixed across years, so the copies differ only in
 the year they name. Each layer's legend sits under `metadata.portolan:legend`, and
 **the build reads those numbers rather than holding a copy**: the ranges, ramps
-and units exist once, in a reviewed file.
+and units exist once, in `metadata/assets.yaml`, and reach the style, the
+`renders` blocks, the item descriptions and the prose tables through one
+vocabulary.
 
 ### How standard is any of this
 
@@ -202,10 +207,23 @@ Metadata in git, data on object storage, one uploader.
 
 | | tracked | published |
 | --- | --- | --- |
-| `catalog/catalog.json`, both `collection.json`, `_assets/` | yes | yes, patched |
-| every `README.md` / `AGENTS.md` down to collection level | yes | yes |
+| `metadata/`: `catalog.yaml`, `assets.yaml`, `templates/` | yes, the source | no |
+| `catalog/catalog.json`, both `collection.json`, `mosaics/styles/default.json` | yes, rendered | yes, patched |
+| every `README.md` / `AGENTS.md` down to collection level | yes, rendered | yes |
+| `catalog/_assets/` | yes | yes |
 | items, year catalogs, `items.parquet`, thumbnails, `.tif`, `.pmtiles` | no | yes |
 | `.build-state.json`, `.items.parquet`, any other dotfile | no | no |
+
+**`catalog/` is rendered from `metadata/` and committed (R-18).** Every title,
+description and display number is typed once, in `metadata/assets.yaml` or
+`metadata/catalog.yaml`, and `scripts/render-catalog.py` writes the tracked
+documents from them; `tests/test_render.py` fails when the tracked tree and a
+fresh render differ. The rendered tree stays in git because a rendered diff is
+what a reviewer reads, because rashid and the Portolan browser read a tree, and
+because a release archived on Zenodo then carries the STAC metadata itself. The
+build reads the same vocabulary (`glace_catalog.metadata`) for every asset title
+it writes, so an item and its collection's `item_assets` cannot name one file
+two ways; before R-18 the asset titles were written in eight places.
 
 **The build never writes into `catalog/`.** `scripts/publish-year.py` and
 `scripts/finalize-catalog.py` read the composites from the archive named by
@@ -214,8 +232,9 @@ UZH gateway.
 `finalize-catalog` stages the tracked documents into the store and *patches* the
 copies there with what depends on the run — year links, temporal extent, PMTiles
 links, `file:size` and `file:checksum` on the collection assets it wrote — and
-never touches prose, providers, license, `item_assets` or `renders`. A generator
-that rewrote descriptions would make every publication an unreviewable diff.
+never touches prose, providers, license, `item_assets` or `renders`. Rendering
+is a commit-time step with a diff; publication rewriting prose would make every
+publication an unreviewable one.
 
 **The store is the published tree.** `tools/sync_data.py` streams every object
 under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
@@ -379,11 +398,9 @@ Switzerland.
 | collection ids | derived from the scope | `glace-ch-tiles` → `glace-alps-tiles`, automatic |
 | publication target | `catalog.publish.yaml` | `write_prefix` and `public_base` both name `glace-ch` |
 | absolute asset hrefs | both `collection.json` | built from `public_base`; every `alternate` `s3://` href too |
-| root catalog identity | `catalog/catalog.json` | `id`, `title`, `description` |
-| collection prose | both `collection.json` | `title`, `description`, `keywords`, `extent` |
-| the documentation | 6 × `README.md` / `AGENTS.md` | written for Switzerland throughout: the perimeter, the coverage caveat, the tile counts, the worked examples' URLs |
-| the perimeter caveat | `catalog/tiles/README.md`, `AGENTS.md` | "coverage is the glacier perimeter, not the country" is a Swiss sentence |
-| the years | both `collection.json` extents | 2021–2024 → 2015–2025 |
+| root catalog identity and every document's prose | `metadata/catalog.yaml` | `scope`, `region`, `years`, `title`, the preliminary notice; the prose below the root title already reads "the Alpine Convention perimeter", so nothing else is retyped |
+| the rendered tree | `catalog/` | `uv run scripts/render-catalog.py` after the edit above |
+| the years | `metadata/catalog.yaml` | 2021–2024 → 2015–2025; the measured extent is patched at publication regardless |
 | the measured numbers | `docs/` | the QA ranges and the byte ratios are Swiss |
 
 STATUS.md carries the grep that finds them all.
@@ -427,12 +444,12 @@ struck through — git holds them.
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and pyrefly and covered by upstream's pyflakes pass instead | 6 |
 | M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links, as `visual` item assets (M-34), with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors | 3 |
 | M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 3 |
-| M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year, once per published year (M-35) | 3 |
+| M-21 | The style template is committed; `finalize-catalog` only repoints its year, once per published year (M-35). Since R-18 the template is rendered from `metadata/assets.yaml`, where the colour and legend decisions are reviewed | 3 |
 | M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem. A rendering carries `_viz`, which says what the file is rather than where it sits (M-34) | 2 |
 | M-24 | **The annual analysis mosaic is on ETRS89-LAEA at 40 m.** WebMercator is not equal-area, so any area statistic on it needs an undeclared correction | 3 |
 | M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header, the `rel: "pmtiles"` link, the item, and the MapLibre style's `metadata` | 3 |
-| M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** No stretch, ramp or range is copied into Python | 3 |
+| M-27 | **The display constants live once, in `metadata/assets.yaml`, and the build reads them through the rendered style.** No stretch, ramp or range is copied into Python; the regeneration gate holds the style to the source | 3 |
 | M-28 | QA ramps are **sequential**, `cmc.glasgow` for both QA-NUM and QA-CQM: dark red for few or poor, bright blue for many or good. CQM is a quality indicator where higher is better, not a ratio around 1.0, and its range is the measured one-sided one (−3 to 10 dB COH12, −4 to 8 dB RTC), since 0 dB has no physical meaning in the composites | 3 |
 | M-29 | **One credit line, read from the style**: `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header | 3 |
 | M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` | 4 |
@@ -452,10 +469,11 @@ struck through — git holds them.
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |
 | R-9 | Thumbnails are cut from the latest year's `coh12_rgb.pmtiles` archive, so they obey the committed style by construction: the whole scope for the mosaics, tile `32TMS24` (Aletsch) for the tiles, both framed 3:2 | 3 |
 | R-10 | The root catalog carries a `rel: "icon"` link to `_assets/glace-wordmark.svg` | 2 |
-| R-11 | No `.portolan/metadata.yaml`. It is the input of `portolan add`, which this repository does not use; a second copy of title, license and contact is drift waiting to happen | 4 |
+| R-11 | No `.portolan/metadata.yaml`: `portolan add` is not used here. Title, license and contact live in `metadata/catalog.yaml`, the only copy (R-18) | 4 |
 | R-12 | **Warp once per layer, tile locally.** The RGBA intermediate is a local overview-free GeoTIFF; the tiler is in-tree (`glace_catalog.tiler`, from rio-pmtiles, MIT) and shares one worker pool across the year's layers; `rio-pmtiles` is no longer a dependency | 3 |
 | R-12 | The item mirror satisfies `PTL-DAT-006/007/008/016` as rashid implements them: Hilbert-ordered rows, a float64 `bbox` covering column, 2 048-row groups | 2 |
 | R-13 | `RasterInfo.statistics` is a typed `BandStatistics` record; a missing field is a `ValueError` at manifest read, not a `KeyError` at publication | 5 |
 | R-14 | `docs/DESIGN.md` and `docs/STATUS.md` replace `MIGRATION.md`; `UPSTREAM.md` keeps only the on-disk contracts | — |
 | R-15 | `uv.lock` is tracked, so a fresh clone resolves to the dependency set CI ran | 6 |
 | R-16 | **The catalog is versioned by git tags and GitHub releases, each archived on Zenodo for a DOI.** One version string per release, `DATASET_VERSION`; `sci:doi` / `sci:citation` are added after the first release mints the concept DOI | 7 |
+| R-18 | **`catalog/` is rendered from `metadata/` and committed under a regeneration gate.** `assets.yaml` names and describes every asset once and holds every stretch beside its reasoning; `catalog.yaml` holds identity and prose; `templates/` the markdown. The build reads the same vocabulary for item titles, archive descriptions and link titles. Neither collection declares the projection extension: the tiles use no `proj:*` field and the mosaics' `proj:code` is on the items | 4 |

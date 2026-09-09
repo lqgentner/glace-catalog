@@ -6,30 +6,42 @@ own agent guides are `catalog/AGENTS.md` and one per collection; read those to
 
 ## Scope
 
-`glace-ch` is a rehearsal over Switzerland. The dataset is `glace-alps`, and
-every mention of Switzerland in `catalog/` is placeholder text with a removal
-date. `src/glace_catalog/scopes.py` is the seam: it already carries both scopes
-as committed constants, so the swap is a scope change below it and a prose
-rewrite above it. `docs/DESIGN.md` §8 says what changes; `docs/STATUS.md` carries
-the checklist.
+`glace-ch` is a rehearsal over Switzerland. The dataset is `glace-alps`.
+`src/glace_catalog/scopes.py` is the seam: it already carries both scopes as
+committed constants, so the swap is a scope change below it and a few lines in
+`metadata/catalog.yaml` above it: `scope`, `region`, `years`, `title` and the
+preliminary notice. The prose below the root title is already written for the
+Alpine Convention perimeter. `docs/DESIGN.md` §8 says what changes;
+`docs/STATUS.md` carries the checklist.
 
 ## The one rule
 
-**Edit the generator, not the generated output.** Everything under
-`catalog/tiles/{year}/`, `catalog/mosaics/{year}/`, and every `items.parquet`
-is written by `scripts/publish-year.py` and `scripts/finalize-catalog.py`. A
-hand edit there is overwritten on the next run and is not in git to begin with.
+**Edit the source, not the generated output.** Two generators, two outputs:
 
-The hand-maintained documents are: `catalog/catalog.json`, both
-`collection.json`, and every `README.md` / `AGENTS.md` down to the collection
-level. Those are committed and reviewed.
+- `scripts/render-catalog.py` renders everything under `catalog/` (the root
+  catalog, both `collection.json`, `mosaics/styles/default.json`, every
+  `README.md` / `AGENTS.md` down to the collection level) from `metadata/`:
+  `catalog.yaml` for identity and prose, `assets.yaml` for every asset title,
+  description and display stretch, `templates/` for the markdown. `catalog/` is
+  committed so the rendered tree is reviewable and archived with a release, and
+  `tests/test_render.py` fails when it and a fresh render differ.
+- `scripts/publish-year.py` and `scripts/finalize-catalog.py` write the store:
+  everything under `catalog/tiles/{year}/`, `catalog/mosaics/{year}/`, every
+  `items.parquet`, the per-year styles and the patched collection documents.
+  None of that is in git.
+
+The hand-maintained files are `metadata/*`, `catalog.publish.yaml` and
+`catalog/_assets/`. The build reads the same vocabulary the render does
+(`glace_catalog.metadata`), so an item's asset title is its collection's
+`item_assets` title by construction.
 
 ## Publication model
 
 One uploader, one bucket prefix. `tools/sync_data.py` streams every object
 under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
 documents and data alike: the store *is* the published tree, and its collection
-documents are the tracked ones that `finalize-catalog` patched on the way in.
+documents are the rendered, tracked ones that `finalize-catalog` patched on the
+way in.
 Syncing the tracked `catalog/` over them would strip those patches, which is why
 nothing does. Nothing is staged anywhere in between: both sides are `UPath`
 roots, and each object is read from one and written to the other in chunks,
