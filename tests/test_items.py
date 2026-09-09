@@ -28,6 +28,7 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
+import tempfile
 from typing import TYPE_CHECKING
 
 from glace_catalog.scopes import get_scope
@@ -199,6 +200,17 @@ def _pmtiles_state() -> BuildState:
     return state
 
 
+def _staging_is_cleared() -> bool:
+    """Check that an earlier build's archives leave staging and other files stay."""
+    with tempfile.TemporaryDirectory() as tmp:
+        staged = Path(tmp)
+        (staged / "coh12_vv.pmtiles").write_bytes(b"old")
+        (staged / "coh12_vv_viz.pmtiles").write_bytes(b"old too")
+        (staged / "notes.txt").write_bytes(b"keep")
+        removed = _publisher().clear_stale_archives(staged)
+        return removed == 2 and sorted(p.name for p in staged.iterdir()) == ["notes.txt"]
+
+
 def main() -> int:
     """Run the gate."""
     names = {
@@ -309,6 +321,8 @@ def main() -> int:
         "read coh12_vv.tif and coh12_vh.tif"
         in (rendered.assets["coh12_rgb_viz"].description or "")
     )
+    checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
+
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

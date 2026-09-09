@@ -271,6 +271,23 @@ def step_mosaics(
     return written
 
 
+def clear_stale_archives(staged: Path) -> int:
+    """Delete the archives a previous run left in the staging directory.
+
+    Everything under ``staged`` is uploaded into the year's item directory, so
+    an archive from an earlier build -- under a name the tiler no longer writes
+    -- would be published beside the new ones as if it were current. The
+    2026-09-09 migration did exactly that: the old ``{stem}.pmtiles`` rode
+    along with the new ``{stem}_viz.pmtiles`` and had to be deleted by hand.
+    """
+    stale = sorted(path for path in staged.iterdir() if path.suffix == ".pmtiles")
+    for path in stale:
+        path.unlink()
+    if stale:
+        logger.info("Removed %d stale archive(s) from %s", len(stale), staged)
+    return len(stale)
+
+
 def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
@@ -280,6 +297,7 @@ def step_pmtiles(
     """Render and upload the year's web-map archives."""
     staged = args.cache / "glace-store" / str(args.year) / "pmtiles"
     staged.mkdir(parents=True, exist_ok=True)
+    clear_stale_archives(staged)
     layers = webmap.build_layers(
         chain,
         staged,
