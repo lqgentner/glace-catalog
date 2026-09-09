@@ -6,10 +6,10 @@
 
 ```
 catalog.json
-├── tiles/collection.json      one item per (MGRS square, year), 12 COGs each
+├── tiles/collection.json      one item per (MGRS square, year), {{ n_assets_digits }} COGs each
 │   ├── items.parquet          ← query here, not the tree
 │   └── {year}/catalog.json → {tile}/item.json
-└── mosaics/collection.json    one item per year, 12 analysis COGs + 14 PMTiles
+└── mosaics/collection.json    one item per year, {{ n_assets_digits }} analysis COGs + {{ n_viz_digits }} PMTiles
     ├── items.parquet
     ├── styles/{year}.json     one MapLibre style per year
     └── {year}/item.json

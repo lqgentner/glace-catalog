@@ -80,8 +80,9 @@ side, and the `_viz` suffix is what keeps them apart: without it the names would
 differ by one extension while the quantities differ by a logarithm.
 
 Coherence is not converted: `coh12_*` archives are linear values under a fixed
-stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because those span decades
-of linear power and a linear 8-bit stretch would collapse them.
+stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because backscatter spans
+decades of linear power and the quality ratio spans decades too, and a linear
+8-bit stretch would collapse either.
 
 ## Caveat: the count layers are means
 

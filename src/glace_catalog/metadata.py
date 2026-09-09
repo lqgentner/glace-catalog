@@ -104,17 +104,20 @@ def parse_key(key: str) -> AssetRef:
     stem = data_key(key) if viz else key
     parts = stem.split("_")
     product = parts[0]
-    if product not in ("coh12", "rtc") or len(parts) < 2:  # noqa: PLR2004
-        raise KeyError(key)
-    if parts[1] == "rgb" and len(parts) == 2:  # noqa: PLR2004
-        return AssetRef(key, product, None, None, viz)
-    if parts[1] not in ("vv", "vh"):
-        raise KeyError(key)
-    if len(parts) == 2:  # noqa: PLR2004
-        return AssetRef(key, product, parts[1], None, viz)
-    if len(parts) == 4 and parts[2] == "qa" and parts[3] in ("num", "cqm"):  # noqa: PLR2004
-        return AssetRef(key, product, parts[1], parts[3], viz)
-    raise KeyError(key)
+    if product in ("coh12", "rtc") and len(parts) >= 2:  # noqa: PLR2004
+        if parts[1] == "rgb" and len(parts) == 2:  # noqa: PLR2004
+            return AssetRef(key, product, None, None, viz)
+        if parts[1] in ("vv", "vh"):
+            if len(parts) == 2:  # noqa: PLR2004
+                return AssetRef(key, product, parts[1], None, viz)
+            if len(parts) == 4 and parts[2] == "qa" and parts[3] in ("num", "cqm"):  # noqa: PLR2004
+                return AssetRef(key, product, parts[1], parts[3], viz)
+    msg = (
+        f"{key!r} is not an asset the vocabulary names; metadata/assets.yaml defines "
+        f"the twelve LRW keys {', '.join(ASSET_KEYS)}, their _viz renderings and "
+        f"{', '.join(RGB_KEYS)}"
+    )
+    raise KeyError(msg)
 
 
 @dataclass(frozen=True)
@@ -125,6 +128,9 @@ class CollectionConfig:
     short_title: str
     keywords: tuple[str, ...]
     description: str
+    year_description: str = ""
+    item_description: str = ""
+    style_description: str = ""
 
 
 @dataclass(frozen=True)
@@ -182,6 +188,9 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
             short_title=str(entry["short_title"]),
             keywords=tuple(entry.get("keywords", ())),
             description=str(entry["description"]),
+            year_description=str(entry.get("year_description", "")),
+            item_description=str(entry.get("item_description", "")),
+            style_description=str(entry.get("style_description", "")),
         )
         for name, entry in document["collections"].items()
     }
@@ -204,6 +213,32 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
 
 def _format_number(value: float) -> str:
     return f"{value:g}"
+
+
+_WORDS = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+)
+
+
+def _in_words(count: int) -> str:
+    """Spell a small count as prose does: ``twelve``, ``fourteen``."""
+    return _WORDS[count] if count < len(_WORDS) else str(count)
 
 
 def _pair(values: Sequence[Any]) -> tuple[float, float]:
@@ -326,6 +361,14 @@ class Vocabulary:
             stops=stops,
         )
 
+    def expression(self, key: str, band: str = "b1") -> str:
+        """Return the decibel conversion a layer's ``renders`` entry declares, or ``""``.
+
+        ``band`` is how the client names the band: ``{key}_b1`` in a STAC
+        ``renders`` entry, ``b1`` in a titiler URL.
+        """
+        return f"10*log10({band})" if self.display(key).decibel else ""
+
     def portable_cmap(self, key: str) -> str:
         """Name the matplotlib colormap a client without cmcrameri can resolve (M-10)."""
         ref = parse_key(key)
@@ -337,7 +380,7 @@ class Vocabulary:
         style = self.display(key)
         if isinstance(style, RgbStyle):
             return {
-                "title": self.asset_title(viz_key(key)).removesuffix(TITLE_SEPARATOR + "PMTiles"),
+                "title": self.asset_title(key),
                 "type": "channels",
                 "unit": style.units,
                 "decibel": style.decibel,
@@ -364,7 +407,7 @@ class Vocabulary:
         style = self.display(key)
         unit = f" {style.units}" if style.units else ""
         if isinstance(style, RgbStyle):
-            ranges = " / ".join(
+            ranges = "; ".join(
                 f"{_format_number(low)} to {_format_number(high)}" for low, high in style.ranges
             )
             return f"{ranges}{unit}"
@@ -378,7 +421,7 @@ class Vocabulary:
             raise KeyError(key)
         entry: dict[str, Any] = {"title": self.asset_title(key), "assets": [key]}
         if style.decibel:
-            entry["expression"] = f"10*log10({key}_b1)"
+            entry["expression"] = self.expression(key, band=f"{key}_b1")
         band = self._band(ref, collection)
         entry.update(
             {
@@ -402,14 +445,39 @@ class Vocabulary:
             "nodata": band["nodata"],
         }
 
-    def prose(self, template: str, **context: Any) -> str:
-        """Render one prose template against the catalog's base context and ``context``."""
-        base = {
+    def context(self) -> dict[str, Any]:
+        """Return what every prose template may name: the region, the years, the counts."""
+        return {
             "region": self.catalog.region,
             "first_year": self.catalog.first_year,
             "last_year": self.catalog.last_year,
+            "n_assets": _in_words(len(ASSET_KEYS)),
+            "n_viz": _in_words(len(VIZ_KEYS)),
+            "n_assets_digits": len(ASSET_KEYS),
+            "n_viz_digits": len(VIZ_KEYS),
+            "max_zoom": MOSAIC_ZOOM,
+            "analysis_resolution": _format_number(ANALYSIS_RESOLUTION),
+            "preliminary_notice": self._env.from_string(self.catalog.preliminary_notice).render(
+                region=self.catalog.region,
+            ),
         }
-        return self._env.from_string(template).render({**base, **context})
+
+    def prose(self, template: str, **context: Any) -> str:
+        """Render one prose template against :meth:`context` and ``context``."""
+        return self._env.from_string(template).render({**self.context(), **context})
+
+    def year_description(self, year: int) -> str:
+        """Render the description of one tiles year sub-catalog."""
+        return self.prose(self.catalog.collections["tiles"].year_description, year=year)
+
+    def mosaic_item_description(self, year: int) -> str:
+        """Render the description of one year's mosaic item."""
+        return self.prose(self.catalog.collections["mosaics"].item_description, year=year)
+
+    def style_description(self, year: int | None = None) -> str:
+        """Render the style asset's description: the template's, or one year's copy."""
+        template = self.catalog.collections["mosaics"].style_description
+        return self.prose(template, **({} if year is None else {"year": year}))
 
     def asset_description(self, key: str, collection: Collection) -> str:
         """Render the description of one raster asset on one grid."""

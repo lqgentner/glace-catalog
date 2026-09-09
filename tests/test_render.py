@@ -21,12 +21,10 @@ Run: uv run tests/test_render.py
 
 from __future__ import annotations
 
-import filecmp
 from pathlib import Path
 import sys
-import tempfile
 
-from glace_catalog.documents import render_tree
+from glace_catalog.documents import stale_documents
 from glace_catalog.metadata import VIZ_KEYS, load_vocabulary
 from glace_catalog.stac.naming import ASSET_KEYS
 from glace_catalog.styles import LayerStyle, RgbStyle
@@ -102,26 +100,10 @@ if not isinstance(coh12_vv, LayerStyle) or coh12_vv.vmax != 0.75:
     problems.append("coh12_vv vmax is not the remeasured 0.75")
 
 # --- the regeneration gate -------------------------------------------------
-with tempfile.TemporaryDirectory() as tmp:
-    out = Path(tmp)
-    render_tree(vocabulary, out)
-    rendered = {path.relative_to(out) for path in out.rglob("*") if path.is_file()}
-    tracked = {
-        path.relative_to(CATALOG)
-        for path in CATALOG.rglob("*")
-        if path.is_file()
-        and not any(part.startswith(".") for part in path.parts)
-        and path.relative_to(CATALOG).parts[0] != "_assets"
-    }
-    for missing in sorted(tracked - rendered):
-        problems.append(f"catalog/{missing} is tracked but the render does not write it")
-    for extra in sorted(rendered - tracked):
-        problems.append(f"catalog/{extra} is rendered but not tracked")
-    for path in sorted(rendered & tracked):
-        if not filecmp.cmp(out / path, CATALOG / path, shallow=False):
-            problems.append(f"catalog/{path} differs from a fresh render")
-    if any("differs" in problem or "not tracked" in problem for problem in problems):
-        problems.append("regenerate with: uv run scripts/render-catalog.py")
+stale = stale_documents(vocabulary, CATALOG)
+problems += stale
+if stale:
+    problems.append("regenerate with: uv run scripts/render-catalog.py")
 
 if problems:
     for problem in problems:

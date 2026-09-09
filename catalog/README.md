@@ -40,7 +40,7 @@ SAR item 3.1 asks.
 ## License
 
 **CC-BY-4.0.** Contains modified Copernicus Sentinel data. Cite the
-dataset and the Copernicus programme.
+dataset and Copernicus.
 
 ## Provenance
 

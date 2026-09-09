@@ -6,8 +6,10 @@
 # fails when the tracked tree and a fresh render differ.
 #
 # Prose fields are Jinja2 templates over: region, first_year, last_year,
-# public_base, catalog (this file), assets (the vocabulary tables). Ids and
-# grids come from `src/glace_catalog/scopes.py` for the scope named here.
+# n_assets (twelve), n_viz (fourteen), max_zoom, analysis_resolution, and
+# `year` where a field describes one year. Ids and grids come from
+# `src/glace_catalog/scopes.py` for the scope named here; the markdown
+# templates under templates/ see a wider context, listed in documents.py.
 
 scope: ch
 
@@ -53,6 +55,9 @@ description: >-
   record in its own tags. In addition, raster PMTiles in Web Mercator are
   provided for web maps, such as the
   [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
+
+
+  {{ preliminary_notice }}
 
 license: CC-BY-4.0
 
@@ -100,22 +105,41 @@ collections:
     description: >-
       The GLACE composites on 10 km MGRS grid squares in their own UTM zone at
       10 m grid spacing, one item per square and year. Each item carries
-      twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in
-      VV and VH, and for each of the four a contributing-observations count and
-      a composite quality map. Stored values are linear; the decibel display
+      {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
+      backscatter in VV and VH, and for each of the four a
+      contributing-observations count and a composite quality map. Stored values are linear; the decibel display
       conversion is declared in the renders. Items are grouped in one
       sub-catalog per year, and the item mirror items.parquet is the query path.
+    # One year sub-catalog, rendered with `year`.
+    year_description: >-
+      The MGRS squares composited in {{ year }}, one item each, every item
+      carrying that square's {{ n_assets }} single-band composites.
   mosaics:
     title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
+    # The style asset. Rendered with `year` for a published per-year copy and
+    # without one for the tracked template.
+    style_description: >-
+      {% if year is defined %}Every published web-map layer of {{ year }}, the
+      first visible and the rest hidden.{% else %}The template every published
+      year's style is written from, one copy per year as styles/{year}.json.
+      Every web-map layer of one year, the first visible and the rest
+      hidden.{% endif %} Each layer's metadata.portolan:legend carries the color
+      ramp and value range baked into its archive.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an
       area or area-change statistic can be taken from pixel counts without a
       latitude correction. Every year shares the same extent, so multitemporal
-      stacks need no alignment step. Twelve single-band analysis rasters per
-      year, in linear units, each a Cloud-Optimized GeoTIFF with internal
-      overviews. Drawing is served separately by fourteen PMTiles archives per
-      year, tiled on the WebMercatorQuad grid at zoom 13. Both products are
-      resampled from the 10 m tiles, so neither is derived from the other.
+      stacks need no alignment step. {{ n_assets | capitalize }} single-band
+      analysis rasters per year, in linear units, each a Cloud-Optimized
+      GeoTIFF with internal overviews. Drawing is served separately by
+      {{ n_viz }} PMTiles archives per year, tiled on the WebMercatorQuad grid
+      at zoom {{ max_zoom }}. The rasters and the archives are both resampled
+      from the 10 m tiles, so neither is derived from the other.
+    # One mosaic item, rendered with `year`.
+    item_description: >-
+      Annual mosaics of the GLACE composites for {{ year }}, on the fixed
+      equal-area grid (ETRS89-LAEA, {{ analysis_resolution }} m) every year of
+      this collection shares.

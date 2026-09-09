@@ -549,10 +549,7 @@ def year_catalog_document(
         "stac_extensions": [portolan_schema],
         "id": f"{collection_id}-{year}",
         "title": _year_title(collection_id, year),
-        "description": (
-            f"The MGRS squares composited in {year}, one item each, every item carrying "
-            "that square's twelve single-band composites."
-        ),
+        "description": metadata.vocabulary().year_description(year),
         "links": [
             _link("root", f"../../{CATALOG_NAME}", scope_title),
             _link("parent", "../collection.json", _collection_title(collection_id)),

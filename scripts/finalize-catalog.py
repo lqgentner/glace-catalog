@@ -256,9 +256,9 @@ def register_style_assets(document: Document, years: Sequence[int], latest: int)
     published naming, and the ``default`` role follows the template that carries
     it, on the latest year only: a client that asks for one style gets the newest.
 
-    The description is written here rather than copied, because the tracked
-    entry's prose describes a *template* and each published entry describes one
-    year's style.
+    The description is the vocabulary's per-year wording rather than a copy of
+    the tracked entry's, because that one describes a *template* and each
+    published entry describes one year's style.
     """
     assets: dict[str, Document] = document.get("assets", {})
     templates = {key: asset for key, asset in assets.items() if "style" in asset.get("roles", [])}
@@ -276,11 +276,7 @@ def register_style_assets(document: Document, years: Sequence[int], latest: int)
                 "href": f"./styles/{name}",
                 "type": template.get("type", "application/vnd.mapbox.style+json"),
                 "title": f"{template['title']} ({year})",
-                "description": (
-                    f"Every published web-map layer of {year}, the first visible and the rest "
-                    "hidden. Each layer's metadata.portolan:legend carries the colour ramp and "
-                    "value range baked into its archive, which is where those constants live."
-                ),
+                "description": vocabulary().style_description(year),
                 "roles": ["style", "default"] if is_default else ["style"],
             }
 

@@ -12,7 +12,7 @@
   ],
   "id": "glace-ch-mosaics",
   "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)",
-  "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction. Every year shares the same extent, so multitemporal stacks need no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13. Both products are resampled from the 10 m tiles, so neither is derived from the other.",
+  "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction. Every year shares the same extent, so multitemporal stacks need no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13. The rasters and the archives are both resampled from the 10 m tiles, so neither is derived from the other.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -51,10 +51,10 @@
     "spatial": {
       "bbox": [
         [
-          6.767578,
-          45.828799,
-          10.458984,
-          47.338823
+          6.7676,
+          45.8288,
+          10.459,
+          47.3388
         ]
       ]
     },
@@ -559,7 +559,7 @@
     "coh12_rgb_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence False Color – PMTiles",
-      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV / VH) on WebMercatorQuad z5-z13, stretched 0.1 to 0.75 / 0.1 to 0.55 / 0.8 to 2.6. A picture, not a measurement: read coh12_vv.tif and coh12_vh.tif for values.",
+      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV / VH) on WebMercatorQuad z5-z13, stretched 0.1 to 0.75; 0.1 to 0.55; 0.8 to 2.6. A picture, not a measurement: read coh12_vv.tif and coh12_vh.tif for values.",
       "roles": [
         "visual"
       ]
@@ -567,7 +567,7 @@
     "rtc_rgb_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter False Color – PMTiles",
-      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV − VH) on WebMercatorQuad z5-z13, stretched -16.5 to -4 / -23.5 to -11 / 3.5 to 10.5 dB. A picture, not a measurement: read rtc_vv.tif and rtc_vh.tif for values.",
+      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV − VH) on WebMercatorQuad z5-z13, stretched -16.5 to -4; -23.5 to -11; 3.5 to 10.5 dB. A picture, not a measurement: read rtc_vv.tif and rtc_vh.tif for values.",
       "roles": [
         "visual"
       ]
@@ -601,7 +601,7 @@
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "GLACE web-map style",
-      "description": "The template every published year's style is written from, one copy per year as styles/{year}.json. Every web-map layer of one year, the first visible and the rest hidden; each layer's metadata.portolan:legend carries the color ramp and value range baked into its archive.",
+      "description": "The template every published year's style is written from, one copy per year as styles/{year}.json. Every web-map layer of one year, the first visible and the rest hidden. Each layer's metadata.portolan:legend carries the color ramp and value range baked into its archive.",
       "roles": [
         "style",
         "default"

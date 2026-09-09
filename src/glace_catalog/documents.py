@@ -19,8 +19,10 @@ touches prose.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import filecmp
 import json
 from pathlib import Path
+import tempfile
 from typing import TYPE_CHECKING, Any
 
 import jinja2
@@ -39,6 +41,7 @@ from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM, Grid
 from glace_catalog.stac.items import DATASET_VERSION
 from glace_catalog.stac.naming import ASSET_KEYS, viz_filename
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR
+from glace_catalog.stac.store import ASSETS_DIR
 from glace_catalog.styles import LayerStyle
 
 if TYPE_CHECKING:
@@ -126,8 +129,13 @@ def load_public_bases(path: Path = PUBLISH_CONFIG) -> PublicBases:
     )
 
 
-def wgs84_bbox(grid: Grid, decimals: int = 6) -> list[float]:
-    """Return the WGS84 bounding box of a grid, with densified edges."""
+def wgs84_bbox(grid: Grid, decimals: int = 4) -> list[float]:
+    """Return the WGS84 bounding box of a grid, with densified edges.
+
+    Four decimals is about ten metres, which is enough for an extent and coarse
+    enough that a PROJ upgrade moving the last digit does not fail the
+    regeneration gate for no metadata reason.
+    """
     transformer = Transformer.from_crs(grid.crs, "EPSG:4326", always_xy=True)
     left, bottom, right, top = transformer.transform_bounds(*grid.bounds, densify_pts=21)
     return [round(v, decimals) for v in (left, bottom, right, top)]
@@ -223,12 +231,7 @@ def _collection_assets(
             "href": f"./styles/{STYLE_TEMPLATE_NAME}.json",
             "type": STYLE_MEDIA_TYPE,
             "title": "GLACE web-map style",
-            "description": (
-                "The template every published year's style is written from, one copy per "
-                "year as styles/{year}.json. Every web-map layer of one year, the first "
-                "visible and the rest hidden; each layer's metadata.portolan:legend carries "
-                "the color ramp and value range baked into its archive."
-            ),
+            "description": vocabulary.style_description(),
             "roles": ["style", "default"],
         }
     return assets
@@ -368,13 +371,10 @@ def _environment() -> jinja2.Environment:
 def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]:
     catalog = vocabulary.catalog
     return {
+        **vocabulary.context(),
         "catalog": catalog,
-        "region": catalog.region,
-        "first_year": catalog.first_year,
-        "last_year": catalog.last_year,
         "public_base": bases.https,
         "public_s3_base": bases.s3,
-        "preliminary_notice": vocabulary.prose(catalog.preliminary_notice),
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],
         "tile_assets": vocabulary.asset_rows(TILES_DIR),
@@ -388,7 +388,7 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "rescale": lambda key: _rescale(vocabulary, key),
         "cmap": lambda key: _cmap(vocabulary, key),
         "portable_cmap": vocabulary.portable_cmap,
-        "expression": lambda key: "10*log10(b1)" if vocabulary.display(key).decibel else "",
+        "expression": vocabulary.expression,
         "title": vocabulary.asset_title,
     }
 
@@ -440,6 +440,46 @@ def render_year_prose(
 
 
 # --- the tree -------------------------------------------------------------------
+
+
+def tracked_documents(root: Path) -> set[Path]:
+    """List the rendered documents under a catalog tree, relative to it.
+
+    Everything except dotfiles and ``_assets/``, which the render does not write.
+    """
+    return {
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_file()
+        and not any(part.startswith(".") for part in path.relative_to(root).parts)
+        and path.relative_to(root).parts[0] != ASSETS_DIR
+    }
+
+
+def stale_documents(vocabulary: Vocabulary, tracked: Path) -> list[str]:
+    """Compare ``tracked`` with a fresh render; return one line per difference.
+
+    Empty when the tree is current. A file the render does not write, one it
+    writes that is not tracked, and one whose bytes differ are each named, so
+    the regeneration gate and ``render-catalog.py --check`` report the same
+    thing.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        rendered = {path.relative_to(out) for path in render_tree(vocabulary, out)}
+        existing = tracked_documents(tracked)
+        problems = [
+            f"{tracked / path} is tracked but not rendered" for path in sorted(existing - rendered)
+        ]
+        problems += [
+            f"{tracked / path} is rendered but not tracked" for path in sorted(rendered - existing)
+        ]
+        problems += [
+            f"{tracked / path} differs from a fresh render"
+            for path in sorted(rendered & existing)
+            if not filecmp.cmp(out / path, tracked / path, shallow=False)
+        ]
+    return problems
 
 
 def render_tree(

@@ -1,8 +1,8 @@
 # GLACE mosaics – agent guide
 
-One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at 40 m. Twelve
-analysis rasters per year and fourteen PMTiles archives beside them, which are
-what drawing uses.
+One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at 40 m.
+Twelve analysis rasters per year and fourteen PMTiles archives beside
+them, which are what drawing uses.
 
 ## The grid is the point
 

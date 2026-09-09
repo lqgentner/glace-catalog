@@ -11,12 +11,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import filecmp
 import logging
 from pathlib import Path
-import tempfile
 
-from glace_catalog.documents import ROOT, render_tree
+from glace_catalog.documents import ROOT, render_tree, stale_documents
+from glace_catalog.metadata import load_vocabulary
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -34,15 +33,9 @@ def main() -> None:
         logger.info("Rendered %d document(s) into %s", len(written), args.out)
         return
 
-    with tempfile.TemporaryDirectory() as tmp:
-        stale = [
-            path.relative_to(tmp)
-            for path in render_tree(out=Path(tmp))
-            if not (args.out / path.relative_to(tmp)).exists()
-            or not filecmp.cmp(path, args.out / path.relative_to(tmp), shallow=False)
-        ]
-    for path in stale:
-        logger.error("%s is stale", args.out / path)
+    stale = stale_documents(load_vocabulary(), args.out)
+    for problem in stale:
+        logger.error("%s", problem)
     if stale:
         raise SystemExit(1)
     logger.info("%s is current", args.out)

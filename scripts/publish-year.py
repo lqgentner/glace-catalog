@@ -51,11 +51,13 @@ from glace_catalog.documents import render_year_prose
 from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
+from glace_catalog.stac.naming import ASSET_KEYS
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
+from glace_catalog.styles import RgbStyle
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import date
 
     import pystac
@@ -99,6 +101,16 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         raise SystemExit(msg)
 
     files = stac.manifest_composites(frame, src)
+    # The catalog publishes the twelve LRW composites and nothing else: the
+    # vocabulary names no pass composite, so one would fail at the items step,
+    # after the copy. Refuse it before any byte moves.
+    unpublishable = sorted({file.asset_key for file in files if file.asset_key not in ASSET_KEYS})
+    if unpublishable:
+        msg = (
+            f"{src} holds composites the catalog does not publish: {', '.join(unpublishable)}. "
+            "Only the LRW composites named in metadata/assets.yaml are published."
+        )
+        raise SystemExit(msg)
     by_tile: dict[str, list[stac.CompositeFile]] = {}
     for file in files:
         by_tile.setdefault(file.tile, []).append(file)
@@ -403,12 +415,7 @@ def step_items(
         assets={**mosaic_assets(state, frame), **visual_assets(state)},
         build_fingerprint=build_fingerprint,
     )
-    grid = scope.analysis_grid
-    mosaic_item.properties["description"] = (
-        f"Annual mosaics of the GLACE composites for {args.year}, on the fixed "
-        f"equal-area grid ({grid.crs}, {grid.resolution:g} m) every year of this "
-        "collection shares."
-    )
+    mosaic_item.properties["description"] = vocabulary().mosaic_item_description(args.year)
 
     with tempfile.TemporaryDirectory() as tmp:
         staged_tiles = Path(tmp) / "tiles"
@@ -481,6 +488,33 @@ def mosaic_assets(
     return assets
 
 
+def _require_baked_stretch(key: str, detail: Mapping[str, Any]) -> None:
+    """Refuse to describe an archive with a stretch other than the one it baked.
+
+    The description states the vocabulary's range; the build state records the
+    range the tiler actually used. They agree unless a state file outlived a
+    change to ``metadata/assets.yaml``, in which case the archive is stale and
+    describing it with the new numbers would be a lie.
+
+    Raises
+    ------
+    SystemExit
+        Naming the archive and both ranges.
+    """
+    style = vocabulary().display(stac.data_key(key))
+    baked = (float(detail["vmin"]), float(detail["vmax"]))
+    if isinstance(style, RgbStyle):
+        expected = (style.ranges[0][0], style.ranges[0][1])
+    else:
+        expected = (float(style.vmin or 0), float(style.vmax or 0))
+    if baked != expected:
+        msg = (
+            f"{key}: the archive was baked with {baked} but metadata/assets.yaml now says "
+            f"{expected}; rebuild it with --force-from pmtiles"
+        )
+        raise SystemExit(msg)
+
+
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
 
@@ -494,6 +528,7 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     written = state.details.get("pmtiles", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for key, detail in sorted(written.items()):
+        _require_baked_stretch(key, detail)
         entry = vocabulary().viz_asset(
             key,
             min_zoom=int(detail["min_zoom"]),

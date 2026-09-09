@@ -167,10 +167,10 @@ def _pmtiles_state() -> BuildState:
             "checksum": "1220" + "ab" * 32,
             "cmap": "cmc.lipari",
             "vmin": 0.1,
-            "vmax": 0.8,
+            "vmax": 0.75,
             "units": "",
             "min_zoom": 5,
-            "max_zoom": 13,
+            "max_zoom": 12,
             "bounds": [5.9, 45.8, 10.5, 47.8],
             "product": "COH12",
             "polarization": "VV",
@@ -185,10 +185,10 @@ def _pmtiles_state() -> BuildState:
             "checksum": "1220" + "cd" * 32,
             "cmap": "",
             "vmin": 0.1,
-            "vmax": 0.8,
+            "vmax": 0.75,
             "units": "",
             "min_zoom": 5,
-            "max_zoom": 13,
+            "max_zoom": 12,
             "bounds": [5.9, 45.8, 10.5, 47.8],
             "product": "COH12",
             "polarization": "RGB",
@@ -337,10 +337,19 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         item.assets["rtc_vv"].extra_fields.get("sar:product_type") == "RTC"
     )
     checks["a rendering is titled by the vocabulary"] = viz.title == "Coherence VV – PMTiles"
-    checks["a rendering's description carries the tiled zoom range"] = "z5-z13" in (
+    checks["a rendering's description carries the tiled zoom range"] = "z5-z12" in (
         viz.description or ""
     )
     checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
+    # A state file that outlived a stretch change describes an archive that was
+    # baked with other numbers; the description must not state the new ones.
+    stale = _pmtiles_state()
+    stale.details["pmtiles"]["coh12_vv_viz"]["vmax"] = 0.8
+    try:
+        _publisher().visual_assets(stale)
+        checks["an archive baked with a stale stretch is refused"] = False
+    except SystemExit:
+        checks["an archive baked with a stale stretch is refused"] = True
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

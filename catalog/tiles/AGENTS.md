@@ -1,7 +1,7 @@
 # GLACE tiles – agent guide
 
-One item per (MGRS square, year). Twelve single-band COGs per item, 10 m, in
-each square's own UTM zone.
+One item per (MGRS square, year). Twelve single-band COGs per item,
+10 m, in each square's own UTM zone.
 
 ## Query the mirror, do not walk the tree
 
@@ -47,7 +47,7 @@ carries the same stretches with portable matplotlib colormap names.
 
 ## Provenance is in the file
 
-Each GeoTIFF carries about 30 dataset tags recording the processing chain
+Each GeoTIFF carries the dataset tags recording the processing chain
 (`PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`, `COMPOSITING_*`, `BACKSCATTER_*`,
 `COHERENCE_*`). The item properties mirror them under `glace:*` and
 `processing:*`, so you can filter on them without opening a raster, but the
@@ -73,8 +73,7 @@ the tiles are per-UTM-zone and the mosaics are ETRS89-LAEA.
 - **NaN is nodata** on every float32 band. Some browser GeoTIFF decoders drop
   LERC's validity mask and hand a NaN through as `0`; that is a client defect,
   not a property of these files.
-- Tiles are 1000 × 1000 px with one internal overview level, LERC_ZSTD
-  compressed with a per-quantity error bound anchored to that quantity's own
-  measurement noise (1e-3 for coherence, 1e-5 for linear backscatter).
+- Tiles are LERC_ZSTD compressed with a per-quantity error bound anchored to
+  that quantity's own measurement noise.
 - Coverage follows the glacier perimeter, so the tile set is ragged. A missing
   tile means no ice there, not a processing gap.
