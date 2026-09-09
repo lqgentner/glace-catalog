@@ -63,10 +63,14 @@ The stretch is fixed rather than per-year deliberately: a percentile stretch
 recomputed per year gives every year its own scale, and a real change in
 coherence then renders as no change at all.
 
-The QA stretches are `*_qa_num` 0–70 and `*_qa_cqm` ±3 dB, measured against the
-published Swiss 2021–2024 mosaics. One count range is shared by both products, so
-that RTC seeing more acquisitions than COH12 stays visible rather than being
-normalised away. They are Swiss numbers and are re-derived before the Alps.
+The QA stretches are `*_qa_num` 0–90 and `*_qa_cqm` −3 to 10 dB (COH12) and −4
+to 8 dB (RTC), measured on the warped Swiss 2021–2024 display mosaics. The count
+ceiling is the two-satellite maximum of 2021 with headroom for the three
+satellites of 2026; one count range is shared by both products, so that RTC
+seeing more acquisitions than COH12 stays visible rather than being normalised
+away. CQM is one-sided and its range is the measured one, not a symmetric one:
+0 dB has no physical meaning in the composites. They are Swiss numbers and are
+re-derived before the Alps.
 
 ## Related
 

@@ -425,7 +425,7 @@ struck through — git holds them.
 | M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header, the `rel: "pmtiles"` link, the item, and the MapLibre style's `metadata` | 3 |
 | M-27 | **The committed style is the single source of truth for the display constants, and the build reads it.** No stretch, ramp or range is copied into Python | 3 |
-| M-28 | QA ramps are **sequential**: `cmc.turku` for QA-NUM, `cmc.glasgow` for QA-CQM. CQM is a quality indicator where higher is better, not a ratio around 1.0 | 3 |
+| M-28 | QA ramps are **sequential**, `cmc.glasgow` for both QA-NUM and QA-CQM: dark red for few or poor, bright blue for many or good. CQM is a quality indicator where higher is better, not a ratio around 1.0, and its range is the measured one-sided one (−3 to 10 dB COH12, −4 to 8 dB RTC), since 0 dB has no physical meaning in the composites | 3 |
 | M-29 | **One credit line, read from the style**: `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header | 3 |
 | M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` | 4 |
 | M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes; arranging rows in this catalog's vocabulary belongs to the composite driver | 4 |

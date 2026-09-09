@@ -72,8 +72,9 @@ Ordered by what blocks what. Everything not listed here is done.
   `tests/test_manifest_contract.py`, but only ever read on Swiss years.
   *Verified when* `publish-year.py --steps copy` on an Alpine year reports zero
   mismatches.
-- **P-8 — Re-measure the QA display ranges for the Alps.** `*_qa_num` 0–70 and
-  `*_qa_cqm` ±3 dB are Swiss numbers over 2021–2024; `glace-alps` covers
+- **P-8 — Re-measure the display ranges for the Alps.** Every stretch in
+  `default.json` was remeasured on the warped Swiss 2021–2024 display mosaics on
+  2026-09-09 (2–98 %, averaged over the years); `glace-alps` covers
   2015–2025, which holds more of the S1A+S1B era. *Verified when* the ranges in
   `catalog/mosaics/styles/default.json` are re-derived from published Alpine
   mosaics.

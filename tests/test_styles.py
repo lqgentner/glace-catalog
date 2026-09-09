@@ -40,40 +40,48 @@ from glace_catalog.styles import RgbStyle, load_styles, ramp_colors
 
 STYLE_PATH = Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/default.json"
 
-#: What the constants were when they lived in ``webmap.py``. Ramp, vmin, vmax,
-#: units, decibel.
+#: The published constants. Ramp, vmin, vmax, units, decibel. Remeasured
+#: 2026-09-09 on the warped z13 display mosaics of 2021-2024 (25 native-
+#: resolution windows per band per year, 2-98 %), averaged over the years and
+#: rounded to 0.5; the false-colour blue bands from the derived third band.
 EXPECTED_SINGLE = {
-    "coh12_vv": ("cmc.lipari", 0.10, 0.80, "", False),
-    "coh12_vh": ("cmc.lipari", 0.10, 0.60, "", False),
-    "rtc_vv": ("cmc.grayC", -18.5, -5.0, "dB", True),
-    "rtc_vh": ("cmc.grayC", -26.0, -11.0, "dB", True),
-    # Re-derived 2026-09-05 against the published 2021-2024 mosaics; see P-19.
+    "coh12_vv": ("cmc.lipari", 0.10, 0.75, "", False),
+    "coh12_vh": ("cmc.lipari", 0.10, 0.55, "", False),
+    # Never measured before 2026-09-09: the old -18.5 / -26 floors were 2-2.5 dB
+    # too dark. 2021, the two-satellite year, sits ~1 dB below the others at the
+    # dark end; one fixed stretch still holds (M-27).
+    "rtc_vv": ("cmc.grayC", -16.5, -4.0, "dB", True),
+    "rtc_vh": ("cmc.grayC", -23.5, -11.0, "dB", True),
     # QA-NUM is an acquisition count, so its ceiling moves with the
-    # constellation: 2021 reaches 49 (COH12) and 58 (RTC) because S1B was still
-    # flying, against 26 and 30 from 2022 on. The range spans the widest year
-    # plus headroom, or a fixed ramp would clip 2021 to a flat block.
+    # constellation: the exact per-file maxima are 49 (COH12) and 58 (RTC) in
+    # 2021 with S1A+S1B flying, 26 and 30 from 2022 on with S1A alone. 2026
+    # flies three (S1A, S1C, S1D): 58 x 1.5 = 87, rounded up to 90.
     #
     # **One range for both products, not one each.** RTC sees more acquisitions
     # than COH12, which needs pairs; a per-product range would normalise that
-    # difference away and draw the two identically. Sharing 0-70 is what makes
-    # it visible.
-    "coh12_vv_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "coh12_vh_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "rtc_vv_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "rtc_vh_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    # CQM is normalised, so unlike QA-NUM it does not move with the count:
-    # 2-98% lands within 0.25 dB across 2021, 2022 and 2024, at -2.9 to 3.1.
-    # Rounded to an even -3 to 3, which clips 0.14 dB off 2021's upper tail.
-    "coh12_vv_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "coh12_vh_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "rtc_vv_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "rtc_vh_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
+    # difference away and draw the two identically. Sharing 0-90 is what makes
+    # it visible. cmc.glasgow, the same ramp as CQM: dark for few, bright for many.
+    "coh12_vv_qa_num": ("cmc.glasgow", 0.0, 90.0, "", False),
+    "coh12_vh_qa_num": ("cmc.glasgow", 0.0, 90.0, "", False),
+    "rtc_vv_qa_num": ("cmc.glasgow", 0.0, 90.0, "", False),
+    "rtc_vh_qa_num": ("cmc.glasgow", 0.0, 90.0, "", False),
+    # CQM is one-sided: 2-98 % lands at about -2.5 / +10 dB for COH12 and
+    # -3.7 / +8 dB for RTC, within 1 dB across the years. The range is the
+    # measured one, not a symmetric one: 0 dB has no physical meaning in the
+    # composites, so there is nothing to centre. Under the old -3 / 3 a tenth
+    # of the scene saturated white.
+    "coh12_vv_qa_cqm": ("cmc.glasgow", -3.0, 10.0, "dB", True),
+    "coh12_vh_qa_cqm": ("cmc.glasgow", -3.0, 10.0, "dB", True),
+    "rtc_vv_qa_cqm": ("cmc.glasgow", -4.0, 8.0, "dB", True),
+    "rtc_vh_qa_cqm": ("cmc.glasgow", -4.0, 8.0, "dB", True),
 }
 
-#: Per-channel ranges of the two false-colour layers, red, green, blue.
+#: Per-channel ranges of the two false-colour layers, red, green, blue. Red and
+#: green repeat the single-band stretches; blue is the ratio (COH12) or the
+#: difference in dB (RTC), measured on the rgb VRT's third band.
 EXPECTED_RGB = {
-    "rtc_rgb": (((-18.5, -5.0), (-26.0, -11.0), (4.0, 14.0)), "dB", True),
-    "coh12_rgb": (((0.10, 0.80), (0.10, 0.60), (0.8, 2.5)), "", False),
+    "rtc_rgb": (((-16.5, -4.0), (-23.5, -11.0), (3.5, 10.5)), "dB", True),
+    "coh12_rgb": (((0.10, 0.75), (0.10, 0.55), (0.8, 2.6)), "", False),
 }
 
 problems: list[str] = []
