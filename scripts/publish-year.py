@@ -458,6 +458,18 @@ def mosaic_assets(
     return assets
 
 
+def _read_instead(stem: str) -> str:
+    """Which COG to read for the values a rendering only pictures.
+
+    A false-colour archive has no COG of its own: it composes the two
+    polarizations, so it names both.
+    """
+    if stem.endswith("_rgb"):
+        base = stem.removesuffix("_rgb")
+        return f"read {base}_vv.tif and {base}_vh.tif"
+    return f"read {stem}.tif"
+
+
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
 
@@ -481,7 +493,7 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
                 f"Pre-styled 8-bit WebP rendering of {stem} on WebMercatorQuad "
                 f"z{detail['min_zoom']}-z{detail['max_zoom']}, stretched {stretch}{units}{ramp} "
                 f"as the collection's style for {detail['year']} declares. "
-                f"Not for analysis: read {stem}.tif."
+                f"Not for analysis: {_read_instead(stem)}."
             ),
             roles=["visual"],
             media_type="application/vnd.pmtiles",

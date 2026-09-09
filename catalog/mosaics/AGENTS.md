@@ -1,8 +1,8 @@
 # GLACE mosaics — agent guide
 
 One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at 40 m. Twelve
-analysis rasters per year; drawing is served by the PMTiles archives registered
-on this collection.
+analysis rasters per year and fourteen PMTiles archives beside them, which are
+what drawing uses.
 
 ## The grid is the point
 
@@ -28,8 +28,11 @@ change = cube.sel(time="2024") - cube.sel(time="2021")
 
 Two products, and they are not interchangeable.
 
-**PMTiles**, registered as `rel: "pmtiles"` links with MapLibre styles as
-`style` assets, are what a map client uses. Their pixels are 8-bit display codes
+**PMTiles**, `{stem}_viz.pmtiles` in each year's item directory, are what a map
+client uses. Each one is an asset of that item with the `visual` role and a
+`rel: "pmtiles"` link on this collection, and each year has its own MapLibre
+style as a `style-{year}` asset under `styles/`; the latest year's also carries
+the `default` role. Their pixels are 8-bit display codes
 under a fixed stretch, and the backscatter archives are in **decibels** while
 every raster in this catalog is linear. They are renderings. Never read one for
 a value.

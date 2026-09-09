@@ -41,8 +41,9 @@ PFS SAR item 3.1 asks.
 
 Two paths, both zero-infrastructure:
 
-- **Map** — PMTiles archives with MapLibre styles, registered on the mosaics
-  collection. One HTTP range request per visible tile.
+- **Map** — the `{stem}_viz.pmtiles` archives beside each year's mosaics, with
+  one MapLibre style per year on the mosaics collection. One HTTP range request
+  per visible tile.
 - **Analysis** — the COGs themselves, with the colour ramp and value range
   declared in `renders` so a client colorizes at draw time.
 

@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-09-08.** Update this in the same commit as the change it describes;
+**As of 2026-09-09.** Update this in the same commit as the change it describes;
 a stale status record is worse than none, because the next person trusts it. The
 design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
@@ -10,11 +10,11 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | --- | --- |
 | repository | scaffolded from `portolan-sdi/portolan-catalog-template`; the vendored publishers are gone (R-8) |
 | catalog documents | root + both collections written, **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)) |
-| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, links, sync, stac-check, rashid |
+| gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, sync, stac-check, rashid |
 | source composites | Swiss 2021–2024 **regenerated with s1bursts 0.5.0** and verified 2026-09-08 through `load_and_verify_manifest`: 1 716 files across 143 tiles per year, every row carrying a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
-| build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, asset stamps, validate); run end to end over 2021–2024 on 2026-09-08 |
+| build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, styles per year, asset stamps, coverage check, validate); run end to end over 2021–2024 on 2026-09-08, **before** the web-map archives moved into the item directories (P-16) |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
-| thumbnails | rendered from the latest year's `coh12_rgb.pmtiles`, gated by `tests/test_thumbnails.py` |
+| thumbnails | rendered from the latest year's `coh12_rgb_viz.pmtiles`, gated by `tests/test_thumbnails.py` |
 | publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published, live rashid 0 errors |
 | published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared |
 | scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps` (DESIGN.md §8) |
@@ -28,6 +28,23 @@ Ordered by what blocks what. Everything not listed here is done.
   *Verified when* `{GLACE_STORE_ROOT}/tiles/glacier-fractions.parquet` exists and
   `finalize-catalog` stamps its `file:size` and `file:checksum` without a
   warning.
+- **P-16 — Rebuild the web-map archives in their new place.** M-34 and M-35
+  moved every archive to `mosaics/{year}/{stem}_viz.pmtiles` and made the styles
+  per year, so the published tree still holds the old `mosaics/pmtiles/` layout
+  and a single style. Run, per year 2021–2024:
+
+  ```bash
+  uv run --env-file .env scripts/publish-year.py {year} --scope ch \
+      --src … --steps pmtiles,items
+  uv run --env-file .env scripts/finalize-catalog.py --scope ch \
+      --base-url https://data.source.coop/lqgentner/glace-ch
+  ```
+
+  The `pmtiles` fingerprint changes with the style bytes, so all four years
+  rebuild (about 5.5 min each). Then delete `mosaics/pmtiles/` by hand on the UZH
+  store and on Source Cooperative — publishing never deletes — and sync.
+  *Verified when* `rashid check --data` reports 0 errors, the 2024 item lists 26
+  assets, and no `mosaics/pmtiles/` prefix remains on either side.
 - **P-2 — Clear the old publication.** `lqgentner/glace-ch` on Source
   Cooperative still holds the old flat tree, and publishing never deletes.
   *Verified when* listing that prefix returns nothing.

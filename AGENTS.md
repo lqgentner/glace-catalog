@@ -92,9 +92,11 @@ findings are structural consequences of that and are recorded in
 - **Renderings are never `data`.** Every COG in the catalog is linear; the only
   display pixels are inside the PMTiles archives, which are 8-bit codes under a
   fixed stretch and, for backscatter and QA-CQM, in decibels. Each archive is
-  registered as a collection-level `rel: "pmtiles"` link, and the MapLibre style
-  beside it is a collection asset with the `style` role. Neither is ever a `data`
-  asset: marking one would let an analysis pipeline read a picture.
+  `{stem}_viz.pmtiles` in its year's item directory, an asset of that item with
+  the `visual` role and a collection-level `rel: "pmtiles"` link; the MapLibre
+  style of each year is a collection asset under `styles/` with the `style` role.
+  None of them is ever a `data` asset: marking one would let an analysis pipeline
+  read a picture.
 
 ## Related repositories
 

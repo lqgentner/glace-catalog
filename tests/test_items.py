@@ -177,6 +177,24 @@ def _pmtiles_state() -> BuildState:
             "start_date": "2024-07-09",
             "end_date": "2024-10-07",
         },
+        "coh12_rgb_viz": {
+            "url": "coh12_rgb_viz.pmtiles",
+            "size_bytes": 12,
+            "checksum": "1220" + "cd" * 32,
+            "cmap": "",
+            "vmin": 0.1,
+            "vmax": 0.8,
+            "units": "",
+            "min_zoom": 5,
+            "max_zoom": 13,
+            "bounds": [5.9, 45.8, 10.5, 47.8],
+            "product": "COH12",
+            "polarization": "RGB",
+            "year": 2024,
+            "id": "coh12_rgb_2024",
+            "start_date": "2024-07-09",
+            "end_date": "2024-10-07",
+        },
     }
     return state
 
@@ -269,8 +287,12 @@ def main() -> int:
     )
     checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
     built = _publisher().visual_assets(_pmtiles_state())
-    checks["visual_assets keys by rendering key"] = list(built) == ["coh12_vv_viz"]
-    viz = _mosaic_item(extra=built).assets["coh12_vv_viz"]
+    checks["visual_assets keys by rendering key"] = list(built) == [
+        "coh12_rgb_viz",
+        "coh12_vv_viz",
+    ]
+    item = _mosaic_item(extra=built)
+    viz = item.assets["coh12_vv_viz"]
     checks["a rendering is an item asset with the visual role"] = viz.roles == ["visual"]
     checks["a rendering is not data"] = "data" not in (viz.roles or [])
     checks["a rendering declares its own grid"] = viz.extra_fields.get("proj:code") == "EPSG:3857"
@@ -280,6 +302,10 @@ def main() -> int:
     checks["a rendering is a PMTiles archive"] = viz.media_type == "application/vnd.pmtiles"
     checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
     checks["a rendering says what it is"] = "Not for analysis" in (viz.description or "")
+    # A false-colour archive has no COG of its own; it names the two it composes.
+    checks["a false-colour rendering points at both polarizations"] = (
+        "read coh12_vv.tif and coh12_vh.tif" in (item.assets["coh12_rgb_viz"].description or "")
+    )
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

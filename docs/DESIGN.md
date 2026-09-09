@@ -51,9 +51,8 @@ collections, and the year sub-catalogs come for free.
 └── mosaics/
     ├── collection.json  README.md  AGENTS.md
     ├── items.parquet  thumbnail.png
-    ├── styles/default.json         # MapLibre GL, committed
-    ├── pmtiles/{year}/{layer}.pmtiles
-    └── {year}/item.json + 12 analysis COGs
+    ├── styles/{year}.json           # MapLibre GL, one per year, from the committed template
+    └── {year}/item.json + 12 analysis COGs + 14 {stem}_viz.pmtiles
 ```
 
 **One collection per product, not one per year.** FTW splits its per-tile
@@ -84,13 +83,18 @@ flattening the user performs, `odc.stac` and `rasterio` read by URL, and item id
 disambiguate. FTW and portolan-nl both qualify fully, so this is a real fork, and
 we take short predictable hrefs.
 
-**Web-map archives sit apart from the rasters they render**, at
-`mosaics/pmtiles/{year}/`. They are registered as *collection*-level links, so an
-item's own directory is the wrong place for them; and beside the COG the stems
-collide — `coh12_vv.tif` is linear float32, `coh12_vv.pmtiles` is a pre-stretched
-8-bit rendering and the backscatter ones are in decibels. So what needed
-disambiguating was never the CRS but the units and role, and the split is a
-consequence of choosing PMTiles rather than a principle.
+**Web-map archives sit beside the rasters they render**, in the year's own item
+directory, as `{stem}_viz.pmtiles`. Each is an asset of that item with the
+`visual` role, which puts the rendering beside the year it renders, with that
+year's footprint and window already on the item; the collection keeps the
+`rel: "pmtiles"` link `PORTO-FMT-011` requires, because that is where
+`pmtiles:layers` is defined. What needed disambiguating was never the CRS but the
+units and role — `coh12_vv.tif` is linear float32 and `coh12_vv_viz.pmtiles` is a
+pre-stretched 8-bit rendering, the backscatter ones in decibels — and the `_viz`
+suffix says which is the measurement and which is the picture, in the one listing
+where the pairing is visible. Registering 14 archives per year as *collection*
+assets was the alternative: 56 cards on one page for Switzerland, about 150 for
+the Alps, which defeats the purpose of having cards.
 
 **Per-year run records are not published.** The manifest is the publisher's cache
 and the configuration is pipeline state; both stay beside the source archive, and
@@ -152,14 +156,17 @@ running it as a subprocess meant one worker pool, one environment and one
 package's own writer. What is owned here is the warp of one tile.
 
 **The style is committed, not generated.** `mosaics/styles/default.json` holds
-every published layer of the newest year — colour, opacity and legend stops are
-design decisions that belong in review — and carries both the `style` and
-`default` roles, as Portolan requires of the one a client should load. The only
-generated part is the year each `pmtiles://` source names, which
-`finalize-catalog` repoints at the most recent published year. Each layer's
-legend sits under `metadata.portolan:legend`, and **the build reads those numbers
-rather than holding a copy**: the ranges, ramps and units exist once, in a
-reviewed file.
+every published layer of one year — colour, opacity and legend stops are design
+decisions that belong in review. The only generated part is the year, and
+`finalize-catalog` writes one published copy per year from that template:
+`styles/{year}.json`, registered as `style-{year}`, the newest of them also
+carrying the `default` role as Portolan requires of the one a client should load.
+One style per year is what makes every `pmtiles:layers` id resolve — with a
+single published style, 42 of the 56 Swiss ids named a layer no style held — and
+the stretch is per product and fixed across years, so the copies differ only in
+the year they name. Each layer's legend sits under `metadata.portolan:legend`, and
+**the build reads those numbers rather than holding a copy**: the ranges, ramps
+and units exist once, in a reviewed file.
 
 ### How standard is any of this
 
@@ -173,7 +180,7 @@ reviewed file.
 
 So the container is standard and required of us; the raster application is
 territory the specification has not covered, and this may have to change when #41
-lands. One style file is a bounded cost. Keep the legend block aligned with FTW's
+lands. One reviewed style template is a bounded cost. Keep the legend block aligned with FTW's
 shape (`value`, `color`, `label` per stop, plus `unit`), so that if one of the two
 conventions is standardized it is one convention and not two.
 
@@ -410,11 +417,11 @@ struck through — git holds them.
 | M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 1 |
 | M-17 | No ETag in the manifest; `sha256` alone, multihash-encoded | 5 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and pyrefly and covered by upstream's pyflakes pass instead | 6 |
-| M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors | 3 |
+| M-19 | **PMTiles are the web-map product**, registered as collection-level `rel: "pmtiles"` links, as `visual` item assets (M-34), with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors | 3 |
 | M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 3 |
-| M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year | 3 |
-| M-22 | Web-map archives live at `mosaics/pmtiles/{year}/`, not beside the COGs they render | 2 |
-| M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem | 2 |
+| M-21 | Style files are committed, not generated: they hold colour and legend decisions that belong in review. `finalize-catalog` only repoints their year, once per published year (M-35) | 3 |
+| M-22 | ~~Web-map archives live at `mosaics/pmtiles/{year}/`, not beside the COGs they render~~ — **superseded by M-34** | 2 |
+| M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem. A rendering carries `_viz`, which says what the file is rather than where it sits (M-34) | 2 |
 | M-24 | **The annual analysis mosaic is on ETRS89-LAEA at 40 m.** WebMercator is not equal-area, so any area statistic on it needs an undeclared correction | 3 |
 | M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header, the `rel: "pmtiles"` link, the item, and the MapLibre style's `metadata` | 3 |
@@ -425,6 +432,8 @@ struck through — git holds them.
 | M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes; arranging rows in this catalog's vocabulary belongs to the composite driver | 4 |
 | M-32 | **The run manifest and configuration are not published.** Both live beside the source archive; the items carry every value a reader needs | 2 |
 | M-33 | **One time range per year**, from the committed compositing window; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 2 |
+| M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders. Supersedes M-22: the archives are no longer collection-level products, and the suffix keeps the stems apart. The collection-level `rel: "pmtiles"` link stays, because that is where `pmtiles:layers` lives | 2, 3 |
+| M-35 | **One published style per year**, `styles/{year}.json` written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy fourteen legend blocks per year and let them drift; one file for every year would be 154 sources with one visible | 3 |
 | R-1 | `src/glace_catalog/__init__.py` exists — a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | PMTiles are registered at collection level only. `build_mosaic_item` has no `pmtiles` parameter and items carry no `rel: "pmtiles"` link | 3 |

@@ -13,7 +13,7 @@
   ],
   "id": "glace-ch-mosaics",
   "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed equal-area grid",
-  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction; WebMercator, where a nominal 19.109 m pixel is about 13.2 m on the ground at 46.5 degrees north, cannot do that. Every year sits on the same fixed extent, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with 256-pixel blocks and averaged internal overviews. Drawing is served separately by PMTiles archives registered on this collection, tiled on the WebMercatorQuad grid at zoom 13 with MapLibre styles alongside them; both products are resampled from the 10 m tiles, so neither is derived from the other. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
+  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction; WebMercator, where a nominal 19.109 m pixel is about 13.2 m on the ground at 46.5 degrees north, cannot do that. Every year sits on the same fixed extent, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with 256-pixel blocks and averaged internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13: each is an asset of that year's item with the visual role, named {stem}_viz.pmtiles beside the raster it renders, registered on this collection as a rel pmtiles link, and drawn by the MapLibre style this collection publishes for that year. Both products are resampled from the 10 m tiles, so neither is derived from the other. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -318,6 +318,132 @@
           "nodata": "nan"
         }
       ]
+    },
+    "coh12_vv_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vv web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vv on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_vh_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vh web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vh on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vv_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vv web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vv on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vh_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vh web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vh on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_rgb_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_rgb web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_rgb on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv.tif and coh12_vh.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_rgb_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_rgb web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_rgb on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv.tif and rtc_vh.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_vv_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vv_qa_num web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vv_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv_qa_num.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_vh_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vh_qa_num web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vh_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh_qa_num.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vv_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vv_qa_num web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vv_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv_qa_num.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vh_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vh_qa_num web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vh_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh_qa_num.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_vv_qa_cqm_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vv_qa_cqm web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vv_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv_qa_cqm.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "coh12_vh_qa_cqm_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "coh12_vh_qa_cqm web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of coh12_vh_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh_qa_cqm.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vv_qa_cqm_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vv_qa_cqm web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vv_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv_qa_cqm.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
+    },
+    "rtc_vh_qa_cqm_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "rtc_vh_qa_cqm web-map tiles",
+      "description": "Pre-styled 8-bit WebP rendering of rtc_vh_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh_qa_cqm.tif.",
+      "roles": [
+        "visual"
+      ],
+      "proj:code": "EPSG:3857"
     }
   },
   "assets": {
@@ -340,7 +466,7 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.png",
       "type": "image/png",
       "title": "GLACE mosaics preview",
-      "description": "Rendered from the most recent year's coh12_rgb web-map archive, so the preview obeys the committed MapLibre style by construction.",
+      "description": "Rendered from the most recent year's coh12_rgb_viz.pmtiles archive, so the preview obeys the committed MapLibre style by construction.",
       "roles": [
         "thumbnail"
       ]
@@ -349,7 +475,7 @@
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "GLACE web-map style",
-      "description": "Every published web-map layer of the most recent year, the first visible and the rest hidden. Each layer's metadata.portolan:legend carries the colour ramp and value range baked into its archive, which is where those constants live.",
+      "description": "The template every published year's style is written from: the run copies it once per year as styles/{year}.json, rewriting only the year in each pmtiles:// source, in the layer ids and in the credit line. Every published web-map layer of one year, the first visible and the rest hidden. Each layer's metadata.portolan:legend carries the colour ramp and value range baked into its archive, which is where those constants live.",
       "roles": [
         "style",
         "default"

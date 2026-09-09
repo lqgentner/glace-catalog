@@ -16,7 +16,7 @@ catalog.json
 ├── tiles/collection.json      one item per (MGRS tile, year), 12 COGs each
 │   ├── items.parquet          ← query here, not the tree
 │   └── {year}/catalog.json → {tile}/item.json
-└── mosaics/collection.json    one item per year, 12 analysis COGs + PMTiles
+└── mosaics/collection.json    one item per year, 12 analysis COGs + 14 PMTiles
     ├── items.parquet
     └── {year}/item.json
 ```
@@ -79,8 +79,9 @@ https://titiler.xyz/cog/preview.png
   sequential ramp hides the sign, which is the whole information content.
 - **`*_qa_num` is an integer count on tiles and a float mean on mosaics.** They
   are not the same quantity; the mosaic band is named `num_obs_mean`.
-- **PMTiles are for drawing, not reading.** The archives on the mosaics
-  collection are pre-stretched 8-bit tiles. For any value, read the COGs.
+- **PMTiles are for drawing, not reading.** Each `{stem}_viz.pmtiles` sits beside
+  the COG it renders, as a `visual` asset of the same item, and holds
+  pre-stretched 8-bit tiles. For any value, read the COG of the same stem.
 - **nodata is NaN** on every float32 raster and **0** on the uint16 counts.
 - **Colormap names in `renders` are portable stand-ins.** The designed maps are
   `cmc.lipari` for coherence and `cmc.grayC` for backscatter (cmcrameri,

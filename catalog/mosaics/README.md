@@ -1,7 +1,8 @@
 # GLACE mosaics — annual composites on a fixed equal-area grid
 
 One item per year, each carrying twelve single-band analysis rasters on
-ETRS89-LAEA (EPSG:3035) at 40 m, plus a set of PMTiles archives for drawing them.
+ETRS89-LAEA (EPSG:3035) at 40 m, plus fourteen PMTiles archives for drawing
+them, beside the rasters in the same item directory.
 
 ## Why this grid
 
@@ -22,16 +23,18 @@ mosaics, so a map never pays for a second warp.
 
 ## Two ways to consume it
 
-**To draw a map**, use the PMTiles under `pmtiles/{year}/`. They are registered
-as `rel: "pmtiles"` links on this collection, with MapLibre GL styles as `style`
-assets — load the style directly and it works:
+**To draw a map**, use the `{stem}_viz.pmtiles` archives in each year's item
+directory, beside the COGs they render. They are assets of that item with the
+`visual` role, and registered on this collection as `rel: "pmtiles"` links, with
+one MapLibre GL style per year as `style` assets — load a style directly and it
+works:
 
 ```js
 const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 new maplibregl.Map({
   container: "map",
-  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/default.json",
+  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/2024.json",
 });
 ```
 
@@ -71,11 +74,11 @@ resampling step.
 
 ## The two products are not interchangeable
 
-`{year}/rtc_vv.tif` is linear power. `pmtiles/{year}/rtc_vv.pmtiles` is the same
-measurement rendered: 8-bit, pre-stretched, and in **decibels**. They are kept in
-separate directories rather than side by side for exactly that reason — the
-names would otherwise differ by one extension while the quantities differ by a
-logarithm.
+`{year}/rtc_vv.tif` is linear power. `{year}/rtc_vv_viz.pmtiles` is the same
+measurement rendered: 8-bit, pre-stretched, and in **decibels**. They sit side by
+side, which is the pairing to see, and the `_viz` suffix is what keeps them
+apart: without it the names would differ by one extension while the quantities
+differ by a logarithm.
 
 Coherence is not converted: `coh12_*` archives are linear values under a fixed
 stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because those span decades
