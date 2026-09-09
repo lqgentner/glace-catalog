@@ -456,23 +456,23 @@ git commit -m "feat: one published style per year; archive links from the year d
 
 one per stem in `coh12_vv, coh12_vh, rtc_vv, rtc_vh, coh12_rgb, rtc_rgb, coh12_vv_qa_num, coh12_vh_qa_num, rtc_vv_qa_num, rtc_vh_qa_num, coh12_vv_qa_cqm, coh12_vh_qa_cqm, rtc_vv_qa_cqm, rtc_vh_qa_cqm`.
 
-- [ ] **Step 1: Run the tracked-tree gates before editing**
+- [x] **Step 1: Run the tracked-tree gates before editing**
 
 Run: `uv run tests/test_conformance.py && uv run tests/test_data_format.py` — both green; note the accepted findings so a new one is visible afterwards.
 
-- [ ] **Step 2: Edit the documents**
+- [x] **Step 2: Edit the documents**
 
 Make the edits listed under Files. In prose, say: each year's archives are assets of that year's item with the `visual` role and files beside the COGs, `{stem}_viz.pmtiles`; the collection registers every archive as a `rel: "pmtiles"` link and one style per year; the tracked `styles/default.json` is the template the published `styles/{year}.json` are written from. Keep the existing reasoning about PMTiles vs COG in DESIGN.md §3; only the location and registration change.
 
-- [ ] **Step 3: Run the tracked-tree gates**
+- [x] **Step 3: Run the tracked-tree gates**
 
 Run: `uv run tests/test_conformance.py && uv run tests/test_data_format.py && uv run tests/test_links.py`. rashid must report no new finding; `PTL-COL-004` counts raster data assets only and `item_assets` is descriptive, so none is expected. If rashid objects to `proj:code` inside `item_assets`, keep it on the item assets only and drop it from `item_assets`.
 
-- [ ] **Step 4: Full gate**
+- [x] **Step 4: Full gate**
 
 Run: `uv run tests/run_all.py` — green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add catalog docs AGENTS.md
@@ -491,15 +491,15 @@ git commit -m "docs: archives are item assets beside their COGs; one style per y
 **Interfaces:**
 - Produces: `styleHrefs(collection) -> Map<number|"default", string>`: every asset with the `style` role; a key/href ending in a four-digit year maps that year, the `default`-role asset maps `"default"`. `readStore` resolves a layer's legend from the style of its own year first, then the default, then the stem fallback.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `tests/store.test.js`, following its existing pattern for building a fake collection, add a case: a collection with `style-2023` (`./styles/2023.json`) and `style-2024` (`./styles/2024.json`, roles `style, default`) and two `rel: "pmtiles"` links (`glace-coh12_vv-2023`, `glace-coh12_vv-2024`) whose styles carry different `vmax` in `portolan:legend`; assert the 2023 record's legend comes from `2023.json`, not from the default.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd ../glace-viewer && npm test` — the new case fails (only the default style is read).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `store.js`: replace `styleHref` with
 
@@ -519,11 +519,11 @@ function styleHrefs(collection) {
 
 In `readStore`, fetch every distinct href in the map in parallel with the items, build `legends()` per style, and when joining an archive `{stem, year}` look up `byId` in the style of `year`, then the default's, then the stem fallback. Keep the existing error text for a collection with no style.
 
-- [ ] **Step 4: Run the suite**
+- [x] **Step 4: Run the suite**
 
 Run: `npm test` — green, including `store-catalog.test.js` against the committed fixture (which still has one default style; the fallback path).
 
-- [ ] **Step 5: Docs and commit**
+- [x] **Step 5: Docs and commit**
 
 Update `AGENTS.md` as listed. Commit in the viewer repo:
 
@@ -538,7 +538,7 @@ Do **not** touch the `// SPIKE` files (`js/cog-webp.js`, and the `// SPIKE` line
 
 ### Task 8: Final gate and handoff notes
 
-- [ ] Run `uv run tests/run_all.py` in glace-catalog and `npm test` in glace-viewer; both green.
-- [ ] `git log --oneline main..HEAD` in both repos; every task is one commit.
-- [ ] Write the migration steps into `docs/STATUS.md` if Task 6 did not: `publish-year.py {2021..2024} --scope ch --steps pmtiles,items`, then `finalize-catalog.py --base-url …`, then delete `mosaics/pmtiles/` on the UZH store and on Source Cooperative by hand (publishing never deletes), then `rashid check --data`.
-- [ ] Report: commits, anything the plan said that turned out wrong and what was done instead, and any check the plan asked for that could not be made to pass.
+- [x] Run `uv run tests/run_all.py` in glace-catalog and `npm test` in glace-viewer; both green.
+- [x] `git log --oneline main..HEAD` in both repos; every task is one commit.
+- [x] Write the migration steps into `docs/STATUS.md` if Task 6 did not: `publish-year.py {2021..2024} --scope ch --steps pmtiles,items`, then `finalize-catalog.py --base-url …`, then delete `mosaics/pmtiles/` on the UZH store and on Source Cooperative by hand (publishing never deletes), then `rashid check --data`.
+- [x] Report: commits, anything the plan said that turned out wrong and what was done instead, and any check the plan asked for that could not be made to pass.
