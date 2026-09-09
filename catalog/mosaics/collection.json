@@ -6,14 +6,13 @@
     "https://stac-extensions.github.io/render/v2.0.0/schema.json",
     "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
     "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
-    "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json"
   ],
   "id": "glace-ch-mosaics",
-  "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed equal-area grid",
-  "description": "One mosaic per year of the GLACE composites, warped from the 10 m MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction; WebMercator, where a nominal 19.109 m pixel is about 13.2 m on the ground at 46.5 degrees north, cannot do that. Every year sits on the same fixed extent, hard-coded rather than derived from whichever tiles happen to exist, so the series stacks and differences with no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with 256-pixel blocks and averaged internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13: each is an asset of that year's item with the visual role, named {stem}_viz.pmtiles beside the raster it renders, registered on this collection as a rel pmtiles link, and drawn by the MapLibre style this collection publishes for that year. Both products are resampled from the 10 m tiles, so neither is derived from the other. The observation-count layers become a mean rather than a count under averaging, and are described as such.",
+  "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)",
+  "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an area or area-change statistic can be taken from pixel counts without a latitude correction. Every year shares the same extent, so multitemporal stacks need no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13. Both products are resampled from the 10 m tiles, so neither is derived from the other.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -38,7 +37,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data and derived the annual mosaics. Maintains this catalog. The bytes are served from Source Cooperative storage; corrections go through the catalog's issue tracker.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -52,82 +51,206 @@
     "spatial": {
       "bbox": [
         [
-          6.767578125,
-          45.9511496866,
-          10.458984375,
-          47.3983765871
+          6.767578,
+          45.828799,
+          10.458984,
+          47.338823
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2021-07-11T00:00:00Z",
-          "2024-10-06T00:00:00Z"
+          "2021-01-01T00:00:00Z",
+          "2025-01-01T00:00:00Z"
         ]
       ]
     }
   },
   "renders": {
     "coh12_vv": {
-      "title": "COH12 VV — 12-day coherence, co-polarised",
+      "title": "Coherence VV",
       "assets": [
         "coh12_vv"
       ],
       "rescale": [
         [
           0.1,
-          0.8
+          0.75
         ]
       ],
       "colormap_name": "magma",
       "resampling": "average",
       "nodata": "nan"
     },
+    "coh12_vv_qa_num": {
+      "title": "Coherence VV – Contributing Observations",
+      "assets": [
+        "coh12_vv_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vv_qa_cqm": {
+      "title": "Coherence VV – Composite Quality Map",
+      "assets": [
+        "coh12_vv_qa_cqm"
+      ],
+      "expression": "10*log10(coh12_vv_qa_cqm_b1)",
+      "rescale": [
+        [
+          -3.0,
+          10.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
     "coh12_vh": {
-      "title": "COH12 VH — 12-day coherence, cross-polarised",
+      "title": "Coherence VH",
       "assets": [
         "coh12_vh"
       ],
       "rescale": [
         [
           0.1,
-          0.6
+          0.55
         ]
       ],
       "colormap_name": "magma",
       "resampling": "average",
       "nodata": "nan"
     },
+    "coh12_vh_qa_num": {
+      "title": "Coherence VH – Contributing Observations",
+      "assets": [
+        "coh12_vh_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vh_qa_cqm": {
+      "title": "Coherence VH – Composite Quality Map",
+      "assets": [
+        "coh12_vh_qa_cqm"
+      ],
+      "expression": "10*log10(coh12_vh_qa_cqm_b1)",
+      "rescale": [
+        [
+          -3.0,
+          10.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
     "rtc_vv": {
-      "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
+      "title": "Backscatter VV",
       "assets": [
         "rtc_vv"
       ],
       "expression": "10*log10(rtc_vv_b1)",
       "rescale": [
         [
-          -18.5,
-          -5.0
+          -16.5,
+          -4.0
         ]
       ],
       "colormap_name": "gray",
       "resampling": "average",
       "nodata": "nan"
     },
+    "rtc_vv_qa_num": {
+      "title": "Backscatter VV – Contributing Observations",
+      "assets": [
+        "rtc_vv_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vv_qa_cqm": {
+      "title": "Backscatter VV – Composite Quality Map",
+      "assets": [
+        "rtc_vv_qa_cqm"
+      ],
+      "expression": "10*log10(rtc_vv_qa_cqm_b1)",
+      "rescale": [
+        [
+          -4.0,
+          8.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
     "rtc_vh": {
-      "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
+      "title": "Backscatter VH",
       "assets": [
         "rtc_vh"
       ],
       "expression": "10*log10(rtc_vh_b1)",
       "rescale": [
         [
-          -26.0,
+          -23.5,
           -11.0
         ]
       ],
       "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh_qa_num": {
+      "title": "Backscatter VH – Contributing Observations",
+      "assets": [
+        "rtc_vh_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh_qa_cqm": {
+      "title": "Backscatter VH – Composite Quality Map",
+      "assets": [
+        "rtc_vh_qa_cqm"
+      ],
+      "expression": "10*log10(rtc_vh_qa_cqm_b1)",
+      "rescale": [
+        [
+          -4.0,
+          8.0
+        ]
+      ],
+      "colormap_name": "viridis",
       "resampling": "average",
       "nodata": "nan"
     }
@@ -135,7 +258,8 @@
   "item_assets": {
     "coh12_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV annual mosaic",
+      "title": "Coherence VV",
+      "description": "12-day repeat-pass interferometric coherence, co-polarized (VV), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
       "roles": [
         "data",
         "cloud-optimized"
@@ -149,9 +273,44 @@
         }
       ]
     },
+    "coh12_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Coherence VV – Contributing Observations",
+      "description": "Mean number of acquisitions that contributed to the Coherence VV composite, averaged over the 10 m pixels inside each 40 m pixel. A float mean, not a count.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Coherence VV – Composite Quality Map",
+      "description": "Composite quality of the Coherence VV composite, averaged in the linear domain onto the 40 m grid: a ratio where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
     "coh12_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH annual mosaic",
+      "title": "Coherence VH",
+      "description": "12-day repeat-pass interferometric coherence, cross-polarized (VH), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
       "roles": [
         "data",
         "cloud-optimized"
@@ -165,10 +324,44 @@
         }
       ]
     },
+    "coh12_vh_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Coherence VH – Contributing Observations",
+      "description": "Mean number of acquisitions that contributed to the Coherence VH composite, averaged over the 10 m pixels inside each 40 m pixel. A float mean, not a count.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "coh12_vh_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Coherence VH – Composite Quality Map",
+      "description": "Composite quality of the Coherence VH composite, averaged in the linear domain onto the 40 m grid: a ratio where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV annual mosaic",
-      "description": "Linear power. Warp averaging and the internal overviews both average in the linear domain, where the mean is physically meaningful; a decibel raster averaged the same way would give log-domain means in every overview level and silently a different quantity from the level above.",
+      "title": "Backscatter VV",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -182,9 +375,44 @@
         }
       ]
     },
+    "rtc_vv_qa_num": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Backscatter VV – Contributing Observations",
+      "description": "Mean number of acquisitions that contributed to the Backscatter VV composite, averaged over the 10 m pixels inside each 40 m pixel. A float mean, not a count.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "num_obs_mean",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
+    "rtc_vv_qa_cqm": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Backscatter VV – Composite Quality Map",
+      "description": "Composite quality of the Backscatter VV composite, averaged in the linear domain onto the 40 m grid: a ratio where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "roles": [
+        "quality",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 40.0,
+      "bands": [
+        {
+          "name": "cqm",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH annual mosaic",
+      "title": "Backscatter VH",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -198,102 +426,13 @@
         }
       ]
     },
-    "coh12_vv_qa_num": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV — mean contributing observations",
-      "description": "A mean rather than a count: the source counts are averaged over roughly 3.6 contributing 10 m pixels per output pixel, so the value is float32 and no longer the same quantity as the tile layer it derives from.",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "num_obs_mean",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
-    "coh12_vv_qa_cqm": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV — composite quality metric",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "cqm",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
-    "coh12_vh_qa_num": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH — mean contributing observations",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "num_obs_mean",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
-    "coh12_vh_qa_cqm": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH — composite quality metric",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "cqm",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
-    "rtc_vv_qa_num": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV — mean contributing observations",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "num_obs_mean",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
-    "rtc_vv_qa_cqm": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV — composite quality metric",
-      "roles": [
-        "quality"
-      ],
-      "raster:spatial_resolution": 40.0,
-      "bands": [
-        {
-          "name": "cqm",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
     "rtc_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH — mean contributing observations",
+      "title": "Backscatter VH – Contributing Observations",
+      "description": "Mean number of acquisitions that contributed to the Backscatter VH composite, averaged over the 10 m pixels inside each 40 m pixel. A float mean, not a count.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
       "raster:spatial_resolution": 40.0,
       "bands": [
@@ -306,9 +445,11 @@
     },
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH — composite quality metric",
+      "title": "Backscatter VH – Composite Quality Map",
+      "description": "Composite quality of the Backscatter VH composite, averaged in the linear domain onto the 40 m grid: a ratio where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
       "raster:spatial_resolution": 40.0,
       "bands": [
@@ -321,129 +462,115 @@
     },
     "coh12_vv_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "coh12_vv web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vv on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv.tif.",
+      "title": "Coherence VV – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VV on WebMercatorQuad z5-z13, stretched 0.1 to 0.75 through cmc.lipari. A picture, not a measurement: read coh12_vv.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "coh12_vh_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "coh12_vh web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vh on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "rtc_vv_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "rtc_vv web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vv on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "rtc_vh_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "rtc_vh web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vh on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "coh12_rgb_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "coh12_rgb web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_rgb on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv.tif and coh12_vh.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "rtc_rgb_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "rtc_rgb web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_rgb on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv.tif and rtc_vh.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
     },
     "coh12_vv_qa_num_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "coh12_vv_qa_num web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vv_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv_qa_num.tif.",
+      "title": "Coherence VV – Contributing Observations – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VV – Contributing Observations on WebMercatorQuad z5-z13, stretched 0 to 90 through cmc.glasgow. A picture, not a measurement: read coh12_vv_qa_num.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "coh12_vh_qa_num_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "coh12_vh_qa_num web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vh_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh_qa_num.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "rtc_vv_qa_num_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "rtc_vv_qa_num web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vv_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv_qa_num.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
-    },
-    "rtc_vh_qa_num_viz": {
-      "type": "application/vnd.pmtiles",
-      "title": "rtc_vh_qa_num web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vh_qa_num on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh_qa_num.tif.",
-      "roles": [
-        "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
     },
     "coh12_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "coh12_vv_qa_cqm web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vv_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vv_qa_cqm.tif.",
+      "title": "Coherence VV – Composite Quality Map – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VV – Composite Quality Map on WebMercatorQuad z5-z13, stretched -3 to 10 dB through cmc.glasgow. A picture, not a measurement: read coh12_vv_qa_cqm.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
+    },
+    "coh12_vh_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Coherence VH – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VH on WebMercatorQuad z5-z13, stretched 0.1 to 0.55 through cmc.lipari. A picture, not a measurement: read coh12_vh.tif for values.",
+      "roles": [
+        "visual"
+      ]
+    },
+    "coh12_vh_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Coherence VH – Contributing Observations – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VH – Contributing Observations on WebMercatorQuad z5-z13, stretched 0 to 90 through cmc.glasgow. A picture, not a measurement: read coh12_vh_qa_num.tif for values.",
+      "roles": [
+        "visual"
+      ]
     },
     "coh12_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "coh12_vh_qa_cqm web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of coh12_vh_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read coh12_vh_qa_cqm.tif.",
+      "title": "Coherence VH – Composite Quality Map – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Coherence VH – Composite Quality Map on WebMercatorQuad z5-z13, stretched -3 to 10 dB through cmc.glasgow. A picture, not a measurement: read coh12_vh_qa_cqm.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
+    },
+    "rtc_vv_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Backscatter VV – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VV on WebMercatorQuad z5-z13, stretched -16.5 to -4 dB through cmc.grayC. A picture, not a measurement: read rtc_vv.tif for values.",
+      "roles": [
+        "visual"
+      ]
+    },
+    "rtc_vv_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Backscatter VV – Contributing Observations – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VV – Contributing Observations on WebMercatorQuad z5-z13, stretched 0 to 90 through cmc.glasgow. A picture, not a measurement: read rtc_vv_qa_num.tif for values.",
+      "roles": [
+        "visual"
+      ]
     },
     "rtc_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "rtc_vv_qa_cqm web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vv_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vv_qa_cqm.tif.",
+      "title": "Backscatter VV – Composite Quality Map – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VV – Composite Quality Map on WebMercatorQuad z5-z13, stretched -4 to 8 dB through cmc.glasgow. A picture, not a measurement: read rtc_vv_qa_cqm.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
+    },
+    "rtc_vh_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Backscatter VH – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VH on WebMercatorQuad z5-z13, stretched -23.5 to -11 dB through cmc.grayC. A picture, not a measurement: read rtc_vh.tif for values.",
+      "roles": [
+        "visual"
+      ]
+    },
+    "rtc_vh_qa_num_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Backscatter VH – Contributing Observations – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VH – Contributing Observations on WebMercatorQuad z5-z13, stretched 0 to 90 through cmc.glasgow. A picture, not a measurement: read rtc_vh_qa_num.tif for values.",
+      "roles": [
+        "visual"
+      ]
     },
     "rtc_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
-      "title": "rtc_vh_qa_cqm web-map tiles",
-      "description": "Pre-styled 8-bit WebP rendering of rtc_vh_qa_cqm on WebMercatorQuad z5-z13, stretched as the year's style declares. Not for analysis: read rtc_vh_qa_cqm.tif.",
+      "title": "Backscatter VH – Composite Quality Map – PMTiles",
+      "description": "Pre-styled 8-bit WebP rendering of Backscatter VH – Composite Quality Map on WebMercatorQuad z5-z13, stretched -4 to 8 dB through cmc.glasgow. A picture, not a measurement: read rtc_vh_qa_cqm.tif for values.",
       "roles": [
         "visual"
-      ],
-      "proj:code": "EPSG:3857"
+      ]
+    },
+    "coh12_rgb_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Coherence False Color – PMTiles",
+      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV / VH) on WebMercatorQuad z5-z13, stretched 0.1 to 0.75 / 0.1 to 0.55 / 0.8 to 2.6. A picture, not a measurement: read coh12_vv.tif and coh12_vh.tif for values.",
+      "roles": [
+        "visual"
+      ]
+    },
+    "rtc_rgb_viz": {
+      "type": "application/vnd.pmtiles",
+      "title": "Backscatter False Color – PMTiles",
+      "description": "Pre-styled 8-bit WebP false-color rendering (VV, VH, VV − VH) on WebMercatorQuad z5-z13, stretched -16.5 to -4 / -23.5 to -11 / 3.5 to 10.5 dB. A picture, not a measurement: read rtc_vv.tif and rtc_vh.tif for values.",
+      "roles": [
+        "visual"
+      ]
     }
   },
   "assets": {
@@ -451,7 +578,7 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
-      "description": "One row per year. The item JSON under each year directory remains the normative representation.",
+      "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
       "roles": [
         "collection-mirror"
       ],
@@ -466,7 +593,6 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.png",
       "type": "image/png",
       "title": "GLACE mosaics preview",
-      "description": "Rendered from the most recent year's coh12_rgb_viz.pmtiles archive, so the preview obeys the committed MapLibre style by construction.",
       "roles": [
         "thumbnail"
       ]
@@ -475,7 +601,7 @@
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "GLACE web-map style",
-      "description": "The template every published year's style is written from: the run copies it once per year as styles/{year}.json, rewriting only the year in each pmtiles:// source, in the layer ids and in the credit line. Every published web-map layer of one year, the first visible and the rest hidden. Each layer's metadata.portolan:legend carries the colour ramp and value range baked into its archive, which is where those constants live.",
+      "description": "The template every published year's style is written from, one copy per year as styles/{year}.json. Every web-map layer of one year, the first visible and the rest hidden; each layer's metadata.portolan:legend carries the color ramp and value range baked into its archive.",
       "roles": [
         "style",
         "default"

@@ -19,6 +19,7 @@ dependencies = [
     "freezebase[s3]>=0.7.1,<0.8",
     "fsspec>=2026.6.0",
     "geopandas>=1.1",
+    "jinja2>=3.1",
     "matplotlib>=3.7",
     "numpy>=1.24",
     "pandas>=2.3",
@@ -110,6 +111,8 @@ include = [
 ]
 
 [tool.ruff.lint]
+# The en dash is the separator every asset title carries (glace_catalog.metadata).
+allowed-confusables = ["–"]
 # Taken verbatim from s1bursts, which carries the current first-party rule set.
 # deep-glacier-mapping has an older one; where the two differ, s1bursts wins, so
 # that code moving between first-party repositories does not change shape.

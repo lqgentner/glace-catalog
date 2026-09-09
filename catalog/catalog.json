@@ -5,8 +5,8 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
   "id": "glace-ch",
-  "title": "GLACE Switzerland (preliminary) — Sentinel-1 Glacier Coherence and Backscatter",
-  "description": "A preliminary release covering the glacierised Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is being produced. The dataset proper is GLACE Alps, which applies this same pipeline across the Alpine Convention perimeter and supersedes this catalog; treat these URLs as provisional. Contents: annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC), 2021 onward. Composites are locally resolution weighted (LRW), so each output pixel is dominated by the acquisitions that resolve it best rather than by whichever orbit happened to observe it most often. Two collections: per-tile composites on the 10 m MGRS grid for analysis and machine learning, and one annual mosaic per year on a fixed equal-area grid (ETRS89-LAEA, 40 m) for mapping, inspection and area statistics. Every raster is a Cloud-Optimized GeoTIFF carrying the full processing record in its own tags.",
+  "title": "GLACE Switzerland (preliminary) – Sentinel-1 Glacier Coherence and Backscatter",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2021–2024. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every raster is a LERC-compressed, cloud-optimized GeoTIFF carrying the full processing record in its own tags. In addition, raster PMTiles in Web Mercator are provided for web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer).",
   "links": [
     {
       "rel": "root",
@@ -36,13 +36,13 @@
       "rel": "child",
       "href": "./tiles/collection.json",
       "type": "application/json",
-      "title": "GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid"
+      "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)"
     },
     {
       "rel": "child",
       "href": "./mosaics/collection.json",
       "type": "application/json",
-      "title": "GLACE mosaics — annual Sentinel-1 composites on a fixed equal-area grid"
+      "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)"
     },
     {
       "rel": "vcs",
@@ -53,6 +53,11 @@
       "rel": "issues",
       "href": "https://github.com/lqgentner/glace-catalog/issues",
       "title": "Issue tracker"
+    },
+    {
+      "rel": "related",
+      "href": "https://lqgentner.github.io/glace-viewer",
+      "title": "GLACE Viewer, a web map over the PMTiles archives"
     }
   ]
 }

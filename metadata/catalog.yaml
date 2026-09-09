@@ -1,0 +1,121 @@
+# The identity and prose of the published GLACE catalog.
+#
+# `scripts/render-catalog.py` renders `catalog/` from this file, `assets.yaml`
+# and the templates beside them: the root catalog, both collections, the style
+# and every README and AGENTS.md. Edit here, never there; `tests/test_render.py`
+# fails when the tracked tree and a fresh render differ.
+#
+# Prose fields are Jinja2 templates over: region, first_year, last_year,
+# public_base, catalog (this file), assets (the vocabulary tables). Ids and
+# grids come from `src/glace_catalog/scopes.py` for the scope named here.
+
+scope: ch
+
+# The covered area as it reads in a sentence. The root title names the
+# rehearsal; everything below it is written for the dataset, so the swap to
+# the Alps changes this line and the title, not the prose.
+region: the Alpine Convention perimeter
+
+# Years the tracked tree claims. `finalize-catalog` replaces the temporal
+# extent with the measured compositing windows at publication; these bound it
+# in the tracked tree and name the series in the prose.
+years:
+  first: 2021
+  last: 2024
+
+title: GLACE Switzerland (preliminary)
+subtitle: Sentinel-1 Glacier Coherence and Backscatter
+
+# Shown once, in the root README and AGENTS.md. Drop it with the "(preliminary)"
+# in the title when the Alpine catalog replaces this one.
+preliminary_notice: >-
+  This is a preliminary release over the Swiss Alps, published to exercise
+  the GLACE publication pipeline while the full dataset is produced. The
+  dataset is GLACE Alps, over {{ region }}, which uses this same pipeline and
+  supersedes this catalog. These URLs are provisional: do not cite them, and
+  expect the coverage, the years and the identifiers to change.
+
+description: >-
+  Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
+  coherence (COH12) and radiometrically terrain-corrected backscatter (RTC).
+  The data covers {{ region }}, {{ first_year }}–{{ last_year }}. The
+  analysis-ready composites are locally resolution weighted (LRW) after
+  [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each
+  output pixel is dominated by acquisitions with high spatial resolution.
+  Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI
+  over the target area.
+
+
+  The composites are available in two separate collections: tiles
+  (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
+  one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every raster is
+  a LERC-compressed, cloud-optimized GeoTIFF carrying the full processing
+  record in its own tags. In addition, raster PMTiles in Web Mercator are
+  provided for web maps, such as the
+  [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
+
+license: CC-BY-4.0
+
+keywords:
+  - Sentinel-1
+  - SAR
+  - InSAR coherence
+  - backscatter
+  - glaciers
+  - cryosphere
+  - Alps
+
+providers:
+  - name: European Space Agency / Copernicus
+    description: >-
+      Operates the Sentinel-1 mission and distributes the SLC data these
+      composites are derived from, through the Copernicus Data Space Ecosystem.
+    roles: [producer, licensor]
+    url: https://sentinel.esa.int/web/sentinel/missions/sentinel-1
+  - name: University of Zurich, Department of Geography
+    description: >-
+      Produced the composites from Copernicus Sentinel-1 SLC data: burst
+      extraction, coherence estimation, radiometric terrain correction and
+      locally resolution weighted compositing. Derived the annual mosaics and
+      maintains this catalog.
+    roles: [producer, processor, licensor, host]
+    url: https://www.geo.uzh.ch/en.html
+
+links:
+  vcs:
+    href: https://github.com/lqgentner/glace-catalog
+    title: Source repository
+  issues:
+    href: https://github.com/lqgentner/glace-catalog/issues
+    title: Issue tracker
+  related:
+    href: https://lqgentner.github.io/glace-viewer
+    title: GLACE Viewer, a web map over the PMTiles archives
+
+collections:
+  tiles:
+    title: GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
+    short_title: GLACE tiles
+    keywords: [MGRS]
+    description: >-
+      The GLACE composites on 10 km MGRS grid squares in their own UTM zone at
+      10 m grid spacing, one item per square and year. Each item carries
+      twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in
+      VV and VH, and for each of the four a contributing-observations count and
+      a composite quality map. Stored values are linear; the decibel display
+      conversion is declared in the renders. Items are grouped in one
+      sub-catalog per year, and the item mirror items.parquet is the query path.
+  mosaics:
+    title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
+    short_title: GLACE mosaics
+    keywords: [mosaic]
+    description: >-
+      One mosaic per year of the GLACE composites, resampled from the MGRS
+      tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an
+      area or area-change statistic can be taken from pixel counts without a
+      latitude correction. Every year shares the same extent, so multitemporal
+      stacks need no alignment step. Twelve single-band analysis rasters per
+      year, in linear units, each a Cloud-Optimized GeoTIFF with internal
+      overviews. Drawing is served separately by fourteen PMTiles archives per
+      year, tiled on the WebMercatorQuad grid at zoom 13. Both products are
+      resampled from the 10 m tiles, so neither is derived from the other.

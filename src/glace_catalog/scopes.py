@@ -47,6 +47,9 @@ not declare, which for a glacier dataset is a correctness problem rather than a
 preference. See M-24.
 """
 
+COMPOSITE_RESOLUTION = 10.0
+"""Pixel size of the per-tile composites on the MGRS grid, in metres."""
+
 ANALYSIS_RESOLUTION = 40.0
 """Pixel size of the annual analysis mosaics, in metres."""
 
@@ -79,6 +82,9 @@ def zoom_resolution(zoom: int) -> float:
     """Ground resolution of one WebMercatorQuad pixel at ``zoom``, in metres."""
     return MERCATOR_SPAN_M / (TILE_PX * 2**zoom)
 
+
+VIZ_MIN_ZOOM = 5
+"""Coarsest zoom level a web-map archive holds."""
 
 MOSAIC_RESOLUTION = zoom_resolution(MOSAIC_ZOOM)
 """19.109257071294063 m, which is 13.2 m on the ground at 46.5 degrees north."""

@@ -17,6 +17,10 @@ write_prefix: s3://lqgentner/glace-ch
 # write_prefix is not.
 public_base: https://data.source.coop/lqgentner/glace-ch
 
+# The same tree over anonymous S3, which the `alternate` href of every
+# collection asset carries. Range requests answer 206 on both.
+public_s3_base: s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch
+
 # The named AWS profile the publisher uses. Source Cooperative issues
 # per-account credentials; store them under this profile in ~/.aws/credentials
 # (or wherever AWS_SHARED_CREDENTIALS_FILE points) rather than in the

@@ -5,14 +5,13 @@
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json",
     "https://stac-extensions.github.io/render/v2.0.0/schema.json",
     "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
-    "https://stac-extensions.github.io/projection/v2.0.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json"
   ],
   "id": "glace-ch-tiles",
-  "title": "GLACE tiles — 10 m Sentinel-1 LRW composites on the MGRS grid",
-  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over Alpine glaciers, on the 10 km MGRS grid at 10 m resolution. One item per (tile, year), carrying twelve single-band Cloud-Optimized GeoTIFFs: COH12 and RTC in VV and VH, and for each of those four measurements a pair of QA layers — the contributing observation count (QA-NUM) and the composite quality metric (QA-CQM), which is the local resolution-weighting's own record of how well each pixel was resolved. Compositing is locally resolution weighted (LRW): each acquisition's contribution is weighted by how well it resolves the pixel, so layover and shadow are down-weighted rather than averaged in. All values are linear — backscatter in linear power, QA-CQM as a linear ratio — with the decibel conversion declared in the render definitions rather than applied to the stored pixels, as CEOS-ARD PFS SAR item 3.1 asks. Every raster carries its full processing record in its own GeoTIFF tags, so a file separated from this catalog still says how it was made. Items are grouped into one sub-catalog per year; the item mirror at items.parquet is the query path.",
+  "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion is declared in the renders. Items are grouped in one sub-catalog per year, and the item mirror items.parquet is the query path.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -37,7 +36,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing. Maintains this catalog. The bytes are served from Source Cooperative storage; corrections go through the catalog's issue tracker.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -51,94 +50,47 @@
     "spatial": {
       "bbox": [
         [
-          5.9,
-          45.8,
-          10.5,
-          47.0
+          6.767578,
+          45.828799,
+          10.458984,
+          47.338823
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2021-07-11T00:00:00Z",
-          "2024-10-06T00:00:00Z"
+          "2021-01-01T00:00:00Z",
+          "2025-01-01T00:00:00Z"
         ]
       ]
     }
   },
   "renders": {
     "coh12_vv": {
-      "title": "COH12 VV — 12-day coherence, co-polarised",
+      "title": "Coherence VV",
       "assets": [
         "coh12_vv"
       ],
       "rescale": [
         [
           0.1,
-          0.8
+          0.75
         ]
       ],
       "colormap_name": "magma",
-      "resampling": "average",
-      "nodata": "nan"
-    },
-    "coh12_vh": {
-      "title": "COH12 VH — 12-day coherence, cross-polarised",
-      "assets": [
-        "coh12_vh"
-      ],
-      "rescale": [
-        [
-          0.1,
-          0.6
-        ]
-      ],
-      "colormap_name": "magma",
-      "resampling": "average",
-      "nodata": "nan"
-    },
-    "rtc_vv": {
-      "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
-      "assets": [
-        "rtc_vv"
-      ],
-      "expression": "10*log10(rtc_vv_b1)",
-      "rescale": [
-        [
-          -18.5,
-          -5.0
-        ]
-      ],
-      "colormap_name": "gray",
-      "resampling": "average",
-      "nodata": "nan"
-    },
-    "rtc_vh": {
-      "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
-      "assets": [
-        "rtc_vh"
-      ],
-      "expression": "10*log10(rtc_vh_b1)",
-      "rescale": [
-        [
-          -26.0,
-          -11.0
-        ]
-      ],
-      "colormap_name": "gray",
       "resampling": "average",
       "nodata": "nan"
     },
     "coh12_vv_qa_num": {
-      "title": "COH12 VV — contributing observations",
+      "title": "Coherence VV – Contributing Observations",
       "assets": [
         "coh12_vv_qa_num"
       ],
       "rescale": [
         [
-          0,
-          30
+          0.0,
+          90.0
         ]
       ],
       "colormap_name": "viridis",
@@ -146,18 +98,158 @@
       "nodata": 0
     },
     "coh12_vv_qa_cqm": {
-      "title": "COH12 VV — composite quality metric (dB, 0 = flat terrain)",
+      "title": "Coherence VV – Composite Quality Map",
       "assets": [
         "coh12_vv_qa_cqm"
       ],
       "expression": "10*log10(coh12_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -6.0,
-          6.0
+          -3.0,
+          10.0
         ]
       ],
-      "colormap_name": "rdbu",
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vh": {
+      "title": "Coherence VH",
+      "assets": [
+        "coh12_vh"
+      ],
+      "rescale": [
+        [
+          0.1,
+          0.55
+        ]
+      ],
+      "colormap_name": "magma",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "coh12_vh_qa_num": {
+      "title": "Coherence VH – Contributing Observations",
+      "assets": [
+        "coh12_vh_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "nearest",
+      "nodata": 0
+    },
+    "coh12_vh_qa_cqm": {
+      "title": "Coherence VH – Composite Quality Map",
+      "assets": [
+        "coh12_vh_qa_cqm"
+      ],
+      "expression": "10*log10(coh12_vh_qa_cqm_b1)",
+      "rescale": [
+        [
+          -3.0,
+          10.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vv": {
+      "title": "Backscatter VV",
+      "assets": [
+        "rtc_vv"
+      ],
+      "expression": "10*log10(rtc_vv_b1)",
+      "rescale": [
+        [
+          -16.5,
+          -4.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vv_qa_num": {
+      "title": "Backscatter VV – Contributing Observations",
+      "assets": [
+        "rtc_vv_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "nearest",
+      "nodata": 0
+    },
+    "rtc_vv_qa_cqm": {
+      "title": "Backscatter VV – Composite Quality Map",
+      "assets": [
+        "rtc_vv_qa_cqm"
+      ],
+      "expression": "10*log10(rtc_vv_qa_cqm_b1)",
+      "rescale": [
+        [
+          -4.0,
+          8.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh": {
+      "title": "Backscatter VH",
+      "assets": [
+        "rtc_vh"
+      ],
+      "expression": "10*log10(rtc_vh_b1)",
+      "rescale": [
+        [
+          -23.5,
+          -11.0
+        ]
+      ],
+      "colormap_name": "gray",
+      "resampling": "average",
+      "nodata": "nan"
+    },
+    "rtc_vh_qa_num": {
+      "title": "Backscatter VH – Contributing Observations",
+      "assets": [
+        "rtc_vh_qa_num"
+      ],
+      "rescale": [
+        [
+          0.0,
+          90.0
+        ]
+      ],
+      "colormap_name": "viridis",
+      "resampling": "nearest",
+      "nodata": 0
+    },
+    "rtc_vh_qa_cqm": {
+      "title": "Backscatter VH – Composite Quality Map",
+      "assets": [
+        "rtc_vh_qa_cqm"
+      ],
+      "expression": "10*log10(rtc_vh_qa_cqm_b1)",
+      "rescale": [
+        [
+          -4.0,
+          8.0
+        ]
+      ],
+      "colormap_name": "viridis",
       "resampling": "average",
       "nodata": "nan"
     }
@@ -165,13 +257,13 @@
   "item_assets": {
     "coh12_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV — 12-day InSAR coherence, co-polarised",
-      "description": "Locally resolution weighted composite of 12-day repeat-pass coherence, VV. Dimensionless ratio in [0, 1].",
+      "title": "Coherence VV",
+      "description": "12-day repeat-pass interferometric coherence, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Dimensionless, in [0, 1].",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "coh12_vv",
@@ -180,30 +272,15 @@
         }
       ]
     },
-    "coh12_vh": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH — 12-day InSAR coherence, cross-polarised",
-      "description": "Locally resolution weighted composite of 12-day repeat-pass coherence, VH. Dimensionless ratio in [0, 1].",
-      "roles": [
-        "data",
-        "cloud-optimized"
-      ],
-      "raster:spatial_resolution": 10,
-      "bands": [
-        {
-          "name": "coh12_vh",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV — contributing observation count",
+      "title": "Coherence VV – Contributing Observations",
+      "description": "Number of acquisitions that contributed to the Coherence VV composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "num_obs",
@@ -214,12 +291,13 @@
     },
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VV — composite quality metric",
-      "description": "Contributing-area ratio of the resolution weighting. A linear ratio where 1.0 (0 dB) is flat terrain; below 1 is layover, above 1 is shadow.",
+      "title": "Coherence VV – Composite Quality Map",
+      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "cqm",
@@ -228,13 +306,32 @@
         }
       ]
     },
+    "coh12_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Coherence VH",
+      "description": "12-day repeat-pass interferometric coherence, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Dimensionless, in [0, 1].",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10.0,
+      "bands": [
+        {
+          "name": "coh12_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH — contributing observation count",
+      "title": "Coherence VH – Contributing Observations",
+      "description": "Number of acquisitions that contributed to the Coherence VH composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "num_obs",
@@ -245,11 +342,13 @@
     },
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "COH12 VH — composite quality metric",
+      "title": "Coherence VH – Composite Quality Map",
+      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "cqm",
@@ -260,13 +359,13 @@
     },
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV — terrain-corrected backscatter, co-polarised",
-      "description": "Locally resolution weighted composite of radiometrically terrain corrected gamma-nought backscatter, VV, in linear power. The decibel conversion is declared in the collection's render definitions, not applied to the stored pixels.",
+      "title": "Backscatter VV",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "rtc_vv",
@@ -275,30 +374,15 @@
         }
       ]
     },
-    "rtc_vh": {
-      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH — terrain-corrected backscatter, cross-polarised",
-      "description": "Locally resolution weighted composite of radiometrically terrain corrected gamma-nought backscatter, VH, in linear power.",
-      "roles": [
-        "data",
-        "cloud-optimized"
-      ],
-      "raster:spatial_resolution": 10,
-      "bands": [
-        {
-          "name": "rtc_vh",
-          "data_type": "float32",
-          "nodata": "nan"
-        }
-      ]
-    },
     "rtc_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV — contributing observation count",
+      "title": "Backscatter VV – Contributing Observations",
+      "description": "Number of acquisitions that contributed to the Backscatter VV composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "num_obs",
@@ -309,11 +393,13 @@
     },
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VV — composite quality metric",
+      "title": "Backscatter VV – Composite Quality Map",
+      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "cqm",
@@ -322,13 +408,32 @@
         }
       ]
     },
+    "rtc_vh": {
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Backscatter VH",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
+      "roles": [
+        "data",
+        "cloud-optimized"
+      ],
+      "raster:spatial_resolution": 10.0,
+      "bands": [
+        {
+          "name": "rtc_vh",
+          "data_type": "float32",
+          "nodata": "nan"
+        }
+      ]
+    },
     "rtc_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH — contributing observation count",
+      "title": "Backscatter VH – Contributing Observations",
+      "description": "Number of acquisitions that contributed to the Backscatter VH composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "num_obs",
@@ -339,11 +444,13 @@
     },
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
-      "title": "RTC VH — composite quality metric",
+      "title": "Backscatter VH – Composite Quality Map",
+      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
       "roles": [
-        "quality"
+        "quality",
+        "cloud-optimized"
       ],
-      "raster:spatial_resolution": 10,
+      "raster:spatial_resolution": 10.0,
       "bands": [
         {
           "name": "cqm",
@@ -358,7 +465,7 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
-      "description": "Every tile item of every year, one row each. The query path for this collection: one range request returns the whole item index in place of one HTTP fetch per tile. The item JSON under each year sub-catalog remains the normative representation.",
+      "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
       "roles": [
         "collection-mirror"
       ],
@@ -373,7 +480,7 @@
       "href": "https://data.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "Per-tile glacier cover fractions (RGI7)",
-      "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, pinned to one inventory version. Computed once per scope rather than per year, so the same tile cannot carry different fractions in 2021 and 2024. This is the lookup behind the glace:glacier_fraction properties on every item, published so that a property nobody can recompute is at least auditable.",
+      "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, computed once per scope: the lookup behind the glace:glacier_fraction properties on every item.",
       "roles": [
         "metadata"
       ],

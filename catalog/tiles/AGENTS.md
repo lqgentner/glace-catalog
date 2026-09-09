@@ -1,7 +1,7 @@
-# GLACE tiles — agent guide
+# GLACE tiles – agent guide
 
-One item per (MGRS tile, year). Twelve single-band COGs per item, 10 m, in each
-tile's own UTM zone.
+One item per (MGRS square, year). Twelve single-band COGs per item, 10 m, in
+each square's own UTM zone.
 
 ## Query the mirror, do not walk the tree
 
@@ -22,38 +22,35 @@ ORDER BY frac DESC;
 
 ## Asset vocabulary
 
-Twelve keys, and the key is the filename stem:
+Twelve keys, and the key is the filename stem. Polarization comes before the
+QA role, so a sorted listing keeps each QA layer directly beneath the
+measurement it describes.
 
-```
-coh12_vv        coh12_vh          measurements, float32, NaN nodata
-rtc_vv          rtc_vh
-coh12_vv_qa_num coh12_vv_qa_cqm   QA for each measurement
-coh12_vh_qa_num coh12_vh_qa_cqm
-rtc_vv_qa_num   rtc_vv_qa_cqm
-rtc_vh_qa_num   rtc_vh_qa_cqm
-```
-
-Polarization comes before the QA role, so a sorted listing keeps each QA layer
-directly beneath the measurement it describes.
-
-## Units
-
-| asset | stored as | to display |
-| --- | --- | --- |
-| `coh12_*` | dimensionless [0, 1] | rescale 0.10–0.80 (VV) / 0.10–0.60 (VH) |
-| `rtc_*` | **linear power** | `10*log10(x)`, then −18.5…−5 dB (VV) / −26…−11 dB (VH) |
-| `*_qa_cqm` | linear ratio, 1.0 = flat | `10*log10(x)`, diverging ramp ±6 dB |
-| `*_qa_num` | uint16 count, 0 = nodata | 0–30 sequential |
+| asset key | title | stored as | nodata | to display |
+| --- | --- | --- | --- | --- |
+| `coh12_vv` | Coherence VV | float32 | NaN | 0.1 to 0.75, `cmc.lipari` |
+| `coh12_vv_qa_num` | Coherence VV – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
+| `coh12_vv_qa_cqm` | Coherence VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -3 to 10 dB, `cmc.glasgow` |
+| `coh12_vh` | Coherence VH | float32 | NaN | 0.1 to 0.55, `cmc.lipari` |
+| `coh12_vh_qa_num` | Coherence VH – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
+| `coh12_vh_qa_cqm` | Coherence VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -3 to 10 dB, `cmc.glasgow` |
+| `rtc_vv` | Backscatter VV | float32 | NaN | `10*log10(x)`, then -16.5 to -4 dB, `cmc.grayC` |
+| `rtc_vv_qa_num` | Backscatter VV – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
+| `rtc_vv_qa_cqm` | Backscatter VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -4 to 8 dB, `cmc.glasgow` |
+| `rtc_vh` | Backscatter VH | float32 | NaN | `10*log10(x)`, then -23.5 to -11 dB, `cmc.grayC` |
+| `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
+| `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -4 to 8 dB, `cmc.glasgow` |
 
 Averaging `rtc_*` or `*_qa_cqm` must happen in the **linear** domain. A mean of
-decibels is not the decibel of a mean.
+decibels is not the decibel of a mean. The `renders` block on the collection
+carries the same stretches with portable matplotlib colormap names.
 
 ## Provenance is in the file
 
-Each GeoTIFF carries ~30 dataset tags recording the processing chain
+Each GeoTIFF carries about 30 dataset tags recording the processing chain
 (`PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`, `COMPOSITING_*`, `BACKSCATTER_*`,
 `COHERENCE_*`). The item properties mirror them under `glace:*` and
-`processing:*`, so you can filter on them without opening a raster — but the
+`processing:*`, so you can filter on them without opening a raster, but the
 file is the source of truth and stays self-describing if separated from this
 catalog.
 
@@ -66,7 +63,7 @@ both dates inside the window.
 
 ## Pairing with the mosaics
 
-`glace-ch-mosaics` holds the same measurements warped onto one fixed
+The mosaics collection holds the same measurements resampled onto one fixed
 equal-area grid, one item per year. Join on the year. Do not join on geometry:
 the tiles are per-UTM-zone and the mosaics are ETRS89-LAEA.
 

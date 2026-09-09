@@ -48,7 +48,7 @@ import rasterio.shutil
 from rasterio.warp import transform_bounds
 
 from glace_catalog.mosaics import chain_env
-from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM
 from glace_catalog.stac.naming import viz_filename
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import (
@@ -327,7 +327,7 @@ def build_pmtiles(
     style: LayerStyle | RgbStyle,
     start_date: str,
     end_date: str,
-    min_zoom: int = 5,
+    min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
     tile_format: str = "WEBP",
     quality: int = 80,
@@ -503,7 +503,7 @@ def build_layers(
     rgb_styles: Mapping[str, RgbStyle] | None = None,
     style_path: Path | None = None,
     layers: Collection[str] | None = None,
-    min_zoom: int = 5,
+    min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
     tile_format: str = "WEBP",
     quality: int = 80,

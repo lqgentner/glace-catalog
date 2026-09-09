@@ -1,32 +1,32 @@
-# GLACE mosaics — annual composites on a fixed equal-area grid
+# GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
 
 One item per year, each carrying twelve single-band analysis rasters on
-ETRS89-LAEA (EPSG:3035) at 40 m, plus fourteen PMTiles archives for drawing
-them, beside the rasters in the same item directory.
+ETRS89-LAEA (EPSG:3035) at 40 m, plus fourteen PMTiles archives
+for drawing them, beside the rasters in the same item directory. Agents: read
+[`AGENTS.md`](AGENTS.md).
 
 ## Why this grid
 
 Two properties, both deliberate:
 
-- **It is equal-area.** A pixel covers the same 1 600 m² everywhere, so a glacier
-  area or an area change is a pixel count. On WebMercator it is not: a nominal
-  19.109 m pixel is about 13.2 m on the ground at 46.5°N and the factor varies
-  with latitude, so every area statistic would need a correction this catalog
-  does not declare.
-- **It is the same every year.** The extent is a hard-coded constant, not
-  recomputed from whichever tiles happen to exist, so every year has identical
+- **It is equal-area.** A pixel covers the same 1600 m² everywhere, so a
+  glacier area or an area change is a pixel count. On Web Mercator it is not:
+  the pixel size varies with latitude, so every area statistic would need a
+  correction this catalog does not declare.
+- **It is the same every year.** The extent is a fixed constant, not recomputed
+  from whichever tiles happen to exist, so every year has identical
   `proj:shape` and `proj:transform`. Stacking and differencing are a read.
 
 Drawing does not use this grid at all: the PMTiles archives are tiled on
-WebMercatorQuad z13, resampled from the same 10 m tiles rather than from these
-mosaics, so a map never pays for a second warp.
+WebMercatorQuad up to zoom 13, resampled from the same 10 m tiles rather
+than from these mosaics, so a map never pays for a second resampling.
 
 ## Two ways to consume it
 
 **To draw a map**, use the `{stem}_viz.pmtiles` archives in each year's item
 directory, beside the COGs they render. They are assets of that item with the
-`visual` role, and registered on this collection as `rel: "pmtiles"` links, with
-one MapLibre GL style per year as `style` assets — load a style directly and it
+`visual` role, registered on this collection as `rel: "pmtiles"` links, with
+one MapLibre GL style per year as a `style` asset. Load a style directly and it
 works:
 
 ```js
@@ -39,14 +39,14 @@ new maplibregl.Map({
 ```
 
 **To read values**, use the COGs. The `renders` block on this collection carries
-the fixed stretch, colour ramp and — for backscatter and the quality metric —
-the decibel `expression`, so a titiler-compatible client draws them correctly
+the fixed stretch, the color ramp and, for backscatter and the quality map, the
+decibel `expression`, so a titiler-compatible client draws them correctly
 without a style file:
 
 ```
 https://titiler.xyz/cog/preview.png
-  ?url=.../mosaics/2024/rtc_vv.tif
-  &expression=10*log10(b1)&rescale=-18.5,-5&colormap_name=gray
+  ?url=https://data.source.coop/lqgentner/glace-ch/mosaics/2024/rtc_vv.tif
+  &expression=10*log10(b1)&rescale=-16.5,-4&colormap_name=gray
 ```
 
 The stretch is fixed rather than per-year on purpose: a percentile stretch
@@ -76,9 +76,8 @@ resampling step.
 
 `{year}/rtc_vv.tif` is linear power. `{year}/rtc_vv_viz.pmtiles` is the same
 measurement rendered: 8-bit, pre-stretched, and in **decibels**. They sit side by
-side, which is the pairing to see, and the `_viz` suffix is what keeps them
-apart: without it the names would differ by one extension while the quantities
-differ by a logarithm.
+side, and the `_viz` suffix is what keeps them apart: without it the names would
+differ by one extension while the quantities differ by a logarithm.
 
 Coherence is not converted: `coh12_*` archives are linear values under a fixed
 stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because those span decades
@@ -98,8 +97,8 @@ integer count.
 
 ## Provenance
 
-Derived in this repository from the tiles collection by a VRT chain: per-zone
-mosaic, warp to the canonical grid, union, then one streaming COG copy. No pixel
-is resampled twice — the web-map archives run the same chain onto the display
-grid rather than being tiled from these files. Upstream provenance is the tiles
+Derived from the tiles collection by a VRT chain: per-zone mosaic, warp to the
+canonical grid, union, then one streaming COG copy. No pixel is resampled
+twice; the web-map archives run the same chain onto the display grid rather
+than being tiled from these files. Upstream provenance is the tiles
 collection's.

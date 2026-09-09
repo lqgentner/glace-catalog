@@ -1,0 +1,137 @@
+# The asset vocabulary of the GLACE catalog.
+#
+# This is the one place the twelve assets and their renderings are named,
+# described and given a display stretch. `glace_catalog.metadata` reads it;
+# from it come the `item_assets` and `renders` of both collections, the style's
+# legends, the titles on every tile and mosaic item, the `visual` assets and
+# the `rel: "pmtiles"` links, and the tables in every README and AGENTS.md.
+# Nothing else in the repository types an asset title or a stretch.
+#
+# Every rendered document is regenerated from this file by
+# `scripts/render-catalog.py`; `tests/test_render.py` fails when the tracked
+# `catalog/` and a fresh render differ.
+
+products:
+  coh12:
+    name: Coherence
+    long: 12-day repeat-pass interferometric coherence
+    sar_product_type: COH
+    # The one sentence on what the stored values are, appended to every data
+    # asset's description on both grids.
+    value: Dimensionless, in [0, 1].
+    # cmc.lipari is the designed ramp (perceptually uniform, Crameri); magma is
+    # the portable stand-in a client without cmcrameri can resolve (M-10).
+    cmap: cmc.lipari
+    portable_cmap: magma
+    decibel: false
+    # Stretches remeasured 2026-09-09 on the warped z13 display mosaics of
+    # 2021-2024 (25 native-resolution windows per band per year, 2-98 %),
+    # averaged over the years and rounded to 0.05.
+    stretch:
+      vv: [0.1, 0.75]
+      vh: [0.1, 0.55]
+    false_color:
+      title: Coherence False Color
+      channels: [VV, VH, VV / VH]
+      # Red and green repeat the single-band stretches; blue is the co- to
+      # cross-polarized ratio, measured on the rgb chain's third band.
+      blue: [0.8, 2.6]
+    # QA-CQM range for this product, in decibels. CQM is one-sided: 2-98 %
+    # lands at about -2.5 / +10 dB, within 1 dB across the years. The range is
+    # the measured one, not a symmetric one: 0 dB has no physical meaning in
+    # the composites, so there is nothing to centre on (M-28).
+    cqm: [-3.0, 10.0]
+  rtc:
+    name: Backscatter
+    long: Radiometrically terrain-corrected gamma-nought backscatter
+    sar_product_type: RTC
+    value: >-
+      Linear power. The decibel conversion, 10*log10, is declared in the
+      collection's renders and not applied to the stored pixels.
+    cmap: cmc.grayC
+    portable_cmap: gray
+    decibel: true
+    # Never measured before 2026-09-09: the old -18.5 / -26 floors were
+    # 2-2.5 dB too dark. 2021, the two-satellite year, sits about 1 dB below
+    # the others at the dark end; one fixed stretch still holds (M-27).
+    stretch:
+      vv: [-16.5, -4.0]
+      vh: [-23.5, -11.0]
+    false_color:
+      title: Backscatter False Color
+      channels: [VV, VH, VV − VH]
+      blue: [3.5, 10.5]
+    # 2-98 % lands at about -3.7 / +8 dB.
+    cqm: [-4.0, 8.0]
+
+polarizations:
+  vv: co-polarized
+  vh: cross-polarized
+
+qa:
+  num:
+    name: Contributing Observations
+    # One range for both products, not one each. RTC sees more acquisitions
+    # than COH12, which needs pairs; a per-product range would normalise that
+    # difference away and draw the two identically. The ceiling follows the
+    # constellation: per-file maxima are 49 (COH12) and 58 (RTC) in 2021 with
+    # S1A+S1B, 26 and 30 from 2022 on with S1A alone; 2026 flies three
+    # satellites, 58 x 1.5 = 87, rounded up to 90. cmc.glasgow is sequential:
+    # dark for few, bright for many, the same ramp as CQM (M-28).
+    cmap: cmc.glasgow
+    portable_cmap: viridis
+    range: [0.0, 90.0]
+    decibel: false
+    band:
+      # An integer count on the 10 m tiles; warping to 40 m averages sixteen
+      # source pixels, so the mosaic band is a float mean under its own name.
+      tiles: {name: num_obs, data_type: uint16, nodata: 0}
+      mosaics: {name: num_obs_mean, data_type: float32, nodata: nan}
+  cqm:
+    name: Composite Quality Map
+    cmap: cmc.glasgow
+    portable_cmap: viridis
+    # The range is per product: `products.*.cqm`.
+    decibel: true
+    band:
+      tiles: {name: cqm, data_type: float32, nodata: nan}
+      mosaics: {name: cqm, data_type: float32, nodata: nan}
+
+# Description sentences, Jinja2 templates over: long, product (short name),
+# POL, pol_word, value, source_title, stretch, cmap, channels, min_zoom,
+# max_zoom, read_instead.
+descriptions:
+  data:
+    tiles: >-
+      {{ long }}, {{ pol_word }} ({{ POL }}), composited with local resolution weighting
+      over the year's summer window on the 10 m MGRS grid. {{ value }}
+    mosaics: >-
+      {{ long }}, {{ pol_word }} ({{ POL }}), resampled from the 10 m tiles onto the 40 m
+      equal-area grid by averaging in the linear domain. {{ value }}
+  num:
+    tiles: >-
+      Number of acquisitions that contributed to the {{ product }} {{ POL }} composite
+      with a non-zero resolution weight. 0 is nodata, not an observed zero.
+    mosaics: >-
+      Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
+      composite, averaged over the 10 m pixels inside each 40 m pixel. A float
+      mean, not a count.
+  cqm:
+    tiles: >-
+      Composite quality of the {{ product }} {{ POL }} composite: the local resolution
+      of the weighted composite as a linear ratio, where 1.0 is flat terrain
+      and higher is better resolved. The decibel conversion is declared in the
+      collection's renders.
+    mosaics: >-
+      Composite quality of the {{ product }} {{ POL }} composite, averaged in the
+      linear domain onto the 40 m grid: a ratio where 1.0 is flat terrain and
+      higher is better resolved. The decibel conversion is declared in the
+      collection's renders.
+  viz: >-
+    Pre-styled 8-bit WebP rendering of {{ source_title }} on WebMercatorQuad
+    z{{ min_zoom }}-z{{ max_zoom }}, stretched {{ stretch }} through {{ cmap }}. A picture,
+    not a measurement: read {{ read_instead }} for values.
+  viz_rgb: >-
+    Pre-styled 8-bit WebP false-color rendering ({{ channels }}) on WebMercatorQuad
+    z{{ min_zoom }}-z{{ max_zoom }}, stretched {{ stretch }}. A picture, not a measurement:
+    read {{ read_instead }} for values.

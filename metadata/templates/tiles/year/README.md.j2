@@ -1,0 +1,27 @@
+# {{ tiles.short_title }} {{ year }}
+
+The MGRS squares composited in {{ year }}, one item each. Every item carries
+twelve single-band Cloud-Optimized GeoTIFFs at 10 m, in that square's own UTM
+zone.
+
+This sub-catalog exists to group the year's items for browsing. It holds no
+assets of its own and adds no metadata: everything about the pixels is on the
+items, and everything about the run that wrote them is in each GeoTIFF's tags.
+
+## Reading it
+
+Do not walk this catalog: one HTTP request per tile, to learn what one range
+request already holds. `../items.parquet` covers every year in one file, so
+selecting this year is a predicate rather than a different URL. The
+[collection README](../README.md) has the worked query.
+
+## License
+
+{{ catalog.license }}. Contains modified Copernicus Sentinel data.
+
+## Provenance
+
+Produced at the University of Zurich, Department of Geography, from Copernicus
+Sentinel-1 SLC data. Per-file provenance is embedded in each GeoTIFF's tags and
+mirrored into the item properties, including the software versions, the DEM and
+the compositing window and parameters.

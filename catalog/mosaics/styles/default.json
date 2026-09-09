@@ -1,8 +1,8 @@
 {
   "version": 8,
-  "name": "GLACE — Sentinel-1 composites (2024)",
+  "name": "GLACE – Sentinel-1 composites (2024)",
   "metadata": {
-    "description": "Every published web-map layer of one year. The first is visible and the rest ship hidden, so a client switches by visibility rather than by loading another style. Each layer's metadata.portolan:legend is the source of truth for the ramp and range baked into its archive (M-27); stops are derived from cmap over vmin-vmax, never authored."
+    "description": "Every published web-map layer of one year. The first is visible and the rest ship hidden, so a client switches by visibility rather than by loading another style. Each layer's metadata.portolan:legend carries the ramp and range baked into its archive; stops are derived from cmap over vmin-vmax, never authored. Rendered from metadata/assets.yaml."
   },
   "sources": {
     "src-coh12_rgb": {
@@ -129,7 +129,7 @@
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 false colour",
+          "title": "Coherence False Color",
           "type": "channels",
           "unit": "",
           "decibel": false,
@@ -158,13 +158,16 @@
       "id": "glace-coh12_vv-2024",
       "type": "raster",
       "source": "src-coh12_vv",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VV — 12-day coherence, co-polarised",
+          "title": "Coherence VV",
           "type": "ramp",
           "cmap": "cmc.lipari",
           "vmin": 0.1,
@@ -260,22 +263,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-coh12_vh-2024",
       "type": "raster",
       "source": "src-coh12_vh",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VH — 12-day coherence, cross-polarised",
+          "title": "Coherence VH",
           "type": "ramp",
           "cmap": "cmc.lipari",
           "vmin": 0.1,
@@ -371,22 +374,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_rgb-2024",
       "type": "raster",
       "source": "src-rtc_rgb",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC false colour",
+          "title": "Backscatter False Color",
           "type": "channels",
           "unit": "dB",
           "decibel": true,
@@ -409,22 +412,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vv-2024",
       "type": "raster",
       "source": "src-rtc_vv",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VV — terrain-corrected backscatter, co-polarised (dB)",
+          "title": "Backscatter VV",
           "type": "ramp",
           "cmap": "cmc.grayC",
           "vmin": -16.5,
@@ -520,22 +523,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vh-2024",
       "type": "raster",
       "source": "src-rtc_vh",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VH — terrain-corrected backscatter, cross-polarised (dB)",
+          "title": "Backscatter VH",
           "type": "ramp",
           "cmap": "cmc.grayC",
           "vmin": -23.5,
@@ -631,22 +634,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-coh12_vv_qa_num-2024",
       "type": "raster",
       "source": "src-coh12_vv_qa_num",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VV — observation count",
+          "title": "Coherence VV – Contributing Observations",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": 0.0,
@@ -742,22 +745,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-coh12_vh_qa_num-2024",
       "type": "raster",
       "source": "src-coh12_vh_qa_num",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VH — observation count",
+          "title": "Coherence VH – Contributing Observations",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": 0.0,
@@ -853,22 +856,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vv_qa_num-2024",
       "type": "raster",
       "source": "src-rtc_vv_qa_num",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VV — observation count",
+          "title": "Backscatter VV – Contributing Observations",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": 0.0,
@@ -964,22 +967,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vh_qa_num-2024",
       "type": "raster",
       "source": "src-rtc_vh_qa_num",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VH — observation count",
+          "title": "Backscatter VH – Contributing Observations",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": 0.0,
@@ -1075,22 +1078,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-coh12_vv_qa_cqm-2024",
       "type": "raster",
       "source": "src-coh12_vv_qa_cqm",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VV — composite quality (dB)",
+          "title": "Coherence VV – Composite Quality Map",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": -3.0,
@@ -1186,22 +1189,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-coh12_vh_qa_cqm-2024",
       "type": "raster",
       "source": "src-coh12_vh_qa_cqm",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "COH12 VH — composite quality (dB)",
+          "title": "Coherence VH – Composite Quality Map",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": -3.0,
@@ -1297,22 +1300,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vv_qa_cqm-2024",
       "type": "raster",
       "source": "src-rtc_vv_qa_cqm",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VV — composite quality (dB)",
+          "title": "Backscatter VV – Composite Quality Map",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": -4.0,
@@ -1408,22 +1411,22 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     },
     {
       "id": "glace-rtc_vh_qa_cqm-2024",
       "type": "raster",
       "source": "src-rtc_vh_qa_cqm",
+      "layout": {
+        "visibility": "none"
+      },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "linear"
       },
       "metadata": {
         "portolan:legend": {
-          "title": "RTC VH — composite quality (dB)",
+          "title": "Backscatter VH – Composite Quality Map",
           "type": "ramp",
           "cmap": "cmc.glasgow",
           "vmin": -4.0,
@@ -1519,9 +1522,6 @@
             }
           ]
         }
-      },
-      "layout": {
-        "visibility": "none"
       }
     }
   ]
