@@ -12,8 +12,9 @@ and ``LAST_ACQUISITION_DATE`` tags, published per product as
 A tile whose files disagree about the window is refused rather than widened,
 and the window-to-range translation is checked once, since every item uses it.
 
-The mosaic item is checked for what it must *not* carry: the web-map archives
-are registered on the mosaics collection, never on an item.
+The mosaic item is checked for what its web-map archives are: assets with the
+``visual`` role beside the COGs they render, and never a link — the link with
+``pmtiles:layers`` stays on the collection.
 
 Reads no data and needs no network.
 
@@ -23,6 +24,8 @@ Run: uv run tests/test_items.py
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+import importlib.util
+import os
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -41,11 +44,12 @@ from glace_catalog.stac.naming import (
     viz_filename,
     viz_key,
 )
-from glace_catalog.stac.store import StoreLayout
+from glace_catalog.stac.store import BuildState, StoreLayout
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
+    from types import ModuleType
 
     import pystac
 
@@ -108,8 +112,11 @@ def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
     return False
 
 
-def _mosaic_item(checksum: str | None = None) -> pystac.Item:
-    """Build one year's mosaic item over a single asset."""
+def _mosaic_item(
+    checksum: str | None = None,
+    extra: Mapping[str, MosaicAsset] | None = None,
+) -> pystac.Item:
+    """Build one year's mosaic item over a single asset, plus whatever is passed in."""
     return build_mosaic_item(
         get_scope("ch"),
         2023,
@@ -124,8 +131,54 @@ def _mosaic_item(checksum: str | None = None) -> pystac.Item:
                 roles=["data"],
                 checksum=checksum,
             ),
+            **(extra or {}),
         },
     )
+
+
+def _publisher() -> ModuleType:
+    """Load ``scripts/publish-year.py`` as a module.
+
+    The script resolves its store root at import; a local value keeps this gate
+    off object storage, and nothing here reads or writes it.
+    """
+    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
+    spec = importlib.util.spec_from_file_location(
+        "publish_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
+    )
+    if spec is None or spec.loader is None:
+        msg = "scripts/publish-year.py did not load"
+        raise RuntimeError(msg)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _pmtiles_state() -> BuildState:
+    """Build a state holding one archive, as the ``pmtiles`` step records it."""
+    state = BuildState(path=Path("/nowhere/.build-state.json"))
+    state.details["pmtiles"] = {
+        "coh12_vv_viz": {
+            "url": "coh12_vv_viz.pmtiles",
+            "size_bytes": 10,
+            "checksum": "1220" + "ab" * 32,
+            "cmap": "cmc.lipari",
+            "vmin": 0.1,
+            "vmax": 0.8,
+            "units": "",
+            "min_zoom": 5,
+            "max_zoom": 13,
+            "bounds": [5.9, 45.8, 10.5, 47.8],
+            "product": "COH12",
+            "polarization": "VV",
+            "year": 2024,
+            "id": "coh12_vv_2024",
+            "start_date": "2024-07-09",
+            "end_date": "2024-10-07",
+        },
+    }
+    return state
 
 
 def main() -> int:
@@ -176,10 +229,10 @@ def main() -> int:
         == "2023-07-21",
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
-    # PMTiles are registered on the mosaics collection (PORTO-FMT-011), which is
-    # `finalize-catalog`'s job. An item that also linked them would claim a
-    # rendering is one of its measurements, and would declare an extension whose
-    # version the collection alone is the source of.
+    # The item carries the archives as `visual` assets; the link with
+    # `pmtiles:layers` stays on the collection (PORTO-FMT-011), which is
+    # `finalize-catalog`'s job. So the item declares no web-map-links extension,
+    # whose version the collection alone is the source of.
     mosaic = _mosaic_item()
     checks["the mosaic item links no PMTiles archive"] = not mosaic.get_links("pmtiles")
     checks["the mosaic item declares no web-map-links extension"] = not any(
@@ -215,6 +268,18 @@ def main() -> int:
         "/store/mosaics/2024/coh12_vv_viz.pmtiles"
     )
     checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
+    built = _publisher().visual_assets(_pmtiles_state())
+    checks["visual_assets keys by rendering key"] = list(built) == ["coh12_vv_viz"]
+    viz = _mosaic_item(extra=built).assets["coh12_vv_viz"]
+    checks["a rendering is an item asset with the visual role"] = viz.roles == ["visual"]
+    checks["a rendering is not data"] = "data" not in (viz.roles or [])
+    checks["a rendering declares its own grid"] = viz.extra_fields.get("proj:code") == "EPSG:3857"
+    checks["a rendering carries its digest"] = str(
+        viz.extra_fields.get("file:checksum", "")
+    ).startswith("1220")
+    checks["a rendering is a PMTiles archive"] = viz.media_type == "application/vnd.pmtiles"
+    checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
+    checks["a rendering says what it is"] = "Not for analysis" in (viz.description or "")
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

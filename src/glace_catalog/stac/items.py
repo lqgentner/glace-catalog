@@ -464,6 +464,9 @@ class MosaicAsset:
     checksum
         Multihash-encoded sha256 of the file, published as ``file:checksum``
         (``PTL-AST-003``). Measured on the staged bytes before upload.
+    description
+        What the file is, where a title cannot say it: a rendering has to say
+        which COG to read instead of it.
     band
         Single-band description, for a raster asset.
     extra
@@ -477,6 +480,7 @@ class MosaicAsset:
     media_type: str = pystac.MediaType.COG
     size: int | None = None
     checksum: str | None = None
+    description: str | None = None
     band: dict[str, Any] | None = None
     extra: dict[str, Any] = dc_field(default_factory=dict)
 
@@ -485,6 +489,7 @@ class MosaicAsset:
         asset = pystac.Asset(
             href=self.href,
             title=self.title,
+            description=self.description,
             media_type=self.media_type,
             roles=list(self.roles),
         )

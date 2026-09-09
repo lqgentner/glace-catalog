@@ -380,7 +380,7 @@ def step_items(
         bbox=bbox,
         start=start,
         end=end,
-        assets=mosaic_assets(state, frame),
+        assets={**mosaic_assets(state, frame), **visual_assets(state)},
         build_fingerprint=build_fingerprint,
     )
     grid = scope.analysis_grid
@@ -454,6 +454,40 @@ def mosaic_assets(
             checksum=detail.get("checksum"),
             band=band,
             extra={"raster:spatial_resolution": detail.get("resolution")},
+        )
+    return assets
+
+
+def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
+    """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
+
+    One asset per archive, with the ``visual`` role and never ``data``: the pixels
+    are an 8-bit stretch of the mosaic, backscatter in decibels, and an analysis
+    pipeline that read one would be reading a picture. The archive's own header
+    carries bounds and zoom range; the asset carries the grid, the digest, and a
+    sentence saying which COG to read instead.
+    """
+    written = state.details.get("pmtiles", {})
+    assets: dict[str, stac.MosaicAsset] = {}
+    for key, detail in sorted(written.items()):
+        stem = stac.data_key(key)
+        stretch = f"{detail['vmin']:g}-{detail['vmax']:g}"
+        ramp = f" through {detail['cmap']}" if detail.get("cmap") else ""
+        units = f" {detail['units']}" if detail.get("units") else ""
+        assets[key] = stac.MosaicAsset(
+            href=detail["url"],
+            title=f"{stem} web-map tiles",
+            description=(
+                f"Pre-styled 8-bit WebP rendering of {stem} on WebMercatorQuad "
+                f"z{detail['min_zoom']}-z{detail['max_zoom']}, stretched {stretch}{units}{ramp} "
+                f"as the collection's style for {detail['year']} declares. "
+                f"Not for analysis: read {stem}.tif."
+            ),
+            roles=["visual"],
+            media_type="application/vnd.pmtiles",
+            size=detail.get("size_bytes"),
+            checksum=detail.get("checksum"),
+            extra={"proj:code": "EPSG:3857"},
         )
     return assets
 
