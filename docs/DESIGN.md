@@ -226,8 +226,16 @@ retry budget, and the target needs only the profile: botocore reads the Source
 Cooperative endpoint from that profile's config section. Syncing the tracked
 `catalog/` over the store afterwards would put the unpatched documents over the
 patched ones, which is why nothing does.
-Change detection is size against size from one listing per side; `--force`
-re-uploads, dotfiles never leave the store, and nothing is ever deleted.
+Change detection is three steps from one listing per side and reads no bytes.
+A different size is a change; at an equal size two single-part ETags are two
+MD5s and settle it either way; what they leave is changed only when the source
+is newer than its published copy. That last step is the `aws s3 sync` rule,
+and it holds here because the build writes the store before publication
+copies it. The ETag is used where both sides list one and never required, so
+no writer is constrained to single-part uploads; on the Swiss store both
+services list an MD5 for all but the 113 multipart objects, and those fall to
+the timestamps. `--force` re-uploads, dotfiles never leave the store, and
+nothing is ever deleted.
 
 **Source Cooperative is addressed through its S3 proxy.** The `source-coop`
 profile carries `endpoint_url = https://data.source.coop`, and against that

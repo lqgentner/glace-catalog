@@ -18,13 +18,15 @@ Run: uv run tests/test_sync_data.py
 from __future__ import annotations
 
 from argparse import ArgumentTypeError
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import UTC, datetime, timedelta
 from io import BytesIO, StringIO
 import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import TYPE_CHECKING, Any, Self, override
+from typing import TYPE_CHECKING, Any, Self, cast, override
+from unittest.mock import patch
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +44,13 @@ from upath import UPath  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+Entry = sync_data.Entry
+
+BUILT = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
+"""When the store was written, in the synthetic listings."""
+PUBLISHED_AT = BUILT + timedelta(hours=6)
+"""When it was last synced: after the build, the way publication always is."""
 
 # One year of one collection, cut down: a document, a raster, an archive, the
 # item mirror, and the two dotfiles that are build state rather than content.
@@ -64,20 +73,70 @@ PUBLISHED: dict[str, int] = {
 }
 
 
-def memory_root(listing: Mapping[str, int]) -> UPath:
-    """Make a fresh in-memory root holding one object of the listed size per path."""
+def memory_root(listing: Mapping[str, int], written: datetime = BUILT) -> UPath:
+    """Make a fresh in-memory root holding one object of the listed size per path.
+
+    Every object is stamped ``written``, so a test says which side is newer
+    instead of depending on the order it built the roots in.
+    """
     root = UPath(f"memory://{uuid4().hex}")
     for relative, size in listing.items():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"x" * size)
+        touch(root, relative, written)
     return root
+
+
+def touch(root: UPath, relative: str, when: datetime) -> None:
+    """Set the listed timestamp of one in-memory object."""
+    store = cast("MemoryFileSystem", root.fs).store
+    store[f"{root.path}/{relative}"].created = when
+
+
+def entries(sizes: Mapping[str, int], written: datetime = BUILT) -> dict[str, Entry]:
+    """Make a listing without ETags, every object stamped ``written``."""
+    return {name: Entry(size, modified=written) for name, size in sizes.items()}
+
+
+def sizes_of(listing: Mapping[str, Entry]) -> dict[str, int]:
+    """Reduce a listing to its sizes."""
+    return {name: entry.size for name, entry in listing.items()}
+
+
+class TwoRoots:
+    """Point the tool's source and target at two roots, for a run of ``main``."""
+
+    def __init__(self, source_root: UPath, target_root: UPath) -> None:
+        self.patches = (
+            patch.object(sync_data, "read_target", self._returning(target_root)),
+            patch.object(sync_data, "bucket_root", self._returning(source_root)),
+        )
+
+    @staticmethod
+    def _returning(root: UPath) -> Any:
+        def opened(*_: object) -> UPath:
+            return root
+
+        return opened
+
+    def __enter__(self) -> Self:
+        """Apply both patches."""
+        for item in self.patches:
+            item.start()
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Undo both patches."""
+        for item in self.patches:
+            item.stop()
 
 
 def check_change_detection() -> dict[str, bool]:
     """Classification of a listing against what is already published."""
-    plan = sync_data.plan_sync(SOURCE, PUBLISHED)
-    forced = sync_data.plan_sync(SOURCE, PUBLISHED, force=True)
+    source, published = entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT)
+    plan = sync_data.plan_sync(source, published)
+    forced = sync_data.plan_sync(source, published, force=True)
     return {
         "an object the target lacks is new": plan.new
         == (
@@ -87,7 +146,8 @@ def check_change_detection() -> dict[str, bool]:
             "tiles/items.parquet",
         ),
         "a different size is changed": plan.changed == ("tiles/collection.json",),
-        "an equal size is unchanged": plan.unchanged == ("catalog.json",),
+        "an equal size published after the build is unchanged": plan.unchanged
+        == ("catalog.json",),
         "a dotfile is skipped whatever its size": plan.skipped
         == ("tiles/2024/.build-state.json", "tiles/2024/.items.parquet"),
         "a skipped dotfile never uploads": not any(
@@ -99,6 +159,76 @@ def check_change_detection() -> dict[str, bool]:
         == tuple(sorted([*plan.new, *plan.changed, *plan.unchanged])),
         "sizes come from the source listing": plan.bytes_of(plan.upload)
         == sum(SOURCE[name] for name in plan.upload),
+    }
+
+
+MD5_A = "9e107d9d372bb6826bd81d3542a419d6"
+MD5_B = "e4d909c290d0fb1ca068ffaddf22cbd0"
+MULTIPART = f"{MD5_A}-3"
+"""What a multipart upload lists as: an MD5 of the part digests, then the part count."""
+
+SIZE = 2_048
+REBUILT = PUBLISHED_AT + timedelta(hours=1)
+"""A build after the last publication: what a rewritten store object carries."""
+
+
+def check_same_size_detection() -> dict[str, bool]:
+    """Check what decides a same-size object: two MD5s, else which side is newer.
+
+    A single-part ETag is the MD5, so two of them settle it from the listings
+    whatever the timestamps say. Anything else falls to the rule ``aws s3
+    sync`` uses: the build writes the store before publication copies it, so a
+    source object newer than its published copy was rewritten since.
+    """
+    source = {
+        "etag/equal.json": Entry(SIZE, MD5_A, REBUILT),
+        "etag/differs.json": Entry(SIZE, MD5_A, BUILT),
+        "time/older.tif": Entry(SIZE, MULTIPART, BUILT),
+        "time/same.tif": Entry(SIZE, None, PUBLISHED_AT),
+        "time/newer.tif": Entry(SIZE, MULTIPART, REBUILT),
+        "time/one-md5-newer.json": Entry(SIZE, MD5_A, REBUILT),
+        "time/unknown-source.tif": Entry(SIZE, None, None),
+        "time/unknown-target.tif": Entry(SIZE, None, BUILT),
+        "time/quoted-etags.json": Entry(SIZE, f'"{MD5_A}"', REBUILT),
+    }
+    target = {
+        "etag/equal.json": Entry(SIZE, MD5_A, PUBLISHED_AT),
+        "etag/differs.json": Entry(SIZE, MD5_B, PUBLISHED_AT),
+        "time/older.tif": Entry(SIZE, MULTIPART, PUBLISHED_AT),
+        "time/same.tif": Entry(SIZE, None, PUBLISHED_AT),
+        "time/newer.tif": Entry(SIZE, MULTIPART, PUBLISHED_AT),
+        "time/one-md5-newer.json": Entry(SIZE, MULTIPART, PUBLISHED_AT),
+        "time/unknown-source.tif": Entry(SIZE, None, PUBLISHED_AT),
+        "time/unknown-target.tif": Entry(SIZE, None, None),
+        "time/quoted-etags.json": Entry(SIZE, f'"{MD5_A.upper()}"', PUBLISHED_AT),
+    }
+    plan = sync_data.plan_sync(source, target)
+    return {
+        "two equal MD5s are unchanged even when the source is newer": {
+            "etag/equal.json",
+            "time/quoted-etags.json",
+        }
+        <= set(plan.unchanged),
+        "two different MD5s are changed even when the source is older": "etag/differs.json"
+        in plan.changed,
+        "without two MD5s, a source older than its copy is unchanged": "time/older.tif"
+        in plan.unchanged,
+        "without two MD5s, a source as old as its copy is unchanged": "time/same.tif"
+        in plan.unchanged,
+        "without two MD5s, a newer source is changed": {
+            "time/newer.tif",
+            "time/one-md5-newer.json",
+        }
+        <= set(plan.changed),
+        "a side without a timestamp cannot clear an object": {
+            "time/unknown-source.tif",
+            "time/unknown-target.tif",
+        }
+        <= set(plan.changed),
+        "every object landed in exactly one category": sorted(
+            [*plan.new, *plan.changed, *plan.unchanged, *plan.skipped],
+        )
+        == sorted(source),
     }
 
 
@@ -222,7 +352,7 @@ class RecordingWrites:
 def check_listing_and_transfer() -> dict[str, bool]:
     """Check both listings and one transfer per object with its content type."""
     source_root = memory_root(SOURCE)
-    target_root = memory_root(PUBLISHED)
+    target_root = memory_root(PUBLISHED, PUBLISHED_AT)
     source = sync_data.list_subtree(source_root, "")
     published = sync_data.list_subtree(target_root, "")
     plan = sync_data.plan_sync(source, published)
@@ -236,9 +366,15 @@ def check_listing_and_transfer() -> dict[str, bool]:
     }
     after = sync_data.list_subtree(target_root, "")
     return {
-        "the source listing comes back store-relative": source == SOURCE,
-        "the target listing comes back store-relative": published == PUBLISHED,
-        "a subtree lists only its own keys, still store-relative": subtree
+        "the source listing comes back store-relative": sizes_of(source) == SOURCE,
+        "the target listing comes back store-relative": sizes_of(published) == PUBLISHED,
+        "a side without ETags lists them as absent": all(
+            entry.etag is None for entry in source.values()
+        ),
+        "the listing carries the write time, timezone-aware": all(
+            entry.modified == BUILT for entry in source.values()
+        ),
+        "a subtree lists only its own keys, still store-relative": sizes_of(subtree)
         == {"tiles/collection.json": 1_500},
         "an unpublished target lists as empty": sync_data.list_subtree(
             UPath(f"memory://{uuid4().hex}"),
@@ -248,8 +384,9 @@ def check_listing_and_transfer() -> dict[str, bool]:
         "no transfer failed": not failed,
         "every planned object was written under the target root": sorted(written)
         == sorted(plan.upload),
-        "the bytes arrived whole": all(after[name] == SOURCE[name] for name in plan.upload),
-        "the unchanged object was left alone": after["catalog.json"] == PUBLISHED["catalog.json"],
+        "the bytes arrived whole": all(after[name].size == SOURCE[name] for name in plan.upload),
+        "the unchanged object was left alone": after["catalog.json"].size
+        == PUBLISHED["catalog.json"],
         "the raster is served as a COG": written["tiles/2024/32TMS24/coh12_vv.tif"].get(
             "ContentType",
         )
@@ -263,7 +400,7 @@ def check_failure_is_reported() -> dict[str, bool]:
     """One unreadable object is reported, not raised, and the rest still move."""
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED)
-    plan = sync_data.plan_sync(SOURCE, PUBLISHED)
+    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     # The raster is not on the source at all, which is what a rejected read
     # looks like from the tool's side.
     (source_root / "tiles/2024/32TMS24/coh12_vv.tif").unlink()
@@ -479,7 +616,7 @@ nothing is ever deleted; removing a file from the store leaves it published\
 
 def check_summary() -> dict[str, bool]:
     """Check the table a person reads before typing ``--confirm``."""
-    plan = sync_data.plan_sync(SOURCE, PUBLISHED)
+    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     rendered = "\n".join(
         sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-ch", sync_data.read_target()),
     )
@@ -493,11 +630,40 @@ def check_summary() -> dict[str, bool]:
     }
 
 
+def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
+    """Check the P-17 case: a collection document re-stamped at an identical length.
+
+    On 2026-09-09 ``tiles/collection.json`` changed its digests and kept its
+    size, and a size-only plan called it unchanged. The dry run over a store
+    published whole and then rebuilt in that one document has to say
+    ``changed``, on the strength of the rewrite alone: the in-memory roots
+    list no ETags, so this is the timestamp rule the ETags fall back to.
+    """
+    source_root = memory_root(SOURCE)
+    target_root = memory_root(SOURCE, PUBLISHED_AT)
+    (source_root / "tiles/collection.json").write_bytes(b"y" * SOURCE["tiles/collection.json"])
+    touch(source_root, "tiles/collection.json", REBUILT)
+    printed = StringIO()
+    with TwoRoots(source_root, target_root), redirect_stdout(printed):
+        code = sync_data.main([])
+    lines = printed.getvalue().splitlines()
+    return {
+        "the dry run exits zero": code == 0,
+        "the same-size edit counts as changed": any(
+            line.split() == ["changed", "1", "2.0", "KiB"] for line in lines
+        ),
+        "everything else is unchanged": any(
+            line.split()[:2] == ["unchanged", "5"] for line in lines
+        ),
+    }
+
+
 def main() -> int:
     """Run every check, printing one line per failure."""
     checks: dict[str, bool] = {}
     for group in (
         check_change_detection,
+        check_same_size_detection,
         check_content_types,
         check_target_config,
         check_local_root,
@@ -507,6 +673,7 @@ def main() -> int:
         check_setup_failures_are_messages,
         check_workers_floor,
         check_summary,
+        check_dry_run_sees_a_same_size_edit,
     ):
         checks.update(group())
     failed = [name for name, ok in checks.items() if not ok]

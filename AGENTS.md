@@ -35,8 +35,12 @@ nothing does. Nothing is staged anywhere in between: both sides are `UPath`
 roots, and each object is read from one and written to the other in chunks,
 with its content type on the write. The source root is `settings.store_root`;
 the target is the `write_prefix` opened with the `profile` alone, whose config
-section carries the endpoint. Change detection is size against size from one
-listing per side; `--force` re-uploads regardless. Build state (`.build-state.json`, `.items.parquet`, anything whose
+section carries the endpoint. Change detection is three steps from one listing
+per side, reading no bytes: a different size is a change; two single-part MD5
+ETags decide an equal size either way; what they leave is changed only when
+the source is newer than its published copy, the `aws s3 sync` rule, which
+holds because the build writes before publication copies. `--force` re-uploads
+regardless. Build state (`.build-state.json`, `.items.parquet`, anything whose
 name starts with a dot) never leaves the store.
 
 **Source Cooperative is addressed through its S3 proxy.** The `source-coop`

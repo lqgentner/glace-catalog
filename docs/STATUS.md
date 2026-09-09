@@ -15,7 +15,7 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, styles per year, asset stamps, coverage check, validate); run end to end over 2021–2024 on 2026-09-09 with the archives in the item directories, one style per year and the remeasured stretches |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | rendered from the latest year's `coh12_rgb_viz.pmtiles`, gated by `tests/test_thumbnails.py` |
-| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published in the item-asset layout (2026-09-09), the old `mosaics/pmtiles/` prefix deleted on both sides. The size-only change detection missed one same-size document (`tiles/collection.json`), caught by a byte comparison afterwards; see P-17 |
+| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published in the item-asset layout (2026-09-09), the old `mosaics/pmtiles/` prefix deleted on both sides. Change detection is size, then single-part ETags, then which side is newer (P-17) |
 | published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared |
 | scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps` (DESIGN.md §8) |
 
@@ -28,12 +28,15 @@ Ordered by what blocks what. Everything not listed here is done.
   *Verified when* `{GLACE_STORE_ROOT}/tiles/glacier-fractions.parquet` exists and
   `finalize-catalog` stamps its `file:size` and `file:checksum` without a
   warning.
-- **P-17 — Harden the sync's change detection.** `sync_data.py` compares sizes
-  from one listing per side, and on 2026-09-09 that skipped `tiles/collection.json`,
-  whose stamped digests changed at an identical length. Compare documents and
-  other small objects byte for byte, and data objects by size plus single-part
-  MD5 ETag where both sides expose one. *Verified when* a same-size edit of a
-  collection document shows as `changed` in the dry run.
+- **P-17 — Harden the sync's change detection.** Size-only comparison skipped
+  `tiles/collection.json` on 2026-09-09, whose stamped digests changed at an
+  identical length. *Done 2026-09-09*: a same-size object is decided by two
+  single-part MD5 ETags where both sides list one, else by the `aws s3 sync`
+  rule, changed when the source is newer than its published copy; no bytes
+  are read, and `--force` still overrides. `tests/test_sync_data.py` runs the
+  dry run over a store published whole and then rebuilt in that one document
+  and sees it as `changed`; the live dry run over the 7 576 published objects
+  reports 0 changed.
 - **P-2 — Clear the old publication.** `lqgentner/glace-ch` on Source
   Cooperative still holds the old flat tree, and publishing never deletes.
   *Verified when* listing that prefix returns nothing.

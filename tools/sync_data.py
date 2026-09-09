@@ -17,12 +17,17 @@ and botocore reads it from there. Bytes never touch local disk. Each object is
 read from one root and written to the other in chunks, and the retry budget
 ``freezebase`` puts on every S3 path covers both sides.
 
-Change detection is size against size, from one listing per side. That is a weak
-content check and deliberately all this does: an ETag is an MD5 for a
-single-part upload and something else for a multipart one, so keying on it would
-constrain how anything may ever write. ``--force`` is the way out when a
-truncated object of the right size has to be replaced. Nothing is ever deleted:
-removing a file from the store leaves the object published.
+Change detection is three steps from one listing per side, and reads no bytes.
+A different size is a change. At an equal size, two single-part ETags are two
+MD5s and settle it either way; a multipart upload lists an ETag that is not an
+MD5, and a side may list none, so the ETag is never required, only used when
+both sides have one. What that leaves is decided the way ``aws s3 sync``
+decides everything: the build writes the store before publication copies it,
+so a source object newer than its published copy was rewritten since, and one
+that is not has not been touched. ``--force`` is the way out when a truncated
+object of the right size has to be replaced, or when the two services' clocks
+are not to be trusted. Nothing is ever deleted: removing a file from the store
+leaves the object published.
 
     uv run --env-file .env tools/sync_data.py                 # dry run
     uv run --env-file .env tools/sync_data.py --confirm       # upload
@@ -35,13 +40,15 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import sys
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
-from freezebase.s3 import content_type_for, list_object_sizes, make_s3_upath
+from freezebase.s3 import content_type_for, make_s3_upath
 from tqdm import tqdm
 from upath import UPath
 import yaml
@@ -57,6 +64,8 @@ PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 DEFAULT_WORKERS = 8
 COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
+SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
+"""An ETag that is the object's MD5: one hex digest, no part count after it."""
 
 
 def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
@@ -138,6 +147,28 @@ def is_build_state(relative: str) -> bool:
 
 
 @dataclass(frozen=True)
+class Entry:
+    """One listed object: its size, and its ETag and write time when listed."""
+
+    size: int
+    etag: str | None = None
+    modified: datetime | None = None
+
+    @property
+    def md5(self) -> str | None:
+        """The ETag when it is the MD5 of the bytes, else ``None``.
+
+        A single-part upload lists its MD5; a multipart upload lists the MD5
+        of its part digests with the part count after a dash, and a side may
+        list nothing. Only the first kind says anything about the content.
+        """
+        if self.etag is None:
+            return None
+        digest = self.etag.strip('"').lower()
+        return digest if SINGLE_PART_ETAG.match(digest) else None
+
+
+@dataclass(frozen=True)
 class Plan:
     """What one sync would do, before it does any of it.
 
@@ -158,9 +189,27 @@ class Plan:
         return sum(self.sizes.get(name, 0) for name in names)
 
 
+def is_unchanged(source: Entry, target: Entry) -> bool:
+    """Whether a published object still matches the store's, from the listings.
+
+    Three steps, each final when it applies: a different size is a change;
+    two single-part ETags are two MD5s and settle it either way; and what is
+    left is unchanged only when the source is no newer than its published
+    copy, since the build writes before publication copies. A side that lists
+    no time cannot clear an object: the safe answer is to upload it.
+    """
+    if source.size != target.size:
+        return False
+    if source.md5 is not None and target.md5 is not None:
+        return source.md5 == target.md5
+    if source.modified is None or target.modified is None:
+        return False
+    return source.modified <= target.modified
+
+
 def plan_sync(
-    source: Mapping[str, int],
-    target: Mapping[str, int],
+    source: Mapping[str, Entry],
+    target: Mapping[str, Entry],
     *,
     force: bool = False,
 ) -> Plan:
@@ -169,9 +218,9 @@ def plan_sync(
     Parameters
     ----------
     source
-        Store-relative path to size, from the private gateway.
+        Store-relative path to entry, from the private gateway.
     target
-        Store-relative path to size, from Source Cooperative.
+        Store-relative path to entry, from Source Cooperative.
     force
         Upload every published object regardless of what the target holds.
 
@@ -191,10 +240,10 @@ def plan_sync(
         published = target.get(relative)
         if published is None:
             new.append(relative)
-        elif published != source[relative]:
-            changed.append(relative)
-        else:
+        elif is_unchanged(source[relative], published):
             unchanged.append(relative)
+        else:
+            changed.append(relative)
     upload = sorted([*new, *changed, *unchanged]) if force else sorted([*new, *changed])
     return Plan(
         new=tuple(new),
@@ -202,7 +251,7 @@ def plan_sync(
         unchanged=tuple(unchanged),
         skipped=tuple(skipped),
         upload=tuple(upload),
-        sizes=dict(source),
+        sizes={name: entry.size for name, entry in source.items()},
     )
 
 
@@ -246,8 +295,55 @@ def summary_lines(plan: Plan, source: str, target: UPath) -> list[str]:
     return lines
 
 
-def list_subtree(root: UPath, subtree: str) -> dict[str, int]:
-    """List one subtree of a root as store-relative path to size.
+def listed_time(info: Mapping[str, Any]) -> datetime | None:
+    """Read the write time off an fsspec listing entry, timezone-aware, or ``None``.
+
+    s3fs passes ``LastModified`` through as an aware datetime; other
+    filesystems name a float ``mtime`` or ``created``.
+    """
+    for key in ("LastModified", "mtime", "created"):
+        value = info.get(key)
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.replace(tzinfo=UTC)
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=UTC)
+    return None
+
+
+def list_objects(directory: UPath) -> dict[str, Entry]:
+    """List everything below a prefix as relative path to entry, from one call.
+
+    The same walk as freezebase's ``list_object_sizes``, keeping the ETag and
+    the write time the listing carries beside the size; that helper drops
+    them on purpose, and the plan here needs them. Empty when the prefix does
+    not exist.
+    """
+    prefix = str(directory.path).rstrip("/") + "/"
+    try:
+        found = cast(
+            "dict[str, dict[str, Any]]",
+            directory.fs.find(str(directory.path), detail=True),
+        )
+    except FileNotFoundError:
+        return {}
+    entries: dict[str, Entry] = {}
+    for info in found.values():
+        if info.get("type") == "directory":
+            continue
+        name = str(info["name"])
+        if not name.startswith(prefix):
+            continue
+        size = int(info.get("size") or info.get("Size") or 0)
+        # A zero-byte "folder marker" key ends in a slash and lists as a file.
+        if size == 0 and name.endswith("/"):
+            continue
+        etag = info.get("ETag") or info.get("etag")
+        entries[name[len(prefix) :]] = Entry(size, str(etag) if etag else None, listed_time(info))
+    return entries
+
+
+def list_subtree(root: UPath, subtree: str) -> dict[str, Entry]:
+    """List one subtree of a root as store-relative path to entry.
 
     Parameters
     ----------
@@ -260,13 +356,13 @@ def list_subtree(root: UPath, subtree: str) -> dict[str, int]:
     Returns
     -------
     dict
-        Store-relative path to size. Relative to ``root``, not to the subtree,
+        Store-relative path to entry. Relative to ``root``, not to the subtree,
         so the two sides compare and copy by the same names.
     """
-    listed = list_object_sizes(root / subtree if subtree else root, recursive=True)
+    listed = list_objects(root / subtree if subtree else root)
     if not subtree:
         return listed
-    return {f"{subtree}/{name}": size for name, size in listed.items()}
+    return {f"{subtree}/{name}": entry for name, entry in listed.items()}
 
 
 class TwoPhaseFile(Protocol):
