@@ -48,16 +48,14 @@ request instead of one HTTP fetch per item.
 searches the item mirror directly:
 
 ```python
-import asyncio
 import rustac
 
-async def search(**params):
-    return await rustac.search("{{ public_base }}/tiles/items.parquet", **params)
-
-items = asyncio.run(search(
+tiles = "{{ public_base }}/tiles/items.parquet"
+items = rustac.search_sync(
+    tiles,
     bbox=[7.9, 46.4, 8.2, 46.6],
-    datetime="{{ last_year }}-01-01T00:00:00Z/{{ last_year }}-12-31T23:59:59Z",
-))
+    datetime="{{ last_year }}-01-01/{{ last_year + 1 }}-01-01",
+)
 print(len(items), items[0]["assets"]["coh12_vv"]["href"])
 ```
 
@@ -84,7 +82,7 @@ import odc.stac
 import pystac
 
 bbox = [7.9, 46.4, 8.2, 46.6]
-items = asyncio.run(search(bbox=bbox))
+items = rustac.search_sync(tiles, bbox=bbox)
 cube = odc.stac.load(
     [pystac.Item.from_dict(item) for item in items],
     bands=["coh12_vv", "rtc_vv"],
@@ -98,10 +96,11 @@ change = cube.coh12_vv.sel(time="{{ last_year }}") - cube.coh12_vv.sel(time="{{ 
 and layer; it reads the COGs in place:
 
 ```python
-items = asyncio.run(search(
+items = rustac.search_sync(
+    tiles,
     bbox=bbox,
-    datetime="{{ last_year }}-01-01T00:00:00Z/{{ last_year }}-12-31T23:59:59Z",
-))
+    datetime="{{ last_year }}-01-01/{{ last_year + 1 }}-01-01",
+)
 with open("coh12_vv_{{ last_year }}.txt", "w") as f:
     for item in items:
         f.write("/vsicurl/" + item["assets"]["coh12_vv"]["href"] + "\n")
