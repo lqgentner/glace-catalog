@@ -50,3 +50,7 @@ the collection's `renders` block declares.
 
 `*_qa_cqm` is a linear ratio. It is a weighted average of the observations' local resolution
 and does not carry a unit. For visualization, convert to decibels with `10*log10(x)`.
+
+## License
+
+**CC-BY-4.0.** Contains modified Copernicus Sentinel data.
