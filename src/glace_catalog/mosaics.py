@@ -653,15 +653,15 @@ def build_mosaic_cogs(
     return written
 
 
-def mosaic_band_name(asset_key: str, source_band_name: str) -> str:
-    """Band description of a mosaic, which is the tile's unless the quantity changed.
+def mosaic_band_name(asset_key: str) -> str:
+    """Band description of a mosaic: its asset key, like every band in the catalog.
 
-    A QA-NUM mosaic is a *mean* of contributing observations rather than a count,
-    so it has to say so: it is no longer the same quantity as its source.
+    One band per file, so the asset key identifies it, and a file separated from
+    the catalog still says what it holds. The tiles carry the same rule once
+    s1bursts writes it (UPSTREAM.md S-4); the mosaic's ``LAYER_DESCRIPTION`` tag
+    is where the count-versus-mean difference is spelled out.
     """
-    if asset_key.endswith("_qa_num"):
-        return "mean contributing observations"
-    return source_band_name or asset_key
+    return asset_key
 
 
 def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list[float]]:

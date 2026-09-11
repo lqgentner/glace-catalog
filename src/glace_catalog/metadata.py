@@ -436,14 +436,15 @@ class Vocabulary:
     # -- assets ----------------------------------------------------------------
 
     def _band(self, ref: AssetRef, collection: Collection) -> dict[str, Any]:
+        """Describe the one band of a raster: named by its asset key, typed per grid."""
         if ref.qa is None:
             return {"name": ref.key, "data_type": "float32", "nodata": "nan"}
         band = self._qa(ref)["band"][collection]
-        return {
-            "name": str(band["name"]),
-            "data_type": str(band["data_type"]),
-            "nodata": band["nodata"],
-        }
+        return {"name": ref.key, "data_type": str(band["data_type"]), "nodata": band["nodata"]}
+
+    def band_name(self, key: str) -> str:
+        """Name of a raster's one band, on the file and in STAC alike: its asset key."""
+        return parse_key(key).key
 
     def context(self) -> dict[str, Any]:
         """Return what every prose template may name: the region, the years, the counts."""

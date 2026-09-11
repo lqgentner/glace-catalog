@@ -93,8 +93,10 @@ if (
     problems.append(
         f"coh12_vv_qa_cqm_viz titled {vocabulary.asset_title('coh12_vv_qa_cqm_viz')!r}"
     )
-if vocabulary.item_asset("coh12_vv_qa_num", "mosaics")["bands"][0]["name"] != "num_obs_mean":
-    problems.append("the mosaic count band is not named num_obs_mean")
+for key in ASSET_KEYS:
+    for collection in ("tiles", "mosaics"):
+        if vocabulary.item_asset(key, collection)["bands"][0]["name"] != key:
+            problems.append(f"{collection}/{key}: the band is not named by its asset key")
 coh12_vv = vocabulary.display("coh12_vv")
 if not isinstance(coh12_vv, LayerStyle) or coh12_vv.vmax != 0.75:
     problems.append("coh12_vv vmax is not the remeasured 0.75")

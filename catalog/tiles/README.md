@@ -21,11 +21,9 @@ square's own UTM zone. Agents: read [`AGENTS.md`](AGENTS.md).
 | `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | uint16 | 0 |
 | `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | float32 | NaN |
 
-The asset key is the filename stem, so nothing in the store has to be parsed to
-be understood: `coh12_vv` is `coh12_vv.tif` inside that item's directory. Dates
-are not in filenames; they are in the item properties and the GeoTIFF tags.
+The asset key is the filename stem. Dates are in the item properties and the GeoTIFF tags.
 
-## Reading it
+## Reading the data
 
 Query the item mirror rather than walking the tree. `items.parquet` holds every
 item of every year, so one range request replaces one HTTP fetch per tile:
@@ -45,34 +43,10 @@ duckdb.sql("""
 The item JSON under each year sub-catalog stays the normative representation;
 the mirror is a derived copy of it.
 
-## Units, and the one thing that trips people up
+## Units
 
-`rtc_*` is **linear power, not decibels**. Converting is `10*log10(x)`, which
-the collection's `renders` block declares. Averaging linear power is physically
-meaningful; averaging decibels is not, which is why the stored pixels are
-linear and the conversion happens at draw time.
+`rtc_*` is **linear power, not decibels**. Convert with `10*log10(x)`, which
+the collection's `renders` block declares.
 
-`*_qa_cqm` is a linear ratio where 1.0 is flat terrain and higher is better
-resolved; it is drawn in decibels over a fixed, measured range.
-
-## Caveats
-
-- **Coverage follows the glacier perimeter, not an administrative boundary.**
-  Squares are composited where there is ice to observe, so the footprint is
-  ragged and the gaps between glacierized regions are not data gaps.
-- **Glacier fractions are pinned, not recomputed.** `glace:glacier_fraction` and
-  `glace:glacier_fraction_buffered` come from `glacier-fractions.parquet`,
-  computed once against one RGI7 version, so the same square cannot carry
-  different values in different years.
-- **QA-NUM's zero is nodata**, not "zero observations". A pixel with no
-  contributing acquisition is absent, not counted.
-
-## License
-
-**CC-BY-4.0.** Contains modified Copernicus Sentinel data.
-
-## Provenance
-
-Produced at the University of Zurich, Department of Geography, from Copernicus
-Sentinel-1 SLC data. Per-file processing provenance is embedded in each
-GeoTIFF's tags and mirrored into the item properties.
+`*_qa_cqm` is a linear ratio. It is a weighted average of the observations' local resolution
+and does not carry a unit. For visualization, convert to decibels with `10*log10(x)`.

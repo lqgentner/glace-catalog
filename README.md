@@ -1,8 +1,24 @@
 # glace-catalog
 
+<p align="center">
+<a href="https://lqgentner.github.io/glace-viewer">
+<img src="assets/glace-wordmark.svg" alt="GLACE" width="350">
+</a>
+</p>
+
+Contents
+
+- 🗺️ [Interactive web map](https://lqgentner.github.io/glace-viewer)
+- 💾 [Dataset on Source Cooperative](https://source.coop/lqgentner/glace-ch)
+- 🧭 [Portolan browser of the STAC catalog](https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json)
+- ⚙️ Production pipeline on GitHub (coming soon)
+- 🏷️ Dataset metadata on GitHub (you are here)
+
+---
+
 Metadata, build pipeline and publication for the **GLACE** STAC catalogs —
 annual Sentinel-1 coherence and backscatter composites over Alpine glaciers,
-published to [Source Cooperative](https://source.coop/lqgentner) as a
+published to [Source Cooperative](https://source.coop/lqgentner/glace-ch) as a
 [Portolan](https://www.portolan-sdi.org/) catalog.
 
 > **What is published today is `glace-ch`, a rehearsal.** It covers Switzerland

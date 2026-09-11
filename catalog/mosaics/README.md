@@ -5,38 +5,13 @@ ETRS89-LAEA (EPSG:3035) at 40 m, plus fourteen PMTiles archives
 for drawing them, beside the rasters in the same item directory. Agents: read
 [`AGENTS.md`](AGENTS.md).
 
-## Why this grid
-
-Two properties, both deliberate:
+The grid has two deliberate properties:
 
 - **It is equal-area.** A pixel covers the same 1600 m² everywhere, so a
-  glacier area or an area change is a pixel count. On Web Mercator it is not:
-  the pixel size varies with latitude, so every area statistic would need a
-  correction this catalog does not declare.
+  glacier area or an area change is a pixel count.
 - **It is the same every year.** The extent is a fixed constant, not recomputed
   from whichever tiles happen to exist, so every year has identical
   `proj:shape` and `proj:transform`. Stacking and differencing are a read.
-
-Drawing does not use this grid at all: the PMTiles archives are tiled on
-WebMercatorQuad up to zoom 13, resampled from the same 10 m tiles rather
-than from these mosaics, so a map never pays for a second resampling.
-
-## Two ways to consume it
-
-**To draw a map**, use the `{stem}_viz.pmtiles` archives in each year's item
-directory, beside the COGs they render. They are assets of that item with the
-`visual` role, registered on this collection as `rel: "pmtiles"` links, with
-one MapLibre GL style per year as a `style` asset. Load a style directly and it
-works:
-
-```js
-const protocol = new pmtiles.Protocol();
-maplibregl.addProtocol("pmtiles", protocol.tile);
-new maplibregl.Map({
-  container: "map",
-  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/2024.json",
-});
-```
 
 **To read values**, use the COGs. The `renders` block on this collection carries
 the fixed stretch, the color ramp and, for backscatter and the quality map, the
@@ -48,10 +23,6 @@ https://titiler.xyz/cog/preview.png
   ?url=https://data.source.coop/lqgentner/glace-ch/mosaics/2024/rtc_vv.tif
   &expression=10*log10(b1)&rescale=-16.5,-4&colormap_name=gray
 ```
-
-The stretch is fixed rather than per-year on purpose: a percentile stretch
-recomputed each year would give every year its own scale and turn a real change
-in coherence into no visible change at all.
 
 ## Building a cube
 
@@ -72,6 +43,31 @@ cube = odc.stac.load(
 Every year shares one grid, so the result is a clean time axis with no
 resampling step.
 
+## PMTiles for web maps
+
+In addition to the LAEA COGs for scientific analysis, PMTiles archives are
+provided for web maps. They are tiled on WebMercatorQuad up to zoom
+13, resampled from the MGRS tiles, and carry a `_viz` suffix to
+mark them as renderings for visualization only. They are pre-rendered with the
+[Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
+([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)) over fixed
+ranges, as their style files declare. To suit visualization, the backscatter
+and composite quality map archives are converted to decibels, unlike the
+analysis products, which come in linear units only. False-color RGB archives
+(VV, VH, VV/VH) are provided as well.
+
+**To draw a map**, use the `{stem}_viz.pmtiles` archives in each year's item
+directory, beside the COGs they render. Load a style directly and it works:
+
+```js
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol("pmtiles", protocol.tile);
+new maplibregl.Map({
+  container: "map",
+  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/2024.json",
+});
+```
+
 ## The two products are not interchangeable
 
 `{year}/rtc_vv.tif` is linear power. `{year}/rtc_vv_viz.pmtiles` is the same
@@ -84,22 +80,6 @@ stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because backscatter spans
 decades of linear power and the quality ratio spans decades too, and a linear
 8-bit stretch would collapse either.
 
-## Caveat: the count layers are means
-
-`*_qa_num` on a mosaic is a **mean** of contributing observations, float32, not
-an integer count. Sixteen 10 m source pixels fall in each 40 m output pixel;
-`nearest` would discard fifteen of them and `max` is biased high, so they are
-averaged like everything else and described as a mean. The 10 m tiles keep the
-integer count.
-
 ## License
 
 **CC-BY-4.0.** Contains modified Copernicus Sentinel data.
-
-## Provenance
-
-Derived from the tiles collection by a VRT chain: per-zone mosaic, warp to the
-canonical grid, union, then one streaming COG copy. No pixel is resampled
-twice; the web-map archives run the same chain onto the display grid rather
-than being tiled from these files. Upstream provenance is the tiles
-collection's.

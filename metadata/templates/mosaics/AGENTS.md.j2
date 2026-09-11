@@ -41,13 +41,6 @@ value.
 the ramp and the decibel `expression`, so a client can colorize them at draw
 time and get the same picture with the numbers still underneath.
 
-## `*_qa_num` is a mean here
-
-On the 10 m tiles it is an integer count of contributing acquisitions. Warping
-to {{ analysis_grid.resolution | int }} m averages sixteen source pixels, so the mosaic band is a float32
-**mean** and is named `num_obs_mean`. It is not the same quantity as the tile
-band of the same asset key.
-
 ## Rendering parameters
 
 Every stretch is fixed across years and was measured on the published display
@@ -67,13 +60,9 @@ https://titiler.xyz/cog/preview.png
 | `{{ row.key }}` | {{ row.title }} | {{ row.stretch }} | `{{ row.cmap }}` |
 {% endfor %}
 
-The count ceiling is shared by both products so that backscatter seeing more
-acquisitions than coherence, which needs pairs, stays visible. The quality map
-is one-sided, so its range is the measured one rather than a symmetric one;
-0 dB has no physical meaning in the composites.
-
 ## Related
 
 The tiles collection is the archive these are derived from: same measurements
-at 10 m in each square's own UTM zone, one item per (square, year). Pair on the
-year, not on geometry.
+at 10 m in each square's own UTM zone, one item per (square, year). A mosaic
+year matches the tile items with the same `datetime`; reproject before
+comparing pixels, since the tiles are in UTM and the mosaics in LAEA.

@@ -14,8 +14,9 @@ cannot be satisfied from inside this repository.
 
 **No repository here imports another** (M-30). What they share is on disk: the
 glacier-fraction table, the label masks, the run manifest, and MGRS tile geometry
-via `freezebase`. Three contracts are live, all owned by `deep-glacier-mapping`;
-everything else is settled and listed at the end.
+via `freezebase`. Three contracts are live and owned by `deep-glacier-mapping`,
+one small one by `s1bursts` (S-4); everything else is settled and listed at the
+end.
 
 ---
 
@@ -111,6 +112,29 @@ Three constraints:
 *Verified when* `publish-year.py --steps copy` on an Alpine year reports zero
 mismatches and the `file:checksum` of a published item verifies under
 `rashid check --data`.
+
+---
+
+## S-4 — The band description is the asset key (`s1bursts`)
+
+**Status: open.** Every raster in the catalog has one band, and the catalog
+names that band by the file's asset key: `coh12_vv`, `coh12_vv_qa_num`,
+`rtc_vh_qa_cqm`. The collections' `item_assets`, the items and the mosaic COGs
+already say so. The tile COGs say `VV`, `num_obs` or `cqm`, which is what the
+writer sets as the GDAL band description today, so a tile separated from the
+catalog names its band differently from the item that describes it.
+
+- **What to change.** Set the band description of every composite and QA raster
+  to the published asset key, `{product}_{pol}` plus `_qa_num` / `_qa_cqm`,
+  lower case, as `glace_catalog.stac.naming.CompositeFile.asset_key` derives it
+  from the filename. The `LAYER_DESCRIPTION` and `QA_LAYER` tags stay as they
+  are; they are prose, the band description is an identifier.
+- **Why.** One name per band across the file, the item and the collection, so
+  that `rasterio` and a STAC client agree on what they opened.
+
+*Verified when* a regenerated year's `coh12_vv.tif` opens in rasterio with
+`descriptions == ("coh12_vv",)`, and `publish-year.py` publishes it without
+the item builder overriding the name.
 
 ---
 

@@ -1,5 +1,21 @@
 # {{ catalog.title }} – {{ catalog.subtitle }}
 
+<p align="center">
+<a href="{{ catalog.links.related.href }}">
+<img src="{{ public_base }}/_assets/glace-wordmark.svg" alt="GLACE" width="350">
+</a>
+</p>
+
+Contents
+
+- 🗺️ [Interactive web map]({{ catalog.links.related.href }})
+- 💾 Dataset on Source Cooperative (you are here)
+- 🧭 [Portolan browser of the STAC catalog]({{ browser_url }})
+- ⚙️ Production pipeline on GitHub (coming soon)
+- 🏷️ [Dataset metadata on GitHub]({{ catalog.links.vcs.href }})
+
+---
+
 > **{{ preliminary_notice }}**
 
 Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
@@ -11,16 +27,94 @@ STAC catalog over them. Agents: read [`AGENTS.md`](AGENTS.md).
 
 | collection | one item per | grid | what it is for |
 | --- | --- | --- | --- |
-| [tiles](tiles/) | (MGRS square, year) | 10 m, MGRS / UTM | analysis, machine learning, per-tile reads |
-| [mosaics](mosaics/) | year | 40 m, ETRS89-LAEA (EPSG:3035) | mapping, inspection, change over time |
+| [tiles](tiles/) | (MGRS square, year) | 10 m, UTM {{ utm_zones }} | analysis, machine learning |
+| [mosaics](mosaics/) | year | {{ analysis_grid.resolution | int }} m, ETRS89-LAEA | inspection, large-scale analysis |
 
-Both cover the same pixels. The tiles are the archive; the mosaics are one
-resampling of it onto a fixed equal-area grid that every year shares, so the
-series stacks and differences without an alignment step. The mosaics also carry
-the web-map product: one PMTiles archive per layer and year, drawn by the
-[GLACE Viewer]({{ catalog.links.related.href }}).
+Both cover the same pixels. The tiles hold the main product for scientific
+analysis. The mosaics serve as overviews on one equal-area grid, where every
+year shares the same extent, so the series stacks and differences without
+alignment. The mosaics also carry the web-map product: one PMTiles archive per
+layer and year, drawn by the [GLACE Viewer]({{ catalog.links.related.href }}).
 
-## What the measurements are
+## Data access
+
+All files are anonymous-read on Source Cooperative, with no API key required,
+over HTTPS (`{{ public_base }}/`) or S3
+(`{{ public_s3_base }}/`). Every collection publishes its items as one
+STAC-GeoParquet file, `items.parquet`, which is the query path: one range
+request instead of one HTTP fetch per item.
+
+**Search the catalog.** [rustac](https://github.com/stac-utils/rustac-py)
+searches the item mirror directly:
+
+```python
+import asyncio
+import rustac
+
+async def search(**params):
+    return await rustac.search("{{ public_base }}/tiles/items.parquet", **params)
+
+items = asyncio.run(search(
+    bbox=[7.9, 46.4, 8.2, 46.6],
+    datetime="{{ last_year }}-01-01T00:00:00Z/{{ last_year }}-12-31T23:59:59Z",
+))
+print(len(items), items[0]["assets"]["coh12_vv"]["href"])
+```
+
+**Plot a mosaic.** Read a decimated overview rather than the full raster:
+
+```python
+import numpy as np
+import rasterio
+import matplotlib.pyplot as plt
+
+url = "{{ public_base }}/mosaics/{{ last_year }}/rtc_vv.tif"
+with rasterio.open(url) as src:
+    power = src.read(1, out_shape=(src.height // 8, src.width // 8), masked=True)
+    extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
+plt.imshow(10 * np.log10(power), cmap="{{ portable_cmap("rtc_vv") }}", vmin={{ rescale("rtc_vv").split(",")[0] }}, vmax={{ rescale("rtc_vv").split(",")[1] }}, extent=extent)
+plt.colorbar(label="RTC VV backscatter (dB)")
+```
+
+**Build a data cube.** Find the tiles in an area of interest and load them with
+[odc-stac](https://odc-stac.readthedocs.io/); every year becomes one time step:
+
+```python
+import odc.stac
+import pystac
+
+bbox = [7.9, 46.4, 8.2, 46.6]
+items = asyncio.run(search(bbox=bbox))
+cube = odc.stac.load(
+    [pystac.Item.from_dict(item) for item in items],
+    bands=["coh12_vv", "rtc_vv"],
+    bbox=bbox,
+    chunks={},
+)
+change = cube.coh12_vv.sel(time="{{ last_year }}") - cube.coh12_vv.sel(time="{{ first_year }}")
+```
+
+**Open the tiles in QGIS.** Build a virtual raster over the tiles of one year
+and layer; it reads the COGs in place:
+
+```python
+items = asyncio.run(search(
+    bbox=bbox,
+    datetime="{{ last_year }}-01-01T00:00:00Z/{{ last_year }}-12-31T23:59:59Z",
+))
+with open("coh12_vv_{{ last_year }}.txt", "w") as f:
+    for item in items:
+        f.write("/vsicurl/" + item["assets"]["coh12_vv"]["href"] + "\n")
+```
+
+```bash
+gdalbuildvrt -input_file_list coh12_vv_{{ last_year }}.txt coh12_vv_{{ last_year }}.vrt
+```
+
+Tiles from different UTM zones need one VRT per zone; the item mirror's
+`proj:code` column says which.
+
+## About the dataset
 
 Sentinel-1 SLC bursts are processed to 12-day repeat-pass coherence and
 terrain-corrected gamma-nought backscatter, then composited over each year's
@@ -32,25 +126,21 @@ carries two QA layers, the number of contributing observations and the
 composite quality map, which is the weighting's own record of how well each
 pixel was resolved.
 
-Stored values are **linear throughout**. Backscatter is linear power and the
-quality map a linear ratio; the decibel conversion is declared in each
-collection's `renders` block rather than applied to the pixels, as CEOS-ARD PFS
-SAR item 3.1 asks.
+Stored values are **linear throughout**; use `10*log10(x)` to convert to
+decibels. Every raster carries its description and processing record in its
+GeoTIFF tags.
 
 ## License
 
-**{{ catalog.license }}.** Contains modified Copernicus Sentinel data. Cite the
-dataset and Copernicus.
+**{{ catalog.license }}.** Contains modified Copernicus Sentinel data.
 
-## Provenance
+## Cite
 
-Produced at the University of Zurich, Department of Geography, from Copernicus
-Sentinel-1 SLC data distributed by the Copernicus Data Space Ecosystem. Every
-raster carries its full processing record in its own GeoTIFF tags, so a file
-separated from this catalog still says how it was made.
+A citation will be added with the preprint. Until then, cite the repository
+release at [{{ catalog.links.vcs.href | replace("https://github.com/", "") }}]({{ catalog.links.vcs.href }}).
 
-## Corrections
+## Comments and contributions
 
-The catalog metadata lives in a git repository:
-[{{ catalog.links.vcs.href | replace("https://github.com/", "") }}]({{ catalog.links.vcs.href }}).
-Wrong metadata is a pull request, not an email.
+The metadata of this catalog lives on
+[GitHub]({{ catalog.links.vcs.href }}). Issue reports are welcome
+[there]({{ catalog.links.issues.href }}).

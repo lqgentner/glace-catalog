@@ -68,11 +68,12 @@ https://titiler.xyz/cog/preview.png
   linear domain, never in dB.
 - **The asset key is the filename stem.** `coh12_vv` is `coh12_vv.tif`. No
   dates in filenames; dates are item properties and GeoTIFF tags.
-- **`*_qa_cqm` is a linear ratio where 1.0 is flat terrain** and higher is
-  better resolved. It is one-sided in practice, so it is drawn with a
-  sequential ramp over the measured range, not a diverging one.
-- **`*_qa_num` is an integer count on tiles and a float mean on mosaics.** They
-  are not the same quantity; the mosaic band is named `num_obs_mean`.
+- **`*_qa_cqm` is a linear ratio without a unit**: the weighted average of
+  the contributing observations' local resolution, where higher is better
+  resolved. It is drawn in decibels with a sequential ramp over a fixed range.
+- **`*_qa_num` is an integer count on tiles and a float mean of the counts on
+  mosaics**, under the same band name; the 40 m pixel averages sixteen 10 m
+  counts.
 - **PMTiles are for drawing, not reading.** Each `{stem}_viz.pmtiles` sits beside
   the COG it renders, as a `visual` asset of the same item, and holds
   pre-stretched 8-bit tiles. For any value, read the COG of the same stem.
@@ -86,9 +87,6 @@ https://titiler.xyz/cog/preview.png
 
 ## Data quality notes
 
-- Coverage follows the **glacier perimeter**, not an administrative boundary.
-  Tiles exist where there is ice to observe, so the footprint is ragged and the
-  space between glacierized regions is not a data gap.
 - `glace:glacier_fraction` is pinned to one RGI7 version and computed once per
   scope, so it cannot drift between years. The lookup table is published as the
   `glacier-fractions` collection asset.

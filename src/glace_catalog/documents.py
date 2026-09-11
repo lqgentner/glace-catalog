@@ -63,6 +63,9 @@ ALTERNATE_ASSETS_EXTENSION_URI = (
 )
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 
+PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
+"""The Portolan browser opens any public catalog by its https URL without the scheme."""
+
 STYLE_MEDIA_TYPE = "application/vnd.mapbox.style+json"
 STYLE_TEMPLATE_NAME = "default"
 ATTRIBUTION = "University of Zurich, Contains modified Copernicus Sentinel data {year}"
@@ -375,6 +378,8 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "catalog": catalog,
         "public_base": bases.https,
         "public_s3_base": bases.s3,
+        "browser_url": PORTOLAN_BROWSER + bases.https.removeprefix("https://") + "/catalog.json",
+        "utm_zones": "/".join(catalog.scope.utm_zones),
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],
         "tile_assets": vocabulary.asset_rows(TILES_DIR),

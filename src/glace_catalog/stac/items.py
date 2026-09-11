@@ -236,8 +236,10 @@ def _asset(
         media_type=pystac.MediaType.COG,
         roles=list(entry["roles"]),
     )
-    band: dict[str, Any] = {"name": info.band_name} if info.band_name else {}
-    band["data_type"] = info.data_type
+    # The band is named by its asset key, like the collection's item_assets
+    # entry and, once s1bursts writes it (UPSTREAM.md S-4), the file's own
+    # band description. Its type, nodata, unit and statistics stay the file's.
+    band: dict[str, Any] = {"name": entry["bands"][0]["name"], "data_type": info.data_type}
     nodata = _nodata(info.nodata, info.data_type)
     if nodata is not None:
         band["nodata"] = nodata

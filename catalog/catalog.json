@@ -45,6 +45,11 @@
       "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)"
     },
     {
+      "rel": "about",
+      "href": "https://source.coop/lqgentner/glace-ch",
+      "title": "Dataset on Source Cooperative"
+    },
+    {
       "rel": "vcs",
       "href": "https://github.com/lqgentner/glace-catalog",
       "title": "Source repository"

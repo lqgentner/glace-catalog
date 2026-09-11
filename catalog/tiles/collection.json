@@ -11,15 +11,15 @@
   ],
   "id": "glace-ch-tiles",
   "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
-  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion is declared in the renders. Items are grouped in one sub-catalog per year, and the item mirror items.parquet is the query path.",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion (`10*log10(x)`) is declared in the renders. Query the tiles with the item mirror `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
     "SAR",
     "InSAR coherence",
-    "backscatter",
-    "glaciers",
-    "cryosphere",
+    "Backscatter",
+    "Glaciers",
+    "Cryosphere",
     "Alps",
     "MGRS"
   ],
@@ -36,7 +36,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and locally resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -275,7 +275,7 @@
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Coherence VV composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
+      "description": "Number of acquisitions that contributed to the Coherence VV composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -283,7 +283,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "num_obs",
+          "name": "coh12_vv_qa_num",
           "data_type": "uint16",
           "nodata": 0
         }
@@ -292,7 +292,7 @@
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Composite Quality Map",
-      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -300,7 +300,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "cqm",
+          "name": "coh12_vv_qa_cqm",
           "data_type": "float32",
           "nodata": "nan"
         }
@@ -326,7 +326,7 @@
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Coherence VH composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
+      "description": "Number of acquisitions that contributed to the Coherence VH composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -334,7 +334,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "num_obs",
+          "name": "coh12_vh_qa_num",
           "data_type": "uint16",
           "nodata": 0
         }
@@ -343,7 +343,7 @@
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Composite Quality Map",
-      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -351,7 +351,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "cqm",
+          "name": "coh12_vh_qa_cqm",
           "data_type": "float32",
           "nodata": "nan"
         }
@@ -377,7 +377,7 @@
     "rtc_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Backscatter VV composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
+      "description": "Number of acquisitions that contributed to the Backscatter VV composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -385,7 +385,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "num_obs",
+          "name": "rtc_vv_qa_num",
           "data_type": "uint16",
           "nodata": 0
         }
@@ -394,7 +394,7 @@
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -402,7 +402,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "cqm",
+          "name": "rtc_vv_qa_cqm",
           "data_type": "float32",
           "nodata": "nan"
         }
@@ -428,7 +428,7 @@
     "rtc_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Backscatter VH composite with a non-zero resolution weight. 0 is nodata, not an observed zero.",
+      "description": "Number of acquisitions that contributed to the Backscatter VH composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -436,7 +436,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "num_obs",
+          "name": "rtc_vh_qa_num",
           "data_type": "uint16",
           "nodata": 0
         }
@@ -445,7 +445,7 @@
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite as a linear ratio, where 1.0 is flat terrain and higher is better resolved. The decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -453,7 +453,7 @@
       "raster:spatial_resolution": 10.0,
       "bands": [
         {
-          "name": "cqm",
+          "name": "rtc_vh_qa_cqm",
           "data_type": "float32",
           "nodata": "nan"
         }

@@ -191,6 +191,9 @@ class Scope:
         Fraction of the grid those tiles occupy. The extent is a bounding box
         around a ragged perimeter, so most of it is empty; since nodata
         compresses to almost nothing under LERC, this is what prices a mosaic.
+    utm_zones
+        UTM zones the perimeter's MGRS tiles fall in, northern hemisphere, as
+        the prose names them: ``("32N",)`` for Switzerland.
     """
 
     key: str
@@ -200,6 +203,7 @@ class Scope:
     display_grid: Grid
     perimeter_tiles: int
     coverage: float
+    utm_zones: tuple[str, ...]
 
     @property
     def catalog_title(self) -> str:
@@ -253,6 +257,7 @@ SCOPES: Mapping[str, Scope] = {
         # 143 tiles, every one carrying data and none falling outside.
         perimeter_tiles=143,
         coverage=0.307,
+        utm_zones=("32N",),
     ),
     "alps": Scope(
         key="alps",
@@ -276,6 +281,8 @@ SCOPES: Mapping[str, Scope] = {
         # The Alpine Convention perimeter, via MGRSGrid.
         perimeter_tiles=2209,
         coverage=0.454,
+        # The perimeter spans about 5°E to 17°E.
+        utm_zones=("31N", "32N", "33N"),
     ),
 }
 """Every scope a store can be built over, keyed by :attr:`Scope.key`."""

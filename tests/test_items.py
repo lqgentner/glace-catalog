@@ -316,13 +316,11 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     ).startswith("1220")
     checks["a rendering is a PMTiles archive"] = viz.media_type == "application/vnd.pmtiles"
     checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
-    checks["a rendering says what it is"] = "A picture, not a measurement" in (
+    checks["a rendering says what it is"] = 'read the COGs with the "data" role' in (
         viz.description or ""
     )
-    # A false-color archive has no COG of its own; it names the two it composes.
-    checks["a false-color rendering points at both polarizations"] = (
-        "read coh12_vv.tif and coh12_vh.tif"
-        in (rendered.assets["coh12_rgb_viz"].description or "")
+    checks["a tile band is named by its asset key"] = (
+        item.assets["coh12_vv"].extra_fields["bands"][0]["name"] == "coh12_vv"
     )
     # Every title is the vocabulary's, so an item and its collection's
     # `item_assets` cannot name one file two ways.

@@ -66,8 +66,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(Path(__file__).stem)
 
-CATALOGUE_SCHEMA_VERSION = 1
-"""Bumped when the documents change shape, so ``items`` reruns against a new one."""
+CATALOGUE_SCHEMA_VERSION = 2
+"""Bumped when the documents change shape, so ``items`` reruns against a new one.
+
+2: titles, descriptions and band names from the vocabulary (R-18).
+"""
 
 
 def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[stac.CompositeFile]]:
@@ -264,13 +267,7 @@ def step_mosaics(
     frame: pd.DataFrame,
 ) -> dict[str, mosaics.MosaicWrite]:
     """Write and upload the year's twelve mosaic COGs."""
-    band_names = {
-        key: mosaics.mosaic_band_name(
-            key,
-            str(frame.loc[frame["asset_key"] == key, "band_name"].iloc[0]),
-        )
-        for key in chain.linear
-    }
+    band_names = {key: mosaics.mosaic_band_name(key) for key in chain.linear}
     tags = {key: mosaic_tags(frame, key) for key in chain.linear}
     staged = args.cache / "glace-store" / str(args.year) / "mosaics"
     staged.mkdir(parents=True, exist_ok=True)
@@ -631,12 +628,15 @@ def main() -> None:
     prints = {
         "copy": copy_print,
         "vrt": copy_print,
+        # The band names are written into the file headers, so a renamed band
+        # is a rebuilt mosaic.
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
             mosaics.MAX_Z_ERROR,
             mosaics.COG_CREATION,
             args.layers,
+            [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
         # The committed style is the source of the stretches and ramps (M-27),
         # so its bytes are what a rebuild has to notice: edit a range and every

@@ -60,11 +60,11 @@ the tiles are per-UTM-zone and the mosaics are ETRS89-LAEA.
 
 ## Gotchas
 
-- **QA-NUM 0 means absent**, not "zero observations".
+- **QA-NUM's nodata value is 0**, which coincides with zero contributing
+  observations.
 - **NaN is nodata** on every float32 band. Some browser GeoTIFF decoders drop
   LERC's validity mask and hand a NaN through as `0`; that is a client defect,
   not a property of these files.
 - Tiles are LERC_ZSTD compressed with a per-quantity error bound anchored to
   that quantity's own measurement noise.
-- Coverage follows the glacier perimeter, so the tile set is ragged. A missing
-  tile means no ice there, not a processing gap.
+- Coverage is {{ region }}; a square outside it has no item.

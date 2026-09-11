@@ -12,12 +12,7 @@
 # templates under templates/ see a wider context, listed in documents.py.
 
 scope: ch
-
-# The covered area as it reads in a sentence. The root title names the
-# rehearsal; everything below it is written for the dataset, so the swap to
-# the Alps changes this line and the title, not the prose.
 region: the Alpine Convention perimeter
-
 # Years the tracked tree claims. `finalize-catalog` replaces the temporal
 # extent with the measured compositing windows at publication; these bound it
 # in the tracked tree and name the series in the prose.
@@ -65,9 +60,9 @@ keywords:
   - Sentinel-1
   - SAR
   - InSAR coherence
-  - backscatter
-  - glaciers
-  - cryosphere
+  - Backscatter
+  - Glaciers
+  - Cryosphere
   - Alps
 
 providers:
@@ -81,12 +76,15 @@ providers:
     description: >-
       Produced the composites from Copernicus Sentinel-1 SLC data: burst
       extraction, coherence estimation, radiometric terrain correction and
-      locally resolution weighted compositing. Derived the annual mosaics and
+      local resolution weighted compositing. Derived the annual mosaics and
       maintains this catalog.
     roles: [producer, processor, licensor, host]
     url: https://www.geo.uzh.ch/en.html
 
 links:
+  about:
+    href: https://source.coop/lqgentner/glace-ch
+    title: Dataset on Source Cooperative
   vcs:
     href: https://github.com/lqgentner/glace-catalog
     title: Source repository
@@ -108,8 +106,8 @@ collections:
       {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
       backscatter in VV and VH, and for each of the four a
       contributing-observations count and a composite quality map. Stored values are linear; the decibel display
-      conversion is declared in the renders. Items are grouped in one
-      sub-catalog per year, and the item mirror items.parquet is the query path.
+      conversion (`10*log10(x)`) is declared in the renders. Query the tiles
+      with the item mirror `items.parquet`.
     # One year sub-catalog, rendered with `year`.
     year_description: >-
       The MGRS squares composited in {{ year }}, one item each, every item
@@ -129,17 +127,16 @@ collections:
       ramp and value range baked into its archive.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
-      tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, so an
-      area or area-change statistic can be taken from pixel counts without a
-      latitude correction. Every year shares the same extent, so multitemporal
-      stacks need no alignment step. {{ n_assets | capitalize }} single-band
+      tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.
+      The grid is equal-area to support area statistics. Every year shares the
+      same extent, so multitemporal stacks need no alignment step.
+      {{ n_assets | capitalize }} single-band
       analysis rasters per year, in linear units, each a Cloud-Optimized
       GeoTIFF with internal overviews. Drawing is served separately by
       {{ n_viz }} PMTiles archives per year, tiled on the WebMercatorQuad grid
-      at zoom {{ max_zoom }}. The rasters and the archives are both resampled
-      from the 10 m tiles, so neither is derived from the other.
+      at zoom {{ max_zoom }}.
     # One mosaic item, rendered with `year`.
     item_description: >-
-      Annual mosaics of the GLACE composites for {{ year }}, on the fixed
+      Annual mosaics of the GLACE composites for {{ year }}, on a fixed
       equal-area grid (ETRS89-LAEA, {{ analysis_resolution }} m) every year of
       this collection shares.
