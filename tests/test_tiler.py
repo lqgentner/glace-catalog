@@ -37,7 +37,15 @@ from rasterio.enums import Resampling
 from rasterio.warp import transform_bounds
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, get_scope, zoom_resolution
-from glace_catalog.tiler import TileSpec, tile_bounds, tiles_covering, write_archive
+from glace_catalog.tiler import (
+    WORKER_GDAL_CACHE_MB,
+    TileSpec,
+    spawn_pool,
+    tile_bounds,
+    tiles_covering,
+    worker_gdal_cache,
+    write_archive,
+)
 
 ORIGIN_X, ORIGIN_Y = 4252, 2872
 """Upper-left z13 tile of the synthetic raster; multiples of 4, so z11 is one tile."""
@@ -236,6 +244,12 @@ def main() -> int:
             check_archive(checks, label, archive)
 
         checks["a fully transparent source is refused"] = check_all_transparent_refused(work)
+
+    # Fifteen workers at GDAL's default cache of 5 % of RAM each ran a 60 GB
+    # machine dry on 2026-09-11; every worker must start with a bounded cache.
+    with spawn_pool(2) as pool:
+        caches = set(pool.map(worker_gdal_cache, range(4)))
+    checks["every tiler worker bounds its GDAL cache"] = caches == {str(WORKER_GDAL_CACHE_MB)}
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

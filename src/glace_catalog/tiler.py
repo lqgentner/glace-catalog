@@ -28,6 +28,7 @@ image declares no nodata, and a tile is empty when its own footprint is.
 
 from __future__ import annotations
 
+import atexit
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ import functools
 import logging
 import math
 import multiprocessing
+import os
 from typing import TYPE_CHECKING, Any
 
 from pmtiles.tile import Compression, TileType, tileid_to_zxy, zxy_to_tileid
@@ -247,15 +249,57 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
         return tile_id, memfile.read()
 
 
-def spawn_pool(workers: int | None = None) -> ProcessPoolExecutor:
+WORKER_GDAL_CACHE_MB = 256
+"""GDAL block cache of one tiler worker, in megabytes.
+
+GDAL sizes its cache at 5 % of physical memory *per process* unless told
+otherwise, so fifteen spawned workers on a 60 GB machine claimed about 45 GB
+between them and the 2022 Swiss build ran the machine to 57 GB (2026-09-11). A
+worker reads 256 px tiles from one local raster; a few hundred megabytes of
+cache is more than it can use.
+"""
+
+
+def _close_datasets() -> None:
+    """Close the worker's open sources before the interpreter tears GDAL down."""
+    for dataset in _datasets.values():
+        dataset.close()
+    _datasets.clear()
+
+
+def _configure_worker(cache_mb: int) -> None:
+    """Bound GDAL's cache before the worker touches a raster.
+
+    Runs in the spawned process before any GDAL call, which is when the
+    environment variable is read. The sources the worker keeps open are closed
+    at exit rather than left to interpreter shutdown, where GDAL may already be
+    gone when the reader objects are collected.
+    """
+    os.environ.setdefault("GDAL_CACHEMAX", str(cache_mb))
+    atexit.register(_close_datasets)
+
+
+def worker_gdal_cache(_: int = 0) -> str:
+    """Report the GDAL cache a worker runs with; mapped over a pool by the gate."""
+    return os.environ.get("GDAL_CACHEMAX", "unset")
+
+
+def spawn_pool(
+    workers: int | None = None,
+    *,
+    cache_mb: int = WORKER_GDAL_CACHE_MB,
+) -> ProcessPoolExecutor:
     """Start a worker pool for :func:`write_archive`, one process per core by default.
 
     Spawned rather than forked: the caller may be running the warps of other
-    layers in threads, and forking a multi-threaded process is unsafe.
+    layers in threads, and forking a multi-threaded process is unsafe. Each
+    worker's GDAL cache is bounded to ``cache_mb``.
     """
     return ProcessPoolExecutor(
         max_workers=workers,
         mp_context=multiprocessing.get_context("spawn"),
+        initializer=_configure_worker,
+        initargs=(cache_mb,),
     )
 
 
@@ -374,5 +418,6 @@ __all__ = [
     "spawn_pool",
     "tile_bounds",
     "tiles_covering",
+    "worker_gdal_cache",
     "write_archive",
 ]
