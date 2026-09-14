@@ -137,10 +137,14 @@ class RgbStyle:
     bands: tuple[str, ...] = ()
 
 
-#: A four-digit year anywhere in a credit line. The committed style carries the
-#: most recent published year, like its ``pmtiles://`` URLs do, and both are
-#: re-yeared the same way.
-_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+YEAR_IN_TEXT = re.compile(r"\b(?:19|20)\d{2}\b")
+"""A four-digit year anywhere in a credit line.
+
+The committed style carries the most recent published year, like its
+``pmtiles://`` URLs do, and both are re-yeared the same way: here for the
+attribution the build bakes into an archive, and in ``finalize-catalog`` for the
+style it publishes per year.
+"""
 
 
 def load_attribution(path: Path, year: int | None = None) -> str:
@@ -169,7 +173,7 @@ def load_attribution(path: Path, year: int | None = None) -> str:
     for source in document.get("sources", {}).values():
         credit = source.get("attribution")
         if credit:
-            return _YEAR.sub(str(year), credit) if year is not None else credit
+            return YEAR_IN_TEXT.sub(str(year), credit) if year is not None else credit
     msg = f"{path}: no source declares an 'attribution'; Sentinel data requires one"
     raise ValueError(msg)
 
@@ -229,8 +233,9 @@ def load_styles(path: Path) -> tuple[dict[str, LayerStyle], dict[str, RgbStyle]]
             if not isinstance(channels, list) or len(channels) != 3:  # noqa: PLR2004
                 msg = f"{path}: layer {layer['id']!r} is 'channels' but has no three channels"
                 raise ValueError(msg)
+            red, green, blue = [(float(c["vmin"]), float(c["vmax"])) for c in channels]
             rgb[key] = RgbStyle(
-                ranges=tuple((float(c["vmin"]), float(c["vmax"])) for c in channels),  # type: ignore[arg-type]
+                ranges=(red, green, blue),
                 units=units,
                 decibel=decibel,
                 measured=measured,

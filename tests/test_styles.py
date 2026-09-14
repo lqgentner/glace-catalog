@@ -14,21 +14,21 @@ So this gate holds the file to what a reader of it is entitled to assume:
 - every ramp names a colormap matplotlib can actually resolve, including
   Crameri's ``cmc.*`` maps;
 - every range is ordered, ``vmin < vmax``;
-- a false-colour entry carries three channels and no ramp, and a single-band
+- a false-color entry carries three channels and no ramp, and a single-band
   entry carries a ramp and no channels;
 - the ``stops`` are *derived*, so they agree with the colormap and range they
   claim to come from — a hand-edited stop is the exact drift this file exists to
   prevent.
 
-It also pins the values themselves, so that changing a published stretch is a
-visible diff in two places rather than one. The table below started as a record
-that the move out of ``webmap.py`` changed *where* the numbers live and not what
-they are; the QA ranges have since been re-derived from the published mosaics,
-and carry their reasoning beside them.
+The values themselves are no longer pinned here: ``metadata/assets.yaml`` is
+where a stretch is changed, with its reasoning beside it, and
+``tests/test_render.py`` holds the rendered style to that source. Changing a
+published stretch is still a visible diff in two places, the source and the
+rendered style.
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_styles.py
+Run: uv run tests/test_styles.py
 """
 
 from pathlib import Path
@@ -36,45 +36,33 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from glace_catalog.metadata import RGB_KEYS, load_vocabulary
+from glace_catalog.stac.naming import ASSET_KEYS
 from glace_catalog.styles import RgbStyle, load_styles, ramp_colors
 
 STYLE_PATH = Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/default.json"
 
-#: What the constants were when they lived in ``webmap.py``. Ramp, vmin, vmax,
-#: units, decibel.
-EXPECTED_SINGLE = {
-    "coh12_vv": ("cmc.lipari", 0.10, 0.80, "", False),
-    "coh12_vh": ("cmc.lipari", 0.10, 0.60, "", False),
-    "rtc_vv": ("cmc.grayC", -18.5, -5.0, "dB", True),
-    "rtc_vh": ("cmc.grayC", -26.0, -11.0, "dB", True),
-    # Re-derived 2026-09-05 against the published 2021-2024 mosaics; see P-19.
-    # QA-NUM is an acquisition count, so its ceiling moves with the
-    # constellation: 2021 reaches 49 (COH12) and 58 (RTC) because S1B was still
-    # flying, against 26 and 30 from 2022 on. The range spans the widest year
-    # plus headroom, or a fixed ramp would clip 2021 to a flat block.
-    #
-    # **One range for both products, not one each.** RTC sees more acquisitions
-    # than COH12, which needs pairs; a per-product range would normalise that
-    # difference away and draw the two identically. Sharing 0-70 is what makes
-    # it visible.
-    "coh12_vv_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "coh12_vh_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "rtc_vv_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    "rtc_vh_qa_num": ("cmc.turku", 0.0, 70.0, "", False),
-    # CQM is normalised, so unlike QA-NUM it does not move with the count:
-    # 2-98% lands within 0.25 dB across 2021, 2022 and 2024, at -2.9 to 3.1.
-    # Rounded to an even -3 to 3, which clips 0.14 dB off 2021's upper tail.
-    "coh12_vv_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "coh12_vh_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "rtc_vv_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-    "rtc_vh_qa_cqm": ("cmc.glasgow", -3.0, 3.0, "dB", True),
-}
-
-#: Per-channel ranges of the two false-colour layers, red, green, blue.
-EXPECTED_RGB = {
-    "rtc_rgb": (((-18.5, -5.0), (-26.0, -11.0), (4.0, 14.0)), "dB", True),
-    "coh12_rgb": (((0.10, 0.80), (0.10, 0.60), (0.8, 2.5)), "", False),
-}
+#: The published constants, read from the vocabulary rather than pinned here:
+#: `metadata/assets.yaml` is where a stretch is changed, with its reasoning
+#: beside it, and `tests/test_render.py` holds the rendered style to the same
+#: source. What this gate adds is that the style the *build* reads (M-27)
+#: says what the vocabulary says, and that every ramp resolves and every range
+#: is ordered.
+VOCABULARY = load_vocabulary()
+EXPECTED_SINGLE: dict[str, tuple[str, float, float, str, bool]] = {}
+EXPECTED_RGB: dict[str, tuple[tuple[tuple[float, float], ...], str, bool]] = {}
+for _key in (*ASSET_KEYS, *RGB_KEYS):
+    _style = VOCABULARY.display(_key)
+    if isinstance(_style, RgbStyle):
+        EXPECTED_RGB[_key] = (_style.ranges, _style.units, _style.decibel)
+    else:
+        EXPECTED_SINGLE[_key] = (
+            _style.cmap,
+            _style.vmin or 0.0,
+            _style.vmax or 0.0,
+            _style.units,
+            _style.decibel,
+        )
 
 problems: list[str] = []
 
@@ -96,7 +84,7 @@ for key, (cmap, vmin, vmax, units, decibel) in EXPECTED_SINGLE.items():
     if style is None:
         continue
     if isinstance(style, RgbStyle):
-        problems.append(f"{key}: read as false colour, but it is single band")
+        problems.append(f"{key}: read as false color, but it is single band")
         continue
     got = (style.cmap, style.vmin, style.vmax, style.units, style.decibel)
     if got != (cmap, vmin, vmax, units, decibel):
@@ -113,7 +101,7 @@ for key, (cmap, vmin, vmax, units, decibel) in EXPECTED_SINGLE.items():
             "so a hand edit here is the drift this gate exists to catch",
         )
 
-# --- false-colour entries -------------------------------------------------
+# --- false-color entries -------------------------------------------------
 for key, (ranges, units, decibel) in EXPECTED_RGB.items():
     style = rgb.get(key)
     if style is None:
@@ -139,4 +127,4 @@ if problems:
     print(f"FAILED: {len(problems)} problem(s)")
     raise SystemExit(1)
 
-print(f"OK: {len(single)} single-band and {len(rgb)} false-colour style(s), values unchanged")
+print(f"OK: {len(single)} single-band and {len(rgb)} false-color style(s), values unchanged")

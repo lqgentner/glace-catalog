@@ -18,7 +18,7 @@ which reports as a parse failure far from its cause.
 
 Neither gate reads asset bytes, so both run offline and in CI.
 
-Run: python3 tests/test_data_format.py
+Run: uv run tests/test_data_format.py
 """
 
 import json

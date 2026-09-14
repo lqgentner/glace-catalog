@@ -15,11 +15,13 @@ The column list below is copied verbatim from
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_manifest_contract.py
+Run: uv run tests/test_manifest_contract.py
 """
 
 from __future__ import annotations
 
+import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -36,7 +38,7 @@ from glace_catalog.stac.store import (
     manifest_valid_percents,
     read_manifest,
 )
-from glace_catalog.stac.tags import read_raster_info
+from glace_catalog.stac.tags import BandStatistics, read_raster_info
 
 PRODUCER_COLUMNS = (
     "filename",
@@ -78,8 +80,10 @@ def producer_manifest() -> pd.DataFrame:
         "spatial_resolution": 10.0,
         "byte_order": "little-endian",
         # Dataset tags follow the fixed columns, one column each, uncurated.
+        # No PASS_DIRECTION: an LRW composite does not carry it, so the real
+        # manifest has no such column, and the publisher must not index one.
         "PROCESSING_SOFTWARE": "s1bursts 0.4.0",
-        "PASS_DIRECTION": "Ascending",
+        "COMPOSITING_METHOD": "LRW",
     }
     rows = [
         {
@@ -122,7 +126,7 @@ def producer_manifest() -> pd.DataFrame:
         },
     ]
     frame = pd.DataFrame(
-        rows, columns=[*PRODUCER_COLUMNS, "PROCESSING_SOFTWARE", "PASS_DIRECTION"]
+        rows, columns=[*PRODUCER_COLUMNS, "PROCESSING_SOFTWARE", "COMPOSITING_METHOD"]
     )
     frame.attrs["manifest_version"] = 1
     return frame
@@ -146,13 +150,55 @@ def header_checks(tmp: Path) -> dict[str, bool]:
     ) as dst:
         dst.write(data, 1)
         dst.update_tags(
-            1, STATISTICS_MINIMUM="0.5", STATISTICS_MAXIMUM="0.5", STATISTICS_VALID_PERCENT="100"
+            1,
+            STATISTICS_MINIMUM="0.5",
+            STATISTICS_MAXIMUM="0.5",
+            STATISTICS_MEAN="0.5",
+            STATISTICS_STDDEV="0.0",
+            STATISTICS_VALID_PERCENT="100",
         )
     info = read_raster_info(path)
     return {
         "header reader fills statistics from band tags": info.statistics
-        == {"minimum": 0.5, "maximum": 0.5, "valid_percent": 100.0},
+        == BandStatistics(minimum=0.5, maximum=0.5, mean=0.5, stddev=0.0, valid_percent=100.0),
     }
+
+
+def refuses_partial_statistics() -> bool:
+    """Check a manifest missing one ``stat_*`` value is refused, by column name.
+
+    Four of five is a producer bug, and the publisher is where it has to
+    surface: a band that reached ``bands[].statistics`` with a hole in it would
+    fail the Portolan gate long after the run that wrote it.
+    """
+    frame = producer_manifest()
+    frame.loc[0, "stat_mean"] = None
+    try:
+        manifest_raster_info(frame)
+    except ValueError as error:
+        return "stat_mean" in str(error)
+    return False
+
+
+def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
+    """Check the mosaic tag collector tolerates a provenance tag the run never wrote.
+
+    ``PROVENANCE_TAGS`` is the union over every product; the first real run
+    died on ``PASS_DIRECTION``, which only pass composites carry.
+    """
+    # The script resolves its store root at import; a local value keeps this
+    # gate off object storage, and nothing here reads or writes it.
+    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
+    spec = importlib.util.spec_from_file_location(
+        "publish_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
+    )
+    if spec is None or spec.loader is None:
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tags = module.mosaic_tags(frame, "coh12_vv")
+    return tags.get("COMPOSITING_METHOD") == "LRW" and "PASS_DIRECTION" not in tags
 
 
 def main() -> int:
@@ -181,12 +227,18 @@ def main() -> int:
         "digest reaches RasterInfo.checksum": data.checksum == DIGEST,
         "absent digest stays None": count.checksum is None,
         "statistics reach RasterInfo.statistics": data.statistics
-        == {"minimum": 0.01, "maximum": 0.99, "mean": 0.5, "stddev": 0.2, "valid_percent": 87.5},
+        == BandStatistics(minimum=0.01, maximum=0.99, mean=0.5, stddev=0.2, valid_percent=87.5),
         "size carried": data.size == 1234,
         "NaN nodata stays NaN": data.nodata is not None and np.isnan(data.nodata),
         "zero nodata stays zero": count.nodata == 0.0,
-        "tags carried": data.tags.get("PASS_DIRECTION") == "Ascending",
+        "tags carried": data.tags.get("COMPOSITING_METHOD") == "LRW",
+        "mosaic tags survive a manifest without the pass-only column": (
+            mosaic_tags_survive_missing_column(frame)
+        ),
         "valid percent keyed by the data asset": percents == {"32TPS05": {"coh12_vv": 84.375}},
+        "a manifest missing one statistic is refused by column name": (
+            refuses_partial_statistics()
+        ),
     }
     checks.update(header)
     failed = [name for name, ok in checks.items() if not ok]

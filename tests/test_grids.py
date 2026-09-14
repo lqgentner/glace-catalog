@@ -31,7 +31,7 @@ z4 tile is wider than the whole mosaic.
 
 Reads no data and needs no network.
 
-Run: python3 tests/test_grids.py
+Run: uv run tests/test_grids.py
 """
 
 from glace_catalog.scopes import (

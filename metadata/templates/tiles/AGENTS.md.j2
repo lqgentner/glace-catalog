@@ -1,0 +1,70 @@
+# {{ tiles.short_title }} – agent guide
+
+One item per (MGRS square, year). {{ n_assets | capitalize }} single-band COGs per item,
+10 m, in each square's own UTM zone.
+
+## Query the mirror, do not walk the tree
+
+`items.parquet` holds every item of every year. Walking `{year}/{tile}/item.json`
+is one HTTP request per tile and there are hundreds per year.
+
+```sql
+INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
+
+-- glacier-heavy tiles in one year, ready to feed a sampler
+SELECT id, "glace:glacier_fraction_buffered" AS frac,
+       "proj:code", bbox
+FROM read_parquet('{{ public_base }}/tiles/items.parquet')
+WHERE datetime BETWEEN '{{ last_year }}-01-01' AND '{{ last_year }}-12-31'
+  AND "glace:glacier_fraction_buffered" > 0.1
+ORDER BY frac DESC;
+```
+
+## Asset vocabulary
+
+{{ n_assets | capitalize }} keys, and the key is the filename stem. Polarization comes before the
+QA role, so a sorted listing keeps each QA layer directly beneath the
+measurement it describes.
+
+| asset key | title | stored as | nodata | to display |
+| --- | --- | --- | --- | --- |
+{% for row in tile_assets %}
+| `{{ row.key }}` | {{ row.title }} | {{ row.data_type }} | {{ row.nodata }} | {% if row.decibel %}`10*log10(x)`, then {% endif %}{{ row.stretch }}, `{{ row.cmap }}` |
+{% endfor %}
+
+Averaging `rtc_*` or `*_qa_cqm` must happen in the **linear** domain. A mean of
+decibels is not the decibel of a mean. The `renders` block on the collection
+carries the same stretches with portable matplotlib colormap names.
+
+## Provenance is in the file
+
+Each GeoTIFF carries the dataset tags recording the processing chain
+(`PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`, `COMPOSITING_*`, `BACKSCATTER_*`,
+`COHERENCE_*`). The item properties mirror them under `glace:*` and
+`processing:*`, so you can filter on them without opening a raster, but the
+file is the source of truth and stays self-describing if separated from this
+catalog.
+
+Every tile item of a year carries the same `start_datetime` and `end_datetime`:
+the compositing window, chosen once per year from the lowest-snow period. Which
+acquisitions actually contributed varies per tile and product and is on the item
+as `glace:coh_first_acquisition` / `glace:coh_last_acquisition` and the `rtc`
+pair; coherence ends about twelve days before backscatter because a pair needs
+both dates inside the window.
+
+## Pairing with the mosaics
+
+The mosaics collection holds the same measurements resampled onto one fixed
+equal-area grid, one item per year. Join on the year. Do not join on geometry:
+the tiles are per-UTM-zone and the mosaics are ETRS89-LAEA.
+
+## Gotchas
+
+- **QA-NUM's nodata value is 0**, which coincides with zero contributing
+  observations.
+- **NaN is nodata** on every float32 band. Some browser GeoTIFF decoders drop
+  LERC's validity mask and hand a NaN through as `0`; that is a client defect,
+  not a property of these files.
+- Tiles are LERC_ZSTD compressed with a per-quantity error bound anchored to
+  that quantity's own measurement noise.
+- Coverage is {{ region }}; a square outside it has no item.

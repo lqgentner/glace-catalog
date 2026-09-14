@@ -20,9 +20,14 @@ from freezebase.mgrs import MGRSGeoBox
 import pystac
 from pystac.utils import datetime_to_str
 
+# The module, not the name: metadata imports the naming module through this
+# package, so under one import order this package is still initializing when
+# metadata is. Resolving `vocabulary` at call time keeps both orders working.
+from glace_catalog import metadata
 from glace_catalog.stac.naming import (
     POLARIZATIONS,
     PRODUCTS,
+    by_asset_key,
 )
 from glace_catalog.stac.tags import (
     SPECIFICATION_URL,
@@ -40,11 +45,17 @@ if TYPE_CHECKING:
 
 GEOMETRY_SIMPLIFY_DEG = 1e-4  # ~11 m at the equator
 
-DATASET_VERSION = "1.0"
+DATASET_VERSION = "0.1"
 """Published edition of the GLACE dataset, as the STAC version extension's ``version``.
 
 Bump the major part when the pixels change meaning, so that a value stored under
 one edition can never be reinterpreted under a later reading.
+
+A release is one version string, and this is where it is bumped. Both
+``catalog/*/collection.json`` and ``CITATION.cff`` restate it and follow this
+value; ``tests/test_version.py`` fails when any of them disagrees. Tag
+``v{DATASET_VERSION}`` only after the store is published and finalized, because
+the tag is what a citation resolves to.
 """
 
 MGRS_EXTENSION_URI = "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
@@ -57,7 +68,6 @@ RASTER_EXTENSION_URI = "https://stac-extensions.github.io/raster/v2.0.0/schema.j
 FILE_EXTENSION_URI = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
 PROCESSING_EXTENSION_URI = "https://stac-extensions.github.io/processing/v1.2.0/schema.json"
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
-WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.2.0/schema.json"
 
 CEOS_ARD_LINK_REL = "ceos-ard-specification"
 """Relation type of the CEOS-ARD extension, used without declaring the extension.
@@ -75,6 +85,9 @@ A pre-styled RGBA pyramid is a rendering, not a measurement — no bands, no
 units, no values to read — so it is a link rather than an asset or an item. That
 also keeps the asset key ``coh12_vv`` naming one thing inside the mosaics
 collection rather than both a COG and an archive.
+
+Portolan registers PMTiles at collection level (``PORTO-FMT-011``), so the link
+is written by ``finalize-catalog``; a mosaic item carries none.
 """
 
 
@@ -96,7 +109,7 @@ def _add_specification_link(target: pystac.Item | pystac.Collection) -> None:
     )
 
 
-def _tile_geometry(geobox: MGRSGeoBox) -> tuple[dict, list[float]]:
+def _tile_geometry(geobox: MGRSGeoBox) -> tuple[dict[str, Any], list[float]]:
     """WGS84 polygon (simplified to the corners) and bounding box of a tile."""
     extent = geobox.geographic_extent
     geometry = extent.simplify(GEOMETRY_SIMPLIFY_DEG).geom.__geo_interface__
@@ -116,13 +129,6 @@ def _apply_common_metadata(item: pystac.Item, geobox: MGRSGeoBox, tile: str) -> 
     item.properties["proj:shape"] = [geobox.shape.y, geobox.shape.x]
     item.properties["proj:transform"] = list(geobox.affine)[:6]
     item.stac_extensions.extend([MGRS_EXTENSION_URI, PROJECTION_EXTENSION_URI])
-
-
-def _method_label(file: CompositeFile) -> str:
-    """Human-readable compositing method of a composite, from its filename."""
-    if file.orbit is None:
-        return "LRW composite"
-    return f"{'ascending' if file.orbit == 'A' else 'descending'} pass composite"
 
 
 def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:
@@ -210,32 +216,42 @@ def _asset(
     file: CompositeFile,
     info: RasterInfo,
     *,
-    title: str,
-    roles: list[str],
-    statistics: dict[str, float] | None = None,
+    valid_percent: float | None = None,
 ) -> pystac.Asset:
-    """Build one asset, describing its pixels entirely from the raster's own metadata."""
+    """Build one asset: its name from the vocabulary, its pixels from the raster's own metadata.
+
+    Title, description and roles are the collection's ``item_assets`` entry for
+    the same key, asked of the same vocabulary, so an item and its collection
+    cannot name one file two ways. The raster's own ``LAYER_DESCRIPTION`` stays
+    in its tags.
+    """
     require_valid(file, info)
+    entry = metadata.vocabulary().item_asset(file.asset_key, "tiles")
     asset = pystac.Asset(
         # Relative to the item that owns it, which is what keeps the store
         # relocatable: moving the bucket edits one self href, not every asset.
         href=file.published_name,
-        title=title,
-        description=info.tags.get("LAYER_DESCRIPTION"),
+        title=entry["title"],
+        description=entry["description"],
         media_type=pystac.MediaType.COG,
-        roles=roles,
+        roles=list(entry["roles"]),
     )
-    band: dict[str, Any] = {"name": info.band_name} if info.band_name else {}
-    band["data_type"] = info.data_type
+    # The band is named by its asset key, like the collection's item_assets
+    # entry and, once s1bursts writes it (UPSTREAM.md S-4), the file's own
+    # band description. Its type, nodata, unit and statistics stay the file's.
+    band: dict[str, Any] = {"name": entry["bands"][0]["name"], "data_type": info.data_type}
     nodata = _nodata(info.nodata, info.data_type)
     if nodata is not None:
         band["nodata"] = nodata
     # A dimensionless band carries no unit at all rather than an empty string.
     if info.band_unit:
         band["unit"] = info.band_unit
-    stats = dict(info.statistics)
-    if statistics is not None:
-        stats.update(statistics)
+    # The manifest records the valid percentage of the published pixels
+    # separately from the writer's embedded statistics; where it has one, it is
+    # the one measured over the file as published.
+    stats = info.statistics.to_dict() if info.statistics is not None else {}
+    if valid_percent is not None:
+        stats["valid_percent"] = valid_percent
     if stats:
         band["statistics"] = stats
     asset.extra_fields["bands"] = [band]
@@ -256,32 +272,14 @@ def _data_asset(
     info: RasterInfo,
     valid_percent: float | None,
 ) -> pystac.Asset:
-    is_coh = file.product.startswith("COH")
-    if is_coh:
-        baseline = info.tags.get("TEMPORAL_BASELINE_DAYS") or file.product.removeprefix("COH")
-        quantity = f"{baseline}-day repeat-pass coherence"
-    else:
-        quantity = "RTC backscatter"
-    asset = _asset(
-        file,
-        info,
-        title=f"{quantity} {file.polarization}, {_method_label(file)}",
-        roles=["data", "cloud-optimized"],
-        statistics=None if valid_percent is None else {"valid_percent": valid_percent},
-    )
+    asset = _asset(file, info, valid_percent=valid_percent)
     asset.extra_fields["sar:polarizations"] = [file.polarization]
-    asset.extra_fields["sar:product_type"] = "COH" if is_coh else "RTC"
+    asset.extra_fields["sar:product_type"] = metadata.vocabulary().sar_product_type(file.asset_key)
     return asset
 
 
 def _qa_asset(file: CompositeFile, info: RasterInfo) -> pystac.Asset:
-    layer = info.tags.get("QA_LAYER", f"QA-{file.qa}")
-    return _asset(
-        file,
-        info,
-        title=f"{layer} ({file.product} {file.polarization}, {_method_label(file)})",
-        roles=["quality"],
-    )
+    return _asset(file, info)
 
 
 def _unanimous_raster_tag(
@@ -420,7 +418,7 @@ def build_tile_item(
         item.properties["glace:glacier_fraction_buffered"] = round(glacier_fraction_buffered, 5)
 
     valid_percents = valid_percents or {}
-    for file in sorted(files, key=lambda f: f.asset_key):
+    for file in sorted(files, key=by_asset_key):
         info = raster_info[file.asset_key]
         if file.qa is None:
             asset = _data_asset(file, info, valid_percents.get(file.asset_key))
@@ -449,6 +447,12 @@ class MosaicAsset:
         Media type of the file.
     size
         File size in bytes, if known.
+    checksum
+        Multihash-encoded sha256 of the file, published as ``file:checksum``
+        (``PTL-AST-003``). Measured on the staged bytes before upload.
+    description
+        What the file is, where a title cannot say it: a rendering has to say
+        which COG to read instead of it.
     band
         Single-band description, for a raster asset.
     extra
@@ -461,6 +465,8 @@ class MosaicAsset:
     roles: list[str]
     media_type: str = pystac.MediaType.COG
     size: int | None = None
+    checksum: str | None = None
+    description: str | None = None
     band: dict[str, Any] | None = None
     extra: dict[str, Any] = dc_field(default_factory=dict)
 
@@ -469,6 +475,7 @@ class MosaicAsset:
         asset = pystac.Asset(
             href=self.href,
             title=self.title,
+            description=self.description,
             media_type=self.media_type,
             roles=list(self.roles),
         )
@@ -476,18 +483,10 @@ class MosaicAsset:
             asset.extra_fields["bands"] = [self.band]
         if self.size is not None:
             asset.extra_fields["file:size"] = self.size
+        if self.checksum is not None:
+            asset.extra_fields["file:checksum"] = self.checksum
         asset.extra_fields.update(self.extra)
         return asset
-
-
-def _band_title(asset_key: str) -> str:
-    """Human-readable name of one asset key, e.g. ``COH12 VH observation count``."""
-    product, pol, *qa = asset_key.upper().split("_")
-    quantity = "12-day repeat-pass coherence" if product.startswith("COH") else "RTC backscatter"
-    if not qa:
-        return f"{quantity} {pol}"
-    role = "observation count" if qa[-1] == "NUM" else "composite quality metric"
-    return f"{quantity} {pol}, {role}"
 
 
 def build_mosaic_item(
@@ -499,7 +498,6 @@ def build_mosaic_item(
     start: datetime,
     end: datetime,
     assets: Mapping[str, MosaicAsset],
-    pmtiles: Mapping[str, str],
     build_fingerprint: str | None = None,
     version: str = DATASET_VERSION,
 ) -> pystac.Item:
@@ -518,10 +516,6 @@ def build_mosaic_item(
         day, and the midnight after its last day.
     assets
         Written mosaic COGs and per-year documents, keyed by asset key.
-    pmtiles
-        Href per PMTiles archive, keyed by layer id. Attached as
-        ``rel="pmtiles"`` links rather than assets: a pre-styled pyramid is a
-        rendering, not a measurement.
     build_fingerprint
         Fingerprint of the inputs this year was built from, so a store can be
         checked against them without re-deriving anything.
@@ -561,17 +555,6 @@ def build_mosaic_item(
     )
     for key, mosaic in sorted(assets.items()):
         item.add_asset(key, mosaic.to_asset())
-    if pmtiles:
-        item.stac_extensions.append(WEB_MAP_LINKS_EXTENSION_URI)
-    for layer_id, href in sorted(pmtiles.items()):
-        item.add_link(
-            pystac.Link(
-                rel=PMTILES_LINK_REL,
-                target=href,
-                media_type="application/vnd.pmtiles",
-                title=f"{layer_id} web-map tiles",
-            ),
-        )
     _add_specification_link(item)
     return item
 
@@ -590,12 +573,3 @@ def extent_from_items(items: Sequence[pystac.Item]) -> pystac.Extent:
     ends = [datetime.fromisoformat(item.properties["end_datetime"]) for item in items]
     temporal = pystac.TemporalExtent([[min(starts), max(ends)]])
     return pystac.Extent(spatial=spatial, temporal=temporal)
-
-
-_PRODUCERS = [
-    pystac.Provider(
-        name="University of Zurich, Department of Geography",
-        roles=[pystac.ProviderRole.PRODUCER, pystac.ProviderRole.PROCESSOR],
-    ),
-]
-_KEYWORDS = ["Sentinel-1", "SAR", "InSAR coherence", "backscatter", "glaciers"]

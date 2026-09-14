@@ -27,7 +27,7 @@ that spans years, so ``finalize-catalog.py`` owns them. That is what makes addin
 a year later leave every existing year untouched.
 
 Usage:
-    uv run --env-file .env python scripts/publish-year.py 2024 \\
+    uv run --env-file .env scripts/publish-year.py 2024 \\
         --src  s3://s1-bursts/data/alps-total/2024/s1-comp-ch \\
         --scope ch \\
         --steps copy,vrt,mosaics,pmtiles,items
@@ -42,17 +42,22 @@ from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+from freezebase.s3 import list_object_sizes
 import pandas as pd
 
-from glace_catalog import mosaics, stac, webmap
+from glace_catalog import mosaics, stac, tiler, webmap
 from glace_catalog.config import settings
+from glace_catalog.documents import render_year_prose
+from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
+from glace_catalog.stac.naming import ASSET_KEYS
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
+from glace_catalog.styles import RgbStyle
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import date
 
     import pystac
@@ -61,8 +66,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(Path(__file__).stem)
 
-CATALOGUE_SCHEMA_VERSION = 1
-"""Bumped when the documents change shape, so ``items`` reruns against a new one."""
+CATALOGUE_SCHEMA_VERSION = 2
+"""Bumped when the documents change shape, so ``items`` reruns against a new one.
+
+2: titles, descriptions and band names from the vocabulary (R-18).
+"""
 
 
 def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[stac.CompositeFile]]:
@@ -87,7 +95,7 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         raise SystemExit(msg)
 
     frame = stac.read_manifest(manifest_path)
-    listing = stac.list_objects(src)
+    listing = list_object_sizes(src)
     mismatches = stac.verify_manifest(frame, listing)
     if mismatches:
         for mismatch in mismatches[:50]:
@@ -96,6 +104,16 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         raise SystemExit(msg)
 
     files = stac.manifest_composites(frame, src)
+    # The catalog publishes the twelve LRW composites and nothing else: the
+    # vocabulary names no pass composite, so one would fail at the items step,
+    # after the copy. Refuse it before any byte moves.
+    unpublishable = sorted({file.asset_key for file in files if file.asset_key not in ASSET_KEYS})
+    if unpublishable:
+        msg = (
+            f"{src} holds composites the catalog does not publish: {', '.join(unpublishable)}. "
+            "Only the LRW composites named in metadata/assets.yaml are published."
+        )
+        raise SystemExit(msg)
     by_tile: dict[str, list[stac.CompositeFile]] = {}
     for file in files:
         by_tile.setdefault(file.tile, []).append(file)
@@ -136,7 +154,7 @@ def step_copy(
     repository's committed configuration.
     """
     layout.tile_year(args.year).mkdir(parents=True, exist_ok=True)
-    listing = stac.list_objects(src)
+    listing = list_object_sizes(src)
     result = stac.copy_composites(files, layout, args.year, listing, max_workers=args.max_workers)
     logger.info("copy: %s", result)
 
@@ -214,7 +232,12 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
     """
     rows = frame.loc[frame["asset_key"] == asset_key]
     tags: dict[str, str] = {}
+    # PROVENANCE_TAGS is the union over every product: a pass composite's
+    # PASS_DIRECTION is not a column of an LRW manifest, and a coherence tag is
+    # not one of a backscatter-only run. Absent is fine; disagreement is not.
     for column in stac.PROVENANCE_TAGS:
+        if column not in rows:
+            continue
         values = {str(value) for value in rows[column].dropna().unique()}
         if len(values) == 1:
             tags[column] = values.pop()
@@ -242,15 +265,9 @@ def step_mosaics(
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
     frame: pd.DataFrame,
-) -> dict[str, Path]:
+) -> dict[str, mosaics.MosaicWrite]:
     """Write and upload the year's twelve mosaic COGs."""
-    band_names = {
-        key: mosaics.mosaic_band_name(
-            key,
-            str(frame.loc[frame["asset_key"] == key, "band_name"].iloc[0]),
-        )
-        for key in chain.linear
-    }
+    band_names = {key: mosaics.mosaic_band_name(key) for key in chain.linear}
     tags = {key: mosaic_tags(frame, key) for key in chain.linear}
     staged = args.cache / "glace-store" / str(args.year) / "mosaics"
     staged.mkdir(parents=True, exist_ok=True)
@@ -265,6 +282,23 @@ def step_mosaics(
     return written
 
 
+def clear_stale_archives(staged: Path) -> int:
+    """Delete the archives a previous run left in the staging directory.
+
+    Everything under ``staged`` is uploaded into the year's item directory, so
+    an archive from an earlier build -- under a name the tiler no longer writes
+    -- would be published beside the new ones as if it were current. The
+    2026-09-09 migration did exactly that: the old ``{stem}.pmtiles`` rode
+    along with the new ``{stem}_viz.pmtiles`` and had to be deleted by hand.
+    """
+    stale = sorted(path for path in staged.iterdir() if path.suffix == ".pmtiles")
+    for path in stale:
+        path.unlink()
+    if stale:
+        logger.info("Removed %d stale archive(s) from %s", len(stale), staged)
+    return len(stale)
+
+
 def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
@@ -274,6 +308,7 @@ def step_pmtiles(
     """Render and upload the year's web-map archives."""
     staged = args.cache / "glace-store" / str(args.year) / "pmtiles"
     staged.mkdir(parents=True, exist_ok=True)
+    clear_stale_archives(staged)
     layers = webmap.build_layers(
         chain,
         staged,
@@ -283,8 +318,14 @@ def step_pmtiles(
         end_date=window[1].isoformat(),
         layers=args.layers,
         workers=args.tiler_workers,
+        concurrent_layers=args.concurrent_layers,
+        # Beside the staged archives, not inside them: everything under
+        # `staged` is uploaded, and a warp interrupted half-way must not be.
+        scratch=args.cache / "glace-store" / str(args.year) / "rgba",
     )
-    stac.store.upload_tree(staged, layout.pmtiles(args.year))
+    # Into the year's item directory, beside the COGs: the archives are assets of
+    # that item, and `upload_tree` merges rather than replaces.
+    stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return layers
 
 
@@ -350,7 +391,7 @@ def step_items(
     tile_items = [
         stac.build_tile_item(
             tile,
-            sorted(tile_files, key=lambda f: f.asset_key),
+            sorted(tile_files, key=stac.by_asset_key),
             raster_info[tile],
             glacier_fraction=fractions[tile][0],
             glacier_fraction_buffered=fractions[tile][1],
@@ -368,13 +409,10 @@ def step_items(
         bbox=bbox,
         start=start,
         end=end,
-        assets=mosaic_assets(state, frame),
+        assets={**mosaic_assets(state, frame), **visual_assets(state)},
         build_fingerprint=build_fingerprint,
     )
-    mosaic_item.properties["description"] = (
-        f"Annual mosaics of the GLACE composites for {args.year}, on the canonical "
-        "WebMercatorQuad grid every year of this collection shares."
-    )
+    mosaic_item.properties["description"] = vocabulary().mosaic_item_description(args.year)
 
     with tempfile.TemporaryDirectory() as tmp:
         staged_tiles = Path(tmp) / "tiles"
@@ -386,9 +424,10 @@ def step_items(
             staged_mosaics,
             tiles_collection_id=scope.tiles_collection_id,
             mosaics_collection_id=scope.mosaics_collection_id,
-            scope_title=scope.catalog_title,
+            scope_title=vocabulary().catalog.short_title,
             portolan_schema=PORTOLAN_SCHEMA,
             year=args.year,
+            year_prose=render_year_prose(vocabulary(), args.year),
         )
         # Root-relative hrefs, so the year's slice survives a bucket move
         # untouched; finalize-catalog rebases them onto the published URL.
@@ -414,26 +453,93 @@ def mosaic_assets(
     state: stac.BuildState,
     frame: pd.DataFrame,
 ) -> dict[str, stac.MosaicAsset]:
-    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing."""
+    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing.
+
+    Title, description and roles are the collection's ``item_assets`` entry for
+    the same key, from the vocabulary; the band, the digest and the resolution
+    are what the step measured.
+    """
     written = state.details.get("mosaics", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for asset_key, detail in sorted(written.items()):
-        is_num = asset_key.endswith("_qa_num")
-        band: dict[str, Any] = {
-            "name": asset_key,
-            "data_type": "float32",
-            "nodata": "nan",
-        }
+        entry = vocabulary().item_asset(asset_key, "mosaics")
+        band: dict[str, Any] = dict(entry["bands"][0])
         unit = frame.loc[frame["asset_key"] == asset_key, "band_unit"]
-        if not is_num and len(unit) and str(unit.iloc[0]):
+        if not asset_key.endswith("_qa_num") and len(unit) and str(unit.iloc[0]):
             band["unit"] = str(unit.iloc[0])
+        # The five statistics the writer embedded in the COG, republished as the
+        # raster extension's `bands[].statistics` rather than measured again.
+        statistics = detail.get("statistics")
+        if statistics:
+            band["statistics"] = statistics
         assets[asset_key] = stac.MosaicAsset(
             href=f"{asset_key}.tif",
-            title=f"{asset_key} annual mosaic",
-            roles=["quality"] if "_qa_" in asset_key else ["data", "cloud-optimized"],
+            title=entry["title"],
+            description=entry["description"],
+            roles=list(entry["roles"]),
             size=detail.get("size"),
+            checksum=detail.get("checksum"),
             band=band,
             extra={"raster:spatial_resolution": detail.get("resolution")},
+        )
+    return assets
+
+
+def _require_baked_stretch(key: str, detail: Mapping[str, Any]) -> None:
+    """Refuse to describe an archive with a stretch other than the one it baked.
+
+    The description states the vocabulary's range; the build state records the
+    range the tiler actually used. They agree unless a state file outlived a
+    change to ``metadata/assets.yaml``, in which case the archive is stale and
+    describing it with the new numbers would be a lie.
+
+    Raises
+    ------
+    SystemExit
+        Naming the archive and both ranges.
+    """
+    style = vocabulary().display(stac.data_key(key))
+    baked = (float(detail["vmin"]), float(detail["vmax"]))
+    if isinstance(style, RgbStyle):
+        expected = (style.ranges[0][0], style.ranges[0][1])
+    else:
+        expected = (float(style.vmin or 0), float(style.vmax or 0))
+    if baked != expected:
+        msg = (
+            f"{key}: the archive was baked with {baked} but metadata/assets.yaml now says "
+            f"{expected}; rebuild it with --force-from pmtiles"
+        )
+        raise SystemExit(msg)
+
+
+def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
+    """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
+
+    One asset per archive, with the ``visual`` role and never ``data``: the pixels
+    are an 8-bit stretch of the mosaic, backscatter in decibels, and an analysis
+    pipeline that read one would be reading a picture. Title and description come
+    from the vocabulary, the same entry the collection's ``item_assets`` carries,
+    with the zoom range the step actually tiled; the archive's own header carries
+    bounds and zoom range too, and the asset adds the grid and the digest.
+    """
+    written = state.details.get("pmtiles", {})
+    assets: dict[str, stac.MosaicAsset] = {}
+    for key, detail in sorted(written.items()):
+        _require_baked_stretch(key, detail)
+        entry = vocabulary().viz_asset(
+            key,
+            min_zoom=int(detail["min_zoom"]),
+            max_zoom=int(detail["max_zoom"]),
+        )
+        assets[key] = stac.MosaicAsset(
+            href=detail["url"],
+            title=entry["title"],
+            description=entry["description"],
+            roles=list(entry["roles"]),
+            media_type=entry["type"],
+            size=detail.get("size_bytes"),
+            checksum=detail.get("checksum"),
+            extra={"proj:code": "EPSG:3857"},
         )
     return assets
 
@@ -472,9 +578,20 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "worker processes for the web-map tiler; defaults to one per core. "
-            "Each decodes raster blocks, so this is the lever to pull on a memory-"
-            "constrained machine -- unlike --max-workers, it is not a thread count"
+            "worker processes for the web-map tiler; defaults to one per core. Each "
+            "runs with a bounded GDAL cache and costs well under a gigabyte -- unlike "
+            "--max-workers, it is not a thread count"
+        ),
+    )
+    parser.add_argument(
+        "--concurrent-layers",
+        type=int,
+        default=webmap.DEFAULT_CONCURRENT_LAYERS,
+        help=(
+            "web-map layers warped at once before tiling. Each holds one RGBA raster of "
+            "the whole scope in the cache while it runs (about 100 MB for ch, 1.1 GB for "
+            "the Alps), so this is what disk and memory scale with; raise it towards 14 "
+            "where the machine has room, lower it first when it is killed for memory"
         ),
     )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
@@ -511,21 +628,28 @@ def main() -> None:
     prints = {
         "copy": copy_print,
         "vrt": copy_print,
+        # The band names are written into the file headers, so a renamed band
+        # is a rebuilt mosaic.
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
             mosaics.MAX_Z_ERROR,
             mosaics.COG_CREATION,
             args.layers,
+            [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
         # The committed style is the source of the stretches and ramps (M-27),
         # so its bytes are what a rebuild has to notice: edit a range and every
         # archive that baked the old one is stale.
+        # The tiler's own identity is an input too: its output changed when it
+        # moved in-tree (R-12), and archives of one year must not silently keep
+        # an older tiler's pixels beside another year's.
         "pmtiles": stac.fingerprint(
             copy_print,
             scope.display_grid,
             args.style.read_bytes().decode() if args.style.exists() else None,
             args.layers,
+            tiler.WRITER,
         ),
     }
     prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION)
@@ -550,10 +674,12 @@ def main() -> None:
                 prints[step],
                 {
                     key: {
-                        "size": path.stat().st_size,
+                        "size": write.path.stat().st_size,
                         "resolution": scope.analysis_grid.resolution,
+                        "checksum": write.checksum,
+                        "statistics": write.statistics.to_dict(),
                     }
-                    for key, path in written.items()
+                    for key, write in written.items()
                 },
             )
         elif step == "pmtiles":
@@ -573,6 +699,7 @@ def main() -> None:
                     layer.url.removesuffix(".pmtiles"): {
                         "url": layer.url,
                         "size_bytes": layer.size_bytes,
+                        "checksum": layer.checksum,
                         "bounds": layer.bounds,
                         "min_zoom": layer.min_zoom,
                         "max_zoom": layer.max_zoom,

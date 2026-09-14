@@ -4,7 +4,7 @@ Conformance means passing [rashid](https://github.com/portolan-sdi/rashid), not
 claiming to conform, so it runs in CI:
 
 ```bash
-python3 tests/test_conformance.py
+uv run tests/test_conformance.py
 ```
 
 That gate fails on any error-severity finding whose rule is not listed below.
@@ -30,11 +30,18 @@ same collection documents that are committed here:
 0 error(s), 15 warning(s), 0 info(s) across 30 files     # 25-item year
 ```
 
-Re-run this against the real staged tree before every publication:
+Re-run this against the built store before every publication. rashid takes a
+local catalog directory only, so mirror the store's documents first (the asset
+hrefs are absolute public URLs, so the bytes checked are the published ones):
 
 ```bash
-rashid check "$GLACE_STORE_ROOT" --schema --data
+uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
+uv run rashid check /tmp/glace-docs --schema --data --live \
+    --live-base-url https://data.source.coop/lqgentner/glace-ch
 ```
+
+Run on 2026-09-08 over the four published Swiss years: 0 errors, 4 warnings
+(`PTL-CAT-001`, accepted below) across 583 files.
 
 ## Accepted Deviations
 
@@ -87,9 +94,14 @@ consumer at. Revisit if browsing the published tree proves genuinely painful.
 ### `PTL-AST-003` — `file:size` and `file:checksum` on collection assets
 
 *"every asset should carry file:size and file:checksum."* The collection-level
-assets (`items`, `glacier-fractions`, `thumbnail`) point at generated files whose bytes do not exist when the
-collection document is written by hand. `finalize-catalog.py` fills both fields
-from the real bytes at publication.
+assets (`items`, `glacier-fractions`, `thumbnail`, `style-default`) point at
+generated files whose bytes do not exist when the collection document is written
+by hand -- the style included, since the year in its `pmtiles://` sources is
+rewritten at finalize time, so the published bytes are not the tracked ones.
+`finalize-catalog.py` fills both fields from the real bytes — on the **store
+copy** of the document, which is what is published; the tracked document keeps
+the fields absent, and an asset whose bytes are missing at finalize time is
+warned about and left unstamped rather than guessed.
 
 Portolan is explicit that a stale value is a conformance failure and that a
 publisher who cannot keep one current should omit it, so an absent field here is
@@ -128,16 +140,17 @@ outlive the bug.
 
 Where stac-check and rashid disagree, **rashid wins**.
 
-## Requirements Not Yet Met
+## Requirements Proved Elsewhere, and the One Still Open
 
-These are not deviations — they are unfinished work that will make the published
-catalog non-conformant if it ships before they land. Tracked in
-[`MIGRATION.md`](MIGRATION.md).
+One rule group is still unproven, and it is a property of the host rather than of
+the metadata. The rest of this section's former entries have landed; they are
+kept here with what closed them, because a reader wants to know the claim is
+tested rather than assumed. Open work is tracked in [`STATUS.md`](STATUS.md).
 
 | Rule | Requirement | State |
 |---|---|---|
-| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | written by s1bursts 0.4.0; the Swiss 2021–2024 composites are being regenerated with it (P-1) |
-| `PTL-DAT-010` | a COG band with nodata declares its valid percent | as above |
-| `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | not yet implemented in the geoparquet writer |
-| `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | not yet asserted by a gate |
-| `PTL-LIV-001..005` | the host honours range requests and CORS | untested; Source Cooperative is expected to satisfy this, and `rashid check --live` will say so |
+| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **satisfied for both writers.** The Swiss 2021–2024 composites were regenerated with s1bursts 0.5.0 and verified on 2026-09-08 against real headers: the five `STATISTICS_*` tags on both a float32 data band and the uint16 QA-NUM band, and on every row of all four manifests. The annual mosaics are written *here*, so `build_mosaic_cog` takes the statistics in one streaming pass over the source VRT and writes them onto the band before the COG copy; `tests/test_mosaic_stats.py` reads them back with PAM disabled |
+| `PTL-DAT-010` | a COG band with nodata declares its valid percent | **satisfied for both writers**, from the same headers and the same pass; the publisher keys the QA-NUM count to the data asset it counts for, and every mosaic band is float32 with a NaN sentinel |
+| `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks and fails when the ordering is removed |
+| `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **implemented and gated**, through rashid's `_check_mirror` over an in-memory catalog graph of 400 and then 800 items |
+| `PTL-LIV-001..005` | the host honours range requests and CORS | **passes** on Source Cooperative: `rashid check --live` over the published Swiss catalog, 2026-09-08, 0 errors |

@@ -47,7 +47,7 @@ from dataclasses import dataclass
 import logging
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
 import defusedxml.ElementTree as DefusedET
@@ -55,15 +55,20 @@ from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
 from freezebase.raster import get_utm_zone_string, rasterio_open
 from freezebase.s3 import s3_env
 from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_rgb_vrt, create_warped_vrt
+import numpy as np
 from rasterio.enums import Resampling
 import rasterio.shutil
 from rasterio.warp import transform_bounds
 from upath import UPath
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.stac.store import multihash_sha256_file
+from glace_catalog.stac.tags import BandStatistics
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
+
+    from rasterio.io import DatasetReader
 
     from glace_catalog.scopes import Grid, Scope
     from glace_catalog.stac.naming import CompositeFile
@@ -127,6 +132,22 @@ COG_CREATION = {
 
 256 px blocks so a block is exactly one web-map tile, and ``AVERAGE`` overviews
 so the reduced levels are means of the level above rather than samples of it.
+"""
+
+
+STATISTICS_TAGS: dict[str, str] = {
+    "minimum": "STATISTICS_MINIMUM",
+    "maximum": "STATISTICS_MAXIMUM",
+    "mean": "STATISTICS_MEAN",
+    "stddev": "STATISTICS_STDDEV",
+    "valid_percent": "STATISTICS_VALID_PERCENT",
+}
+"""GDAL band tag each :class:`~glace_catalog.stac.tags.BandStatistics` field is written as.
+
+``PTL-DAT-009`` requires the first four in the file's own ``GDAL_METADATA``, and
+``PTL-DAT-010`` the fifth wherever the band declares a nodata value — which
+every mosaic does, as float32 with a NaN sentinel. rashid checks that they are
+present, not what they say.
 """
 
 
@@ -384,26 +405,52 @@ def chain_env(vrts: YearVrts) -> Generator[None]:
         yield
 
 
+def _parse_vrt(text: str) -> ET.Element:
+    """Parse VRT XML, through the hardened parser.
+
+    Two parsers appear in this module and they do not overlap. Anything *read*
+    goes through ``defusedxml``, which refuses the entity-expansion and external
+    entity constructs the stdlib parser accepts; a VRT is written by GDAL but
+    read back from wherever the store lives, so it is input. Anything *built*
+    uses ``xml.etree.ElementTree``, which has no parser in it — defusedxml
+    deliberately ships no serializer, and element construction is not an attack
+    surface. Parsing is confined here so no caller has to know that.
+    """
+    return DefusedET.fromstring(text)
+
+
 def tagged_vrt(
     src_vrt: Path | UPath,
     dst_vrt: Path,
     *,
     band_name: str,
     tags: Mapping[str, str] | None = None,
+    band_tags: Mapping[str, str] | None = None,
 ) -> Path:
-    """Copy a VRT with dataset tags and a band description attached.
+    """Copy a VRT with dataset tags, band tags and a band description attached.
 
     The tags have to be on the *source*: a finished COG cannot be reopened to add
     them without breaking the layout that makes it cloud-optimized, and GDAL
     carries a VRT's metadata into the file it copies out of it.
+
+    Parameters
+    ----------
+    src_vrt, dst_vrt
+        VRT read, and the tagged copy written.
+    band_name
+        Description written onto the first band.
+    tags
+        Dataset-level metadata.
+    band_tags
+        Band-level metadata of the first band, which is where the
+        ``STATISTICS_*`` values Portolan requires have to sit.
 
     Returns
     -------
     pathlib.Path
         The tagged VRT.
     """
-    tree = DefusedET.fromstring(UPath(src_vrt).read_text())
-    root = tree
+    root = _parse_vrt(UPath(src_vrt).read_text())
     if tags:
         metadata = ET.Element("Metadata")
         for key, value in sorted(tags.items()):
@@ -411,6 +458,11 @@ def tagged_vrt(
         root.insert(0, metadata)
     band = root.find("VRTRasterBand")
     if band is not None:
+        if band_tags:
+            metadata = ET.Element("Metadata")
+            for key, value in sorted(band_tags.items()):
+                ET.SubElement(metadata, "MDI", key=key).text = str(value)
+            band.insert(0, metadata)
         description = band.find("Description")
         if description is None:
             description = ET.SubElement(band, "Description")
@@ -420,6 +472,76 @@ def tagged_vrt(
     return dst_vrt
 
 
+def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
+    """Exact statistics of a single-band source, accumulated window by window.
+
+    One streaming pass, never the whole band in memory: the Alps mosaic is
+    24 100 x 14 475 float32, which is 1.4 GiB read at once. Sums are accumulated
+    in float64 and the standard deviation is the **population** one, as GDAL
+    computes it, so the values are the ones a reader would get from
+    ``gdalinfo -stats`` rather than an approximation of them.
+
+    Valid pixels are the finite ones: every mosaic band is float32 with a NaN
+    nodata sentinel, so NaN is exactly the nodata mask.
+
+    Raises
+    ------
+    ValueError
+        If the band has no finite pixel at all. An empty mosaic is a broken run,
+        not a band that legitimately has nothing to say about itself.
+    """
+    total = 0
+    count = 0
+    value_sum = 0.0
+    square_sum = 0.0
+    minimum = math.inf
+    maximum = -math.inf
+    for _, window in src.block_windows(1):
+        block = src.read(1, window=window)
+        values = block[np.isfinite(block)].astype("float64")
+        total += int(block.size)
+        count += int(values.size)
+        if values.size:
+            value_sum += float(values.sum())
+            square_sum += float(np.square(values).sum())
+            minimum = min(minimum, float(values.min()))
+            maximum = max(maximum, float(values.max()))
+    if not count:
+        msg = f"{asset_key}: the mosaic has no valid pixel, so it has no statistics to publish."
+        raise ValueError(msg)
+    mean = value_sum / count
+    # Population variance, clamped: the one-pass form can go slightly negative
+    # on a constant band where the two accumulated sums cancel.
+    variance = max(square_sum / count - mean * mean, 0.0)
+    return BandStatistics(
+        minimum=minimum,
+        maximum=maximum,
+        mean=mean,
+        stddev=math.sqrt(variance),
+        valid_percent=100.0 * count / total,
+    )
+
+
+@dataclass(frozen=True)
+class MosaicWrite:
+    """One written mosaic COG, with what the item has to say about it.
+
+    Parameters
+    ----------
+    path
+        The file written.
+    checksum
+        Multihash-encoded sha256 of its bytes, published as ``file:checksum``.
+    statistics
+        The band statistics embedded in it, so the item can publish the same
+        five values under ``bands[].statistics`` without a second header read.
+    """
+
+    path: Path
+    checksum: str
+    statistics: BandStatistics
+
+
 def build_mosaic_cog(
     src_vrt: Path | UPath,
     out_path: Path,
@@ -427,12 +549,21 @@ def build_mosaic_cog(
     asset_key: str,
     band_name: str,
     tags: Mapping[str, str] | None = None,
-) -> Path:
+) -> MosaicWrite:
     """Write one canonical-grid VRT as a LERC_ZSTD mosaic COG.
 
     A streaming windowed copy of the VRT, so nothing larger than a block is ever
     in memory — where the earlier in-RAM merge held a whole continental band at
-    once.
+    once. The statistics are taken in one further streaming pass over the same
+    VRT and written onto the band *before* the copy, which is the only way they
+    reach the COG's own ``GDAL_METADATA`` header: a finished COG cannot be
+    reopened to add them without either losing its layout or leaving them in a
+    PAM sidecar, and ``PTL-DAT-009`` requires them in the file.
+
+    They are the statistics of the **source** values. The written pixels differ
+    from them by at most the LERC bound :func:`max_z_error`, which is orders of
+    magnitude below each quantity's own noise; rashid checks that the five tags
+    are present rather than recomputing them.
 
     Parameters
     ----------
@@ -451,21 +582,30 @@ def build_mosaic_cog(
 
     Returns
     -------
-    pathlib.Path
-        The path written.
+    MosaicWrite
+        The path written, its digest and its band statistics.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     creation = {**COG_CREATION, "MAX_Z_ERROR": max_z_error(asset_key)}
     logger.info("Writing %s (max_z_error %g)", out_path.name, creation["MAX_Z_ERROR"])
+    with rasterio_open(src_vrt) as src:
+        statistics = band_statistics(src, asset_key=asset_key)
     described = tagged_vrt(
         src_vrt,
         Path(str(src_vrt)).with_name(f"{Path(str(src_vrt)).stem}_tagged.vrt"),
         band_name=band_name,
         tags=tags,
+        band_tags={
+            tag: repr(float(getattr(statistics, field))) for field, tag in STATISTICS_TAGS.items()
+        },
     )
     with rasterio_open(described) as src:
         rasterio.shutil.copy(src, str(out_path), **creation)
-    return out_path
+    return MosaicWrite(
+        path=out_path,
+        checksum=multihash_sha256_file(out_path),
+        statistics=statistics,
+    )
 
 
 def build_mosaic_cogs(
@@ -475,7 +615,7 @@ def build_mosaic_cogs(
     band_names: Mapping[str, str],
     tags: Mapping[str, Mapping[str, str]] | None = None,
     layers: Sequence[str] | None = None,
-) -> dict[str, Path]:
+) -> dict[str, MosaicWrite]:
     """Write one mosaic COG per band from the chain's linear step.
 
     Parameters
@@ -495,12 +635,12 @@ def build_mosaic_cogs(
 
     Returns
     -------
-    dict[str, pathlib.Path]
-        The COG written per asset key.
+    dict[str, MosaicWrite]
+        The COG written per asset key, with its digest and band statistics.
     """
     tags = tags or {}
     selected = sorted(vrts.linear if layers is None else set(layers) & set(vrts.linear))
-    written: dict[str, Path] = {}
+    written: dict[str, MosaicWrite] = {}
     with chain_env(vrts):
         for asset_key in selected:
             written[asset_key] = build_mosaic_cog(
@@ -513,18 +653,18 @@ def build_mosaic_cogs(
     return written
 
 
-def mosaic_band_name(asset_key: str, source_band_name: str) -> str:
-    """Band description of a mosaic, which is the tile's unless the quantity changed.
+def mosaic_band_name(asset_key: str) -> str:
+    """Band description of a mosaic: its asset key, like every band in the catalog.
 
-    A QA-NUM mosaic is a *mean* of contributing observations rather than a count,
-    so it has to say so: it is no longer the same quantity as its source.
+    One band per file, so the asset key identifies it, and a file separated from
+    the catalog still says what it holds. The tiles carry the same rule once
+    s1bursts writes it (UPSTREAM.md S-4); the mosaic's ``LAYER_DESCRIPTION`` tag
+    is where the count-versus-mean difference is spelled out.
     """
-    if asset_key.endswith("_qa_num"):
-        return "mean contributing observations"
-    return source_band_name or asset_key
+    return asset_key
 
 
-def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict, list[float]]:
+def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list[float]]:
     """WGS84 footprint and bbox of the tiles a year actually holds.
 
     The mosaic sits on the scope's canonical extent, which is a bounding box
@@ -543,7 +683,10 @@ __all__ = [
     "COG_CREATION",
     "DECIBEL_BANDS",
     "MAX_Z_ERROR",
+    "STATISTICS_TAGS",
+    "MosaicWrite",
     "YearVrts",
+    "band_statistics",
     "build_cog_chain",
     "build_mosaic_cog",
     "build_mosaic_cogs",

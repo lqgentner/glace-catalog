@@ -19,14 +19,15 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
-from secrets import token_hex
 from typing import TYPE_CHECKING, Any
 
+from freezebase.s3 import atomic_write_text, list_object_sizes
+from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
-from glace_catalog.stac.naming import CompositeFile, parse_composite_name
-from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
+from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -49,6 +50,8 @@ reading the collection document first.
 README_NAME = "README.md"
 AGENTS_NAME = "AGENTS.md"
 THUMBNAIL_NAME = "thumbnail.png"
+ASSETS_DIR = "_assets"
+"""Root directory of files the catalog documents link but do not describe."""
 
 TILES_DIR = "tiles"
 MOSAICS_DIR = "mosaics"
@@ -66,7 +69,7 @@ STATISTICS_COLUMNS: dict[str, str] = {
     "stddev": "stat_stddev",
     "valid_percent": "stat_valid_percent",
 }
-"""The embedded band statistics, as :attr:`RasterInfo.statistics` key to manifest column.
+"""The embedded band statistics, as :class:`BandStatistics` field to manifest column.
 
 Read from the COG's own band tags at write time, so the publisher can put them on
 ``bands[].statistics`` without a second read of the header.
@@ -131,27 +134,24 @@ class StoreLayout:
         |   |-- glacier-fractions.parquet
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
-        |       |-- manifest.parquet  config.yaml
         |       |-- .build-state.json  .items.parquet
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
             |-- items.parquet  thumbnail.png  styles/
-            |-- pmtiles/{year}/{layer}.pmtiles
-            `-- {year}/item.json + 12 analysis COGs
+            `-- {year}/item.json + 12 analysis COGs + 14 web-map archives
 
     One thing is deliberately not mirrored from the old flat layout: there is no
     per-year directory shared by both collections, because a year is not a thing
     either collection owns.
 
-    The web-map archives sit under ``mosaics/pmtiles/{year}/`` rather than beside
-    the rasters they render, for two reasons. They are registered as
-    *collection*-level links, so putting them inside an item's own directory
-    would place a collection-level product under an item; and the stems would
-    otherwise collide — ``coh12_vv.tif`` is linear float32 and
-    ``coh12_vv.pmtiles`` is a pre-stretched 8-bit rendering, the backscatter ones
-    in decibels. Two files one letter apart holding different quantities is the
-    kind of thing that reads fine until someone compares them.
+    The web-map archives sit beside the rasters they render, in the year's own
+    item directory, because each one is an asset of that year's item. The
+    ``_viz`` suffix keeps the two products apart in a listing: ``coh12_vv.tif``
+    is linear float32 and ``coh12_vv_viz.pmtiles`` is a pre-stretched 8-bit
+    rendering, the backscatter ones in decibels, and two files one letter apart
+    holding different quantities is the kind of thing that reads fine until
+    someone compares them.
 
     Dotfiles are build state, never published: ``.build-state.json`` records what
     a step already did, and ``.items.parquet`` is the year's slice of the item
@@ -185,9 +185,14 @@ class StoreLayout:
         return self.root / AGENTS_NAME
 
     @property
-    def logo(self) -> Path | UPath:
-        """Catalog logo, linked ``rel: "icon"`` from the root catalog."""
-        return self.root / "_assets" / "logo.png"
+    def icon(self) -> Path | UPath:
+        """Catalog wordmark, linked ``rel: "icon"`` from the root catalog.
+
+        An SVG rather than a raster: registries and browsers display it at
+        whatever size they render a catalog card at (``PTL-LNK-007``), and it
+        is the same file the viewer draws its header from.
+        """
+        return self.root / ASSETS_DIR / "glace-wordmark.svg"
 
     # -- tiles collection ------------------------------------------------
 
@@ -280,14 +285,14 @@ class StoreLayout:
         """MapLibre GL style assets of the mosaics collection."""
         return self.mosaics / "styles"
 
-    def pmtiles(self, year: int) -> Path | UPath:
-        """Directory of one year's web-map archives.
+    def viz(self, year: int, asset_key: str) -> Path | UPath:
+        """One year's web-map archive of ``asset_key``, beside the COG it renders.
 
-        Deliberately not inside the year's item directory: these are registered
-        as collection-level links, and keeping them apart stops
-        ``coh12_vv.pmtiles`` sitting beside the ``coh12_vv.tif`` it renders.
+        Same directory, distinct stem: ``coh12_vv_viz.pmtiles`` next to
+        ``coh12_vv.tif``. The archive is an asset of the year item with the
+        ``visual`` role and, on the collection, a ``rel="pmtiles"`` link.
         """
-        return self.mosaics / "pmtiles" / str(year)
+        return self.mosaic_year(year) / viz_filename(asset_key)
 
 
 def read_manifest(path: Path | UPath) -> pd.DataFrame:
@@ -307,6 +312,30 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
     return frame
 
 
+MULTIHASH_SHA256 = "1220"
+"""Multihash prefix of a 32-byte sha256 digest, the form ``file:checksum`` requires."""
+
+
+def multihash_sha256(payload: bytes) -> str:
+    """Multihash-encoded sha256 of some bytes, the form ``file:checksum`` requires.
+
+    ``1220`` is the multihash prefix for a 32-byte sha256 digest: the same
+    encoding the run manifest carries for every composite, so a checksum this
+    writes and one the pipeline measured are read the same way.
+    """
+    return MULTIHASH_SHA256 + hashlib.sha256(payload).hexdigest()
+
+
+def multihash_sha256_file(path: Path | UPath) -> str:
+    """Multihash-encoded sha256 of a file, streamed rather than read at once.
+
+    Same encoding as :func:`multihash_sha256`, for the files this repository
+    writes itself: an annual mosaic is hundreds of megabytes, and holding one in
+    memory to hash it would undo the streaming the writer is careful about.
+    """
+    return MULTIHASH_SHA256 + file_sha256(path)
+
+
 def manifest_digest(frame: pd.DataFrame) -> str:
     """Content digest of a manifest, as the fingerprint the copy step keys on.
 
@@ -320,24 +349,6 @@ def manifest_digest(frame: pd.DataFrame) -> str:
             "\t".join(str(record[column]) for column in payload.columns).encode() + b"\n",
         )
     return digest.hexdigest()
-
-
-def list_objects(directory: Path | UPath) -> dict[str, int]:
-    """List one prefix as ``{filename: size}``.
-
-    One listing replaces one remote open per file, which is what makes checking
-    a 26 500-object year affordable at all. Only the size is taken: an ETag is
-    the MD5 for a single-part upload and something else entirely for a multipart
-    one, so keying on it would silently constrain how every writer uploads.
-    """
-    directory = UPath(directory)
-    entries: dict[str, int] = {}
-    for info in directory.fs.ls(str(directory.path), detail=True):
-        name = str(info["name"]).rsplit("/", 1)[-1]
-        if not name:
-            continue
-        entries[name] = int(info.get("size") or info.get("Size") or 0)
-    return entries
 
 
 @dataclass(frozen=True)
@@ -412,6 +423,11 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
 
     This is what collapses the publisher's most expensive work: the survey that
     used to be one remote open per file becomes one read of the manifest.
+
+    Raises
+    ------
+    ValueError
+        If a row carries some but not all of the five ``stat_*`` columns.
     """
     info: dict[str, dict[str, RasterInfo]] = {}
     for row in frame.to_dict("records"):
@@ -420,11 +436,15 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
             for tag in PROVENANCE_TAGS
             if tag in row and row[tag] is not None and pd.notna(row[tag])
         }
-        statistics = {
-            name: float(row[column])
-            for name, column in STATISTICS_COLUMNS.items()
-            if column in row and row[column] is not None and pd.notna(row[column])
-        }
+        statistics = band_statistics(
+            {
+                name: float(row[column])
+                for name, column in STATISTICS_COLUMNS.items()
+                if column in row and row[column] is not None and pd.notna(row[column])
+            },
+            names=STATISTICS_COLUMNS,
+            source=f"{row['filename']} in the manifest",
+        )
         checksum = row["sha256"]
         nodata = row["nodata"]
         info.setdefault(str(row["tile"]), {})[str(row["asset_key"])] = RasterInfo(
@@ -452,7 +472,7 @@ def manifest_valid_percents(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
     columns = ["tile", "asset_key", "valid_percent"]
     for record in frame.loc[frame["valid_percent"].notna(), columns].to_dict("records"):
         tile, key = str(record["tile"]), str(record["asset_key"])
-        percents.setdefault(tile, {})[key] = float(record["valid_percent"])  # type: ignore[arg-type]
+        percents.setdefault(tile, {})[key] = float(record["valid_percent"])
     return percents
 
 
@@ -478,7 +498,7 @@ def copy_composites(
 ) -> CopyResult:
     """Copy a year's composites into the store, server-side.
 
-    Each file lands at ``{root}/{year}/{tile}/{asset_key}.tif`` through a
+    Each file lands at ``{root}/tiles/{year}/{tile}/{asset_key}.tif`` through a
     ``CopyObject``: no download, no upload, no egress, and the bytes and the
     compression the run chose are preserved exactly.
 
@@ -501,7 +521,7 @@ def copy_composites(
         How many files were copied and how many were already in place.
     """
     root = UPath(layout.root)
-    destinations = list_objects_recursive(layout.tile_year(year))
+    destinations = list_object_sizes(layout.tile_year(year), recursive=True)
     # An object store needs no directory, but a local store does, and creating
     # them once up front keeps that out of the copy pool.
     for tile in sorted({file.tile for file in files}):
@@ -527,21 +547,6 @@ def copy_composites(
     result = CopyResult(copied=copied, skipped=len(files) - copied)
     logger.info("Copied %d composites into %s: %s", len(files), layout.tile_year(year), result)
     return result
-
-
-def list_objects_recursive(directory: Path | UPath) -> dict[str, int]:
-    """List one prefix and everything under it as ``{relative path: size}``."""
-    directory = UPath(directory)
-    prefix = str(directory.path).rstrip("/") + "/"
-    entries: dict[str, int] = {}
-    if not directory.fs.exists(str(directory.path)):
-        return entries
-    for info in directory.fs.find(str(directory.path), detail=True).values():
-        name = str(info["name"])
-        if not name.startswith(prefix):
-            continue
-        entries[name[len(prefix) :]] = int(info.get("size") or info.get("Size") or 0)
-    return entries
 
 
 def upload_tree(local: Path, destination: Path | UPath) -> int:
@@ -627,18 +632,7 @@ class BuildState:
             sort_keys=True,
             default=str,
         )
-        path = UPath(self.path)
-        if path.protocol == "s3":
-            # PutObject is atomic on its own.
-            path.write_text(payload)
-            return
-        partial = path.with_name(f"{path.name}.{token_hex(8)}.partial")
-        try:
-            partial.write_text(payload)
-            partial.replace(path)
-        except BaseException:
-            partial.unlink(missing_ok=True)
-            raise
+        atomic_write_text(self.path, payload)
 
     def invalidate_from(self, step: str) -> None:
         """Drop the fingerprint of ``step`` and of every step that follows it."""

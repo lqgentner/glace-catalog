@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 from freezebase.raster import rasterio_open
 import numpy as np
 
+from glace_catalog.stac.naming import by_asset_key
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
@@ -203,7 +205,85 @@ _STATISTICS_TAGS = {
     "stddev": "STATISTICS_STDDEV",
     "valid_percent": "STATISTICS_VALID_PERCENT",
 }
-"""The GDAL band-tag items the writer embeds, keyed as :attr:`RasterInfo.statistics`."""
+"""The GDAL band-tag items the writer embeds, keyed as :class:`BandStatistics` field."""
+
+
+@dataclass(frozen=True)
+class BandStatistics:
+    """The five statistics one band publishes, under the raster extension's names.
+
+    A record rather than a mapping because the five travel together: Portolan
+    raises them to a MUST (``PTL-DAT-009``, and ``PTL-DAT-010`` for the valid
+    percent wherever a band declares nodata), so a band that carries four of
+    them is a writer bug. Naming them here turns that into a ``ValueError``
+    where the manifest or the header is read, rather than a ``KeyError`` at
+    publication.
+
+    Parameters
+    ----------
+    minimum, maximum, mean, stddev
+        Value statistics over the band's valid pixels, in the band's own units.
+    valid_percent
+        Percentage of the band's pixels that are not nodata.
+    """
+
+    minimum: float
+    maximum: float
+    mean: float
+    stddev: float
+    valid_percent: float
+
+    def to_dict(self) -> dict[str, float]:
+        """Render as the ``bands[].statistics`` object of the raster extension."""
+        return {
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "mean": self.mean,
+            "stddev": self.stddev,
+            "valid_percent": self.valid_percent,
+        }
+
+
+def band_statistics(
+    values: Mapping[str, float],
+    *,
+    names: Mapping[str, str],
+    source: str,
+) -> BandStatistics | None:
+    """Assemble the five band statistics, refusing a partial record.
+
+    Parameters
+    ----------
+    values
+        The statistics that were found, keyed by :class:`BandStatistics` field.
+        Absent fields are simply absent from the mapping.
+    names
+        Field name to the name it carries in the source — a GDAL band tag or a
+        manifest column — so the error names what the reader looked for.
+    source
+        What was read, named in the error.
+
+    Returns
+    -------
+    BandStatistics or None
+        The record, or ``None`` when the source carries none of the five: an
+        all-nodata band legitimately has no statistics.
+
+    Raises
+    ------
+    ValueError
+        If the source carries some of the five but not all of them.
+    """
+    if not values:
+        return None
+    missing = [names[field_name] for field_name in names if field_name not in values]
+    if missing:
+        msg = (
+            f"{source} carries only part of the band statistics: "
+            f"{', '.join(missing)} missing. All five are published together."
+        )
+        raise ValueError(msg)
+    return BandStatistics(**values)
 
 
 @dataclass(frozen=True)
@@ -226,13 +306,12 @@ class RasterInfo:
     size: int | None = None
     checksum: str | None = None
     """Multihash-encoded sha256 of the file, as ``file:checksum`` requires."""
-    statistics: dict[str, float] = field(default_factory=dict)
-    """Embedded band statistics, as ``minimum``/``maximum``/``mean``/``stddev``/
-    ``valid_percent``.
+    statistics: BandStatistics | None = None
+    """Embedded band statistics, or ``None`` for a band that carries none.
 
     Portolan raises these to a MUST (``PTL-DAT-009``, and ``PTL-DAT-010`` for the
-    valid percent wherever a band declares nodata), so an empty mapping here is a
-    raster that cannot be published, not a field that happens to be absent.
+    valid percent wherever a band declares nodata), so ``None`` here is a raster
+    that cannot be published, not a field that happens to be absent.
     """
 
     @property
@@ -257,17 +336,22 @@ def read_raster_info(path: Path | UPath) -> RasterInfo:
     Raises
     ------
     ValueError
-        If the file does not start with a TIFF byte-order marker.
+        If the file does not start with a TIFF byte-order marker, or if its band
+        carries some but not all of the five ``STATISTICS_*`` tags.
     """
     with rasterio_open(path) as src:
         band_tags = src.tags(1)
         info = {
             "tags": dict(src.tags()),
-            "statistics": {
-                name: float(band_tags[tag])
-                for name, tag in _STATISTICS_TAGS.items()
-                if tag in band_tags
-            },
+            "statistics": band_statistics(
+                {
+                    name: float(band_tags[tag])
+                    for name, tag in _STATISTICS_TAGS.items()
+                    if tag in band_tags
+                },
+                names=_STATISTICS_TAGS,
+                source=str(path),
+            ),
             "band_name": src.descriptions[0] or "",
             "band_unit": src.units[0] or "",
             "data_type": src.dtypes[0],
@@ -325,7 +409,7 @@ def survey_tags(
     found: list[RasterProblems] = []
     for tile, files in sorted(by_tile.items()):
         infos = raster_info.get(tile, {})
-        for file in sorted(files, key=lambda f: f.asset_key):
+        for file in sorted(files, key=by_asset_key):
             info = infos.get(file.asset_key)
             problems = (
                 ["no raster metadata was read"] if info is None else tag_problems(file, info)

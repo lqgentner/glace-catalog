@@ -19,7 +19,7 @@ Fails when rashid is absent, or when its version is outside the required range.
 A skip reports a green run for a catalog that no validator read. The failure
 message gives the one command that installs a usable rashid.
 
-Run: python3 tests/test_conformance.py
+Run: uv run tests/test_conformance.py
 """
 import json
 import re
@@ -29,9 +29,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
-
-from publish import load_config  # noqa: E402
 
 # Two findings are structural consequences of generating the item tree rather
 # than committing it, and neither is a metadata defect. Both are recorded in
@@ -44,8 +41,9 @@ from publish import load_config  # noqa: E402
 #                document differ from the published one, which is worse.
 ACCEPTED: set[str] = {"PTL-COL-005"}
 
-config = load_config()
-target = ROOT / config["publish_dir"]
+# Local deviation from upstream: tools/publish.py is deleted (R-8), so the
+# tracked catalog directory is named here instead of read from publish_dir.
+target = ROOT / "catalog"
 
 # 0.1.8 is the first release carrying the spec v0.2.0 rules. Below it, a `self`
 # link and an absolute structural href are both reported as errors, which v0.2.0
@@ -126,5 +124,5 @@ if waived:
 if blocking:
     raise SystemExit(1)
 print(
-    f"OK: rashid {shown} found no blocking errors in {config['publish_dir']}/"
+    f"OK: rashid {shown} found no blocking errors in {target.name}/"
 )

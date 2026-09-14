@@ -1,0 +1,141 @@
+<p align="center">
+<a href="{{ catalog.links.about.href }}">
+<img src="{{ public_base }}/_assets/glace-wordmark.svg" alt="GLACE" width="350">
+</a>
+</p>
+<p align="center">
+{{ catalog.tagline }}
+</p>
+
+---
+
+- 🗺️ [Interactive web map]({{ catalog.links.related.href }})
+- 💾 Dataset on Source Cooperative (you are here)
+- 🧭 [Portolan browser of the STAC catalog]({{ browser_url }})
+- ⚙️ Production pipeline on GitHub (coming soon)
+- 🏷️ [Dataset metadata on GitHub]({{ catalog.links.vcs.href }})
+
+---
+
+> **{{ preliminary_notice }}**
+
+Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
+coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) over
+{{ region }}, {{ first_year }}–{{ last_year }}, as Cloud-Optimized GeoTIFFs with a
+STAC catalog over them. Agents: read [`AGENTS.md`](AGENTS.md).
+
+## Collections
+
+| collection | one item per | grid | what it is for |
+| --- | --- | --- | --- |
+| [tiles](tiles/) | (MGRS square, year) | 10 m, UTM {{ utm_zones }} | analysis, machine learning |
+| [mosaics](mosaics/) | year | {{ analysis_grid.resolution | int }} m, ETRS89-LAEA | inspection, large-scale analysis |
+
+Both cover the same pixels. The tiles hold the main product for scientific
+analysis. The mosaics serve as overviews on one equal-area grid, where every
+year shares the same extent, so the series stacks and differences without
+alignment. The mosaics also carry the web-map product: one PMTiles archive per
+layer and year, drawn by the [GLACE Viewer]({{ catalog.links.related.href }}).
+
+## Data access
+
+All files are anonymous-read on Source Cooperative, with no API key required,
+over HTTPS (`{{ public_base }}/`) or S3
+(`{{ public_s3_base }}/`). Every collection publishes its items as one
+STAC-GeoParquet file, `items.parquet`, which is the query path: one range
+request instead of one HTTP fetch per item.
+
+**Search the catalog.** [rustac](https://github.com/stac-utils/rustac-py)
+searches the item mirror directly:
+
+```python
+import rustac
+
+tiles = "{{ public_base }}/tiles/items.parquet"
+items = rustac.search_sync(
+    tiles,
+    bbox=[7.9, 46.4, 8.2, 46.6],
+    datetime="{{ last_year }}-01-01/{{ last_year + 1 }}-01-01",
+)
+print(len(items), items[0]["assets"]["coh12_vv"]["href"])
+```
+
+**Plot a mosaic.** Read a decimated overview rather than the full raster:
+
+```python
+import numpy as np
+import rasterio
+import matplotlib.pyplot as plt
+
+url = "{{ public_base }}/mosaics/{{ last_year }}/rtc_vv.tif"
+with rasterio.open(url) as src:
+    power = src.read(1, out_shape=(src.height // 8, src.width // 8), masked=True)
+    extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
+plt.imshow(10 * np.log10(power), cmap="{{ portable_cmap("rtc_vv") }}", vmin={{ rescale("rtc_vv").split(",")[0] }}, vmax={{ rescale("rtc_vv").split(",")[1] }}, extent=extent)
+plt.colorbar(label="RTC VV backscatter (dB)")
+```
+
+**Build a data cube.** Find the tiles in an area of interest and load them with
+[odc-stac](https://odc-stac.readthedocs.io/); every year becomes one time step:
+
+```python
+import odc.stac
+import pystac
+
+bbox = [7.9, 46.4, 8.2, 46.6]
+items = rustac.search_sync(tiles, bbox=bbox)
+cube = odc.stac.load(
+    [pystac.Item.from_dict(item) for item in items],
+    bands=["coh12_vv", "rtc_vv"],
+    bbox=bbox,
+    chunks={},
+)
+change = cube.coh12_vv.sel(time="{{ last_year }}") - cube.coh12_vv.sel(time="{{ first_year }}")
+```
+
+**Open the tiles in QGIS.** Build a virtual raster of one year and product
+to stream the COGs:
+
+```python
+from osgeo import gdal
+
+items = rustac.search_sync(tiles, bbox=bbox, datetime="{{ last_year }}-01-01/{{ last_year + 1 }}-01-01")
+gdal.BuildVRT(
+    "coh12_vv_{{ last_year }}.vrt",
+    ["/vsicurl/" + item["assets"]["coh12_vv"]["href"] for item in items],
+)
+```
+
+Tiles from different UTM zones need one VRT per zone; the item mirror's
+`proj:code` column says which.
+
+## About the dataset
+
+Sentinel-1 SLC bursts are processed to 12-day repeat-pass coherence and
+terrain-corrected gamma-nought backscatter, then composited over each year's
+90-day summer window with **local resolution weighting** after
+[Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562): each
+acquisition contributes in proportion to how well it resolves the pixel, so
+layover and shadow are down-weighted rather than averaged in. Every measurement
+carries two QA layers, the number of contributing observations and the
+composite quality map, which is the weighting's own record of how well each
+pixel was resolved.
+
+Stored values are **linear throughout**; use `10*log10(x)` to convert to
+decibels. Every raster carries its description and processing record in its
+GeoTIFF tags.
+
+## License
+
+**{{ catalog.license }}.** Contains modified Copernicus Sentinel data.
+
+## Cite
+
+A citation will be added with the preprint. Until then, cite the repository
+release at [{{ catalog.links.vcs.href | replace("https://github.com/", "") }}]({{ catalog.links.vcs.href }}).
+
+## Comments and contributions
+
+The metadata of this catalog lives on
+[GitHub]({{ catalog.links.vcs.href }}). Issue reports are welcome
+[there]({{ catalog.links.issues.href }}).

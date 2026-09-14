@@ -1,18 +1,13 @@
 """Web-map tiling of the annual mosaics into PMTiles archives.
 
 Colour-maps a display-grid mosaic into RGBA and packs it into one PMTiles
-archive per layer. Nothing is written beside them: what a reader needs in order
-to draw a legend lives in the committed MapLibre style (M-27), and what it needs
-in order to find an archive is a ``rel="pmtiles"`` link on the mosaics
-collection (M-26). The ``layers.json`` manifest both used to travel in is
-retired.
-
-Tiling goes through ``rio-pmtiles``, the rasterio plugin Protomaps recommends for
-raster PMTiles (tippecanoe, its counterpart for vector data, cannot produce
-raster tiles). It reprojects to WebMercator and writes the pyramid in one pass,
-so the only intermediate is the colour-mapped RGBA raster — and that is itself a
-VRT, built from per-band lookup tables, so nothing at continental scale is ever
-materialised.
+archive per layer, named ``{layer}_viz.pmtiles`` so it sits beside the COG it
+renders without sharing its stem. Nothing is written beside them: what a reader
+needs in order to draw a legend lives in the committed MapLibre style (M-27),
+and what it needs in order to find an archive is a ``rel="pmtiles"`` link on the
+mosaics collection (M-26) and an asset with the ``visual`` role on the year
+item, which ``publish-year`` writes from the record this module returns. The
+``layers.json`` manifest both used to travel in is retired.
 
 The source is the **VRT chain's canonical-grid mosaic**, which already sits on
 the WebMercatorQuad grid at the maximum zoom. That retires the double resampling
@@ -20,32 +15,42 @@ of the old 40 m EPSG:3035 overview: at max zoom the tiler's warp is the identity
 and every level below it is a clean 2x decimation, which is why the resampling
 kernel here is ``average`` rather than the ``bilinear`` an oversampled source
 needed.
+
+**The warp happens once per layer.** The colour-mapped RGBA VRT over the chain
+is copied to a local tiled GeoTIFF before anything is tiled, and the tiler
+(:mod:`glace_catalog.tiler`) reads that file. Tiling straight from the VRT was
+measured at 174 s per Swiss layer against 10 s from the local copy: every tile
+of every zoom level warped the 1 716 remote UTM composites over its own ground
+again, nine zoom levels deep, so the object store was read nine times per
+archive. The local copy is written **without overviews**: the levels below z13
+are decimated out of the full-resolution copy, which costs a few seconds per
+archive and keeps the intermediate a third smaller — and disk is the constraint
+at Alpine scale, where the fourteen copies of one year are 15 GB.
 """
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 import logging
 import math
-import os
 from pathlib import Path
-import shutil
-import subprocess
-import sys
 import tempfile
 from typing import TYPE_CHECKING
 
 from freezebase.raster import rasterio_open
-from freezebase.s3 import subprocess_s3_env
 from freezebase.vrt import create_rgba_vrt
 import numpy as np
 import rasterio
-from rasterio.enums import ColorInterp, Resampling
+from rasterio.enums import Resampling
+import rasterio.shutil
 from rasterio.warp import transform_bounds
-from upath import UPath
 
 from glace_catalog.mosaics import chain_env
-from glace_catalog.scopes import MOSAIC_ZOOM
+from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM
+from glace_catalog.stac.naming import viz_filename
+from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import (
     DEFAULT_STYLE_PATH,
     LayerStyle,
@@ -55,9 +60,13 @@ from glace_catalog.styles import (
     ramp_colors,
     resolve_cmap,
 )
+from glace_catalog.tiler import TileSpec, spawn_pool, write_archive
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
+    from concurrent.futures import ProcessPoolExecutor
+
+    from upath import UPath
 
     from glace_catalog.mosaics import YearVrts
 
@@ -66,12 +75,31 @@ logger = logging.getLogger(__name__)
 WEB_MERCATOR = "EPSG:3857"
 # Full width of the WebMercatorQuad tile matrix, in metres.
 MERCATOR_SPAN_M = 2 * 20037508.342789244
-TILE_SIZE = 256
+TILE_SIZE = TILE_PX
 
-# Layer name inside tile-grid.pmtiles. Fixed rather than recorded in the
-# manifest: unlike the inventories there is only ever one, and the viewer needs
-# it as `source-layer` -- a vector layer with the wrong one renders nothing and
-# reports no error.
+RGBA_CREATION = {
+    "driver": "GTiff",
+    "TILED": "YES",
+    "BLOCKXSIZE": TILE_PX,
+    "BLOCKYSIZE": TILE_PX,
+    "COMPRESS": "DEFLATE",
+    "ZLEVEL": 6,
+    "BIGTIFF": "IF_SAFER",
+}
+"""Creation options of the warped-once RGBA intermediate.
+
+256 px blocks so a max-zoom tile is one block read; DEFLATE because the file is
+written once and read once. No overviews: see the module docstring.
+"""
+
+DEFAULT_CONCURRENT_LAYERS = 4
+"""Layers warped at once by :func:`build_layers`, absent a better-informed choice.
+
+Four Alpine intermediates are under 5 GB of scratch. The tiling spike measured
+the Swiss year at 5.5 min with all fourteen layers warping at once; at four the
+warps run in four rounds, which projects to 9-10 min. Raise it where the disk
+has room.
+"""
 
 
 @dataclass
@@ -101,11 +129,7 @@ class LayerInfo:
     start_date: str
     end_date: str
     colors: list[str] = field(default_factory=list)
-
-
-def zoom_resolution(zoom: int) -> float:
-    """Ground resolution of a WebMercatorQuad zoom level at the equator, in metres."""
-    return MERCATOR_SPAN_M / (TILE_SIZE * 2**zoom)
+    checksum: str = ""
 
 
 def native_max_zoom(res_m: float, lat_deg: float) -> int:
@@ -254,125 +278,44 @@ def rgba_vrt(
     return out_vrt
 
 
-def write_rgba(
-    dataset: rasterio.DatasetReader,
+def rgba_raster(
+    src_vrt: Path | UPath,
     out_path: Path,
     *,
-    cmap: str,
-    vmin: float,
-    vmax: float,
-    overview_levels: Sequence[int] = (2, 4, 8, 16, 32, 64, 128),
-) -> None:
-    """Colour-map a single-band raster into a tiled RGBA GeoTIFF on the same grid.
+    luts: Sequence[Sequence[tuple[float, int]]],
+    src_bands: Sequence[int] = (1, 1, 1),
+) -> Path:
+    """Warp and colour-map one layer into a local RGBA GeoTIFF, once.
 
-    Nodata becomes a fully transparent alpha, so the tiler can drop tiles that
-    fall outside the composite perimeter. Overviews are built because the tiler
-    resamples every zoom level below the maximum out of this file.
+    The lookup-table VRT of :func:`rgba_vrt` is written beside ``out_path`` and
+    copied through GDAL's ``CreateCopy`` — what ``gdal_translate`` does — so the
+    whole chain below it runs exactly once, as one streaming pass. This process
+    must be inside the chain's environment (:func:`~glace_catalog.mosaics.chain_env`)
+    when the sources are remote.
 
-    Kept as the fallback for :func:`rgba_vrt`, which is the path a normal build
-    takes: materialising this raster at continental scale costs 11.6 GB, so it
-    is worth having only where the virtual one cannot be used.
+    Parameters
+    ----------
+    src_vrt
+        A VRT from the chain: linear, decibel or false-colour.
+    out_path
+        The GeoTIFF written, on the tiler's grid, four uint8 bands with alpha.
+    luts, src_bands
+        The colour mapping, as :func:`rgba_vrt` takes it.
+
+    Returns
+    -------
+    pathlib.Path
+        ``out_path``.
     """
-    lut = color_lookup_table(cmap)
-    scale = 255.0 / (vmax - vmin)
-    profile = dataset.profile | {
-        "driver": "GTiff",
-        "dtype": "uint8",
-        "count": 4,
-        "nodata": None,
-        "tiled": True,
-        "blockxsize": 512,
-        "blockysize": 512,
-        "compress": "deflate",
-        "predictor": 2,
-        "BIGTIFF": "IF_SAFER",
-    }
-    profile.pop("photometric", None)
-
-    with rasterio.open(out_path, "w", **profile) as dst:
-        dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
-        for _, window in dataset.block_windows(1):
-            block = dataset.read(1, window=window, masked=True)
-            opaque = np.ma.getmaskarray(block) == False  # noqa: E712 (ndarray, not bool)
-            values = np.asarray(block.filled(vmin), dtype="float32")
-            opaque &= np.isfinite(values)
-            index = np.clip((values - vmin) * scale, 0.0, 255.0).astype("uint8")
-            rgb = lut[index]
-            for band in range(3):
-                dst.write(rgb[..., band], band + 1, window=window)
-            dst.write((opaque * 255).astype("uint8"), 4, window=window)
-
-    if overview_levels:
-        with rasterio.open(out_path, "r+") as dst:
-            dst.build_overviews(list(overview_levels), Resampling.average)
-
-
-def _rio_executable() -> str:
-    """Path to the ``rio`` CLI of the running interpreter's environment."""
-    candidate = Path(sys.executable).with_name("rio")
-    if candidate.exists():
-        return str(candidate)
-    found = shutil.which("rio")
-    if found is None:
-        msg = "The 'rio' CLI was not found; install rasterio and rio-pmtiles"
-        raise FileNotFoundError(msg)
-    return found
-
-
-def run_rio_pmtiles(
-    rgba_path: Path | UPath,
-    out_path: Path,
-    *,
-    min_zoom: int,
-    max_zoom: int,
-    tile_format: str = "WEBP",
-    quality: int = 80,
-    resampling: str = "bilinear",
-    workers: int | None = None,
-    title: str = "",
-    attribution: str = "",
-    sources_at: Path | UPath | None = None,
-) -> None:
-    """Tile an RGBA raster into a PMTiles archive with ``rio pmtiles``.
-
-    The tiler reprojects to WebMercator itself and skips tiles that are entirely
-    transparent, so an archive follows the data perimeter rather than its
-    bounding box.
-
-    ``sources_at`` names one of the rasters the input reads. The tiler is a
-    subprocess, so none of this process's S3 configuration reaches it; the child
-    is given the profile name and the endpoint instead, and never an access key.
-    """
-    out_path.unlink(missing_ok=True)
-    command = [
-        _rio_executable(),
-        "pmtiles",
-        str(rgba_path),
-        str(out_path),
-        "--rgba",
-        "--overlay",
-        "--format",
-        tile_format,
-        "--co",
-        f"QUALITY={quality}",
-        "--zoom-levels",
-        f"{min_zoom}..{max_zoom}",
-        "--tile-size",
-        str(TILE_SIZE),
-        "--resampling",
-        resampling,
-        "--exclude-empty-tiles",
-        "--silent",
-    ]
-    if workers:
-        command += ["-j", str(workers)]
-    if title:
-        command += ["--name", title]
-    if attribution:
-        command += ["--attribution", attribution]
-    env = os.environ | (subprocess_s3_env(UPath(sources_at)) if sources_at is not None else {})
-    logger.debug("Running %s", " ".join(command))
-    subprocess.run(command, check=True, env=env)  # noqa: S603  # our own argv, no shell
+    lut_vrt = rgba_vrt(
+        src_vrt,
+        out_path.with_suffix(".vrt"),
+        luts=luts,
+        src_bands=src_bands,
+    )
+    with rasterio_open(lut_vrt) as src:
+        rasterio.shutil.copy(src, str(out_path), **RGBA_CREATION)
+    return out_path
 
 
 def build_pmtiles(
@@ -384,17 +327,17 @@ def build_pmtiles(
     style: LayerStyle | RgbStyle,
     start_date: str,
     end_date: str,
-    min_zoom: int = 5,
+    min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
     tile_format: str = "WEBP",
     quality: int = 80,
     resampling: str = "average",
     workers: int | None = None,
-    materialize_rgba: bool = False,
-    sources_at: Path | UPath | None = None,
     attribution: str = "",
+    scratch: Path | None = None,
+    pool: ProcessPoolExecutor | None = None,
 ) -> LayerInfo:
-    """Colour-map and tile one display-grid mosaic into a PMTiles archive.
+    """Colour-map, warp once and tile one display-grid mosaic into a PMTiles archive.
 
     Parameters
     ----------
@@ -405,8 +348,8 @@ def build_pmtiles(
         Destination ``.pmtiles`` file. Must be local — packing an archive needs
         random writes.
     layer_id
-        Identifier of the layer, which is also the archive's filename stem. The
-        two are the same by rule, so the viewer can derive one from the other.
+        Identifier of the layer. The archive is named ``viz_filename(layer_id)``,
+        so a reader derives the data stem by stripping the suffix.
     year
         Composite year, for the manifest entry.
     style
@@ -419,16 +362,24 @@ def build_pmtiles(
         Zoom range of the pyramid. The default maximum is the zoom the source
         already sits on, so that level is a copy and every level below it a 2x
         decimation.
-    tile_format, quality, resampling, workers
-        Passed to the tiler. ``average`` is right here because the source is on
-        the target grid at max zoom; the earlier bilinear-versus-nearest question
-        was about oversampling a 40 m source and no longer applies.
-    materialize_rgba
-        Write the colour-mapped RGBA as a real GeoTIFF instead of a VRT. The
-        fallback for a GDAL that cannot serve the lookup tables virtually.
-    sources_at
-        One of the rasters ``src_vrt`` reads, so the tiler subprocess can be
-        given the object store's configuration.
+    tile_format, quality, resampling
+        Tile encoding and warp kernel. ``average`` is right here because the
+        source is on the target grid at max zoom; the earlier bilinear-versus-
+        nearest question was about oversampling a 40 m source and no longer
+        applies.
+    workers
+        Worker processes of the pool started for this call, one per core by
+        default. Ignored when ``pool`` is given.
+    attribution
+        Archive attribution, as a viewer displays it.
+    scratch
+        Directory the warped-once RGBA raster is written under, in a temporary
+        subdirectory removed on return. Defaults to the system temporary
+        directory; at Alpine scale the raster is about 1.1 GB, so point this at
+        a volume that has room for it.
+    pool
+        A running :func:`~glace_catalog.tiler.spawn_pool` to render the tiles
+        in, so several archives can share one.
 
     Returns
     -------
@@ -465,36 +416,40 @@ def build_pmtiles(
         bounds = _wgs84_bounds(dataset)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        if materialize_rgba:
-            rgba_path = Path(tmp) / f"{out_path.stem}_rgba.tif"
-            with rasterio_open(src_vrt) as dataset:
-                logger.info("Colour-mapping %s with %s", src_vrt.name, cmap or "band ranges")
-                write_rgba(dataset, rgba_path, cmap=cmap, vmin=vmin, vmax=vmax)
-        else:
-            rgba_path = rgba_vrt(
-                src_vrt,
-                Path(tmp) / f"{out_path.stem}_rgba.vrt",
-                luts=luts,
-                src_bands=src_bands,
-            )
+    if scratch is not None:
+        scratch.mkdir(parents=True, exist_ok=True)
+    with (
+        tempfile.TemporaryDirectory(dir=scratch, prefix=f"{layer_id}-") as tmp,
+        nullcontext(pool) if pool is not None else spawn_pool(workers) as executor,
+    ):
+        logger.info("Warping %s once, colour-mapped with %s", layer_id, cmap or "band ranges")
+        rgba_path = rgba_raster(
+            src_vrt,
+            Path(tmp) / f"{layer_id}_rgba.tif",
+            luts=luts,
+            src_bands=src_bands,
+        )
         logger.info("Tiling %s to z%d-%d", out_path.name, min_zoom, max_zoom)
-        run_rio_pmtiles(
+        written = write_archive(
             rgba_path,
             out_path,
             min_zoom=min_zoom,
             max_zoom=max_zoom,
-            tile_format=tile_format,
-            quality=quality,
-            resampling=resampling,
-            workers=workers,
-            title=layer_id,
+            spec=TileSpec(
+                max_zoom=max_zoom,
+                tile_size=TILE_SIZE,
+                image_format=tile_format,
+                quality=quality,
+                resampling=Resampling[resampling],
+            ),
+            name=layer_id,
             attribution=attribution,
-            sources_at=sources_at,
+            pool=executor,
         )
 
     size = out_path.stat().st_size
-    logger.info("Wrote %s (%.1f MB)", out_path.name, size / 1e6)
+    checksum = multihash_sha256_file(out_path)
+    logger.info("Wrote %s: %d tiles, %.1f MB", out_path.name, written, size / 1e6)
     product, polarization = _split_layer_id(layer_id)
     return LayerInfo(
         id=f"{layer_id}_{year}",
@@ -511,6 +466,7 @@ def build_pmtiles(
         units=style.units,
         source=str(src_vrt),
         size_bytes=size,
+        checksum=checksum,
         colors=colors,
         start_date=start_date,
         end_date=end_date,
@@ -547,15 +503,23 @@ def build_layers(
     rgb_styles: Mapping[str, RgbStyle] | None = None,
     style_path: Path | None = None,
     layers: Collection[str] | None = None,
-    min_zoom: int = 5,
+    min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
     tile_format: str = "WEBP",
     quality: int = 80,
     resampling: str = "average",
     workers: int | None = None,
-    materialize_rgba: bool = False,
+    concurrent_layers: int = DEFAULT_CONCURRENT_LAYERS,
+    scratch: Path | None = None,
 ) -> list[LayerInfo]:
     """Build one PMTiles archive per layer of one year, from the VRT chain.
+
+    The layers are pipelined: ``concurrent_layers`` of them warp at once, each
+    in its own thread, and every warped raster is tiled in one shared worker
+    pool as soon as it is ready.
+    The warp is single-threaded inside GDAL and bound by the object store, so
+    running several is what keeps the cores busy; the tiler scales linearly
+    with its workers once the source is local.
 
     Parameters
     ----------
@@ -574,14 +538,22 @@ def build_layers(
         ``catalog/mosaics/styles/default.json``.
     layers
         Restrict to these layer ids. ``None`` builds all fourteen.
-    min_zoom, max_zoom, tile_format, quality, resampling, workers,
-    materialize_rgba
+    min_zoom, max_zoom, tile_format, quality, resampling
         Passed through to :func:`build_pmtiles`.
+    workers
+        Worker processes of the shared tiling pool, one per core by default.
+    concurrent_layers
+        Layers warped at the same time. This bounds the scratch disk: each
+        holds one RGBA raster of the whole scope while it is being written and
+        tiled — about 100 MB for Switzerland, about 1.1 GB for the Alps.
+    scratch
+        Where those rasters are written; the system temporary directory by
+        default.
 
     Returns
     -------
     list[LayerInfo]
-        Manifest entries for the archives written.
+        Manifest entries for the archives written, in layer order.
     """
     path = style_path or DEFAULT_STYLE_PATH
     attribution = load_attribution(path, year)
@@ -604,42 +576,48 @@ def build_layers(
             ", ".join(provisional),
         )
 
-    built: list[LayerInfo] = []
-    # The VRTs are local but read remote tiles, so this process needs the object
-    # store's credentials established around the reads; the tiler subprocess is
-    # given its own configuration through `sources_at`.
-    with chain_env(vrts):
-        for layer_id, style in sorted(wanted.items()):
-            source = _pmtiles_source(layer_id, style, vrts)
-            if source is None:
-                logger.info("No VRT for %s; skipping", layer_id)
-                continue
-            built.append(
-                build_pmtiles(
-                    source,
-                    out_dir / f"{layer_id}.pmtiles",
-                    layer_id=layer_id,
-                    year=year,
-                    style=style,
-                    start_date=start_date,
-                    end_date=end_date,
-                    min_zoom=min_zoom,
-                    max_zoom=max_zoom,
-                    tile_format=tile_format,
-                    quality=quality,
-                    resampling=resampling,
-                    workers=workers,
-                    materialize_rgba=materialize_rgba,
-                    sources_at=vrts.sources_at,
-                    attribution=attribution,
-                ),
-            )
-    return built
+    def build_one(layer_id: str, style: LayerStyle | RgbStyle, source: Path | UPath) -> LayerInfo:
+        return build_pmtiles(
+            source,
+            out_dir / viz_filename(layer_id),
+            layer_id=layer_id,
+            year=year,
+            style=style,
+            start_date=start_date,
+            end_date=end_date,
+            min_zoom=min_zoom,
+            max_zoom=max_zoom,
+            tile_format=tile_format,
+            quality=quality,
+            resampling=resampling,
+            attribution=attribution,
+            scratch=scratch,
+            pool=pool,
+        )
 
+    sources = {
+        layer_id: (style, source)
+        for layer_id, style in sorted(wanted.items())
+        if (source := _pmtiles_source(layer_id, style, vrts)) is not None
+    }
+    for layer_id in sorted(set(wanted) - set(sources)):
+        logger.info("No VRT for %s; skipping", layer_id)
 
-"""How each glacier inventory is drawn as a vector overlay, keyed by dataset.
-
-Not part of the catalog: the inventories are third-party datasets a viewer shows
-*beside* GLACE, and this is the presentation each one is given. It travels with
-:func:`export_inventory` because that is what consumes it.
-"""
+    # The VRTs are local but read remote tiles, so the store's credentials are
+    # established here, in the main thread, around every warp. That placement
+    # is load-bearing: rasterio sets a main thread's options process-wide and
+    # any other thread's thread-locally, where GDAL's own reader threads (a
+    # VRT reads its sources in parallel) cannot see them — a warp that enters
+    # the environment inside its worker thread opens the first sources and
+    # then fails with "No valid AWS credentials". The tiler pool reads the
+    # local raster and needs no environment at all.
+    with (
+        chain_env(vrts),
+        spawn_pool(workers) as pool,
+        ThreadPoolExecutor(max_workers=max(1, concurrent_layers)) as warps,
+    ):
+        futures = {
+            layer_id: warps.submit(build_one, layer_id, style, source)
+            for layer_id, (style, source) in sources.items()
+        }
+        return [futures[layer_id].result() for layer_id in sources]

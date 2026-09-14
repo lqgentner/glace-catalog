@@ -1,15 +1,33 @@
-# glace-catalog
+<p align="center">
+<a href="https://source.coop/lqgentner/glace-ch">
+<img src="assets/glace-wordmark.svg" alt="GLACE" width="350">
+</a>
+</p>
+<p align="center">
+Annual local resolution weighted composites of Sentinel-1 coherence and
+backscatter over Swiss glaciers
+</p>
+
+---
+
+- 🗺️ [Interactive web map](https://lqgentner.github.io/glace-viewer)
+- 💾 [Dataset on Source Cooperative](https://source.coop/lqgentner/glace-ch)
+- 🧭 [Portolan browser of the STAC catalog](https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json)
+- ⚙️ Production pipeline on GitHub (coming soon)
+- 🏷️ Dataset metadata on GitHub (you are here)
+
+---
 
 Metadata, build pipeline and publication for the **GLACE** STAC catalogs —
 annual Sentinel-1 coherence and backscatter composites over Alpine glaciers,
-published to [Source Cooperative](https://source.coop/lqgentner) as a
+published to [Source Cooperative](https://source.coop/lqgentner/glace-ch) as a
 [Portolan](https://www.portolan-sdi.org/) catalog.
 
 > **What is published today is `glace-ch`, a rehearsal.** It covers Switzerland
 > and exists to exercise publication while the Alpine composites are produced.
 > The dataset is **`glace-alps`**; every mention of Switzerland in this
-> repository is placeholder text. See [`docs/MIGRATION.md`](docs/MIGRATION.md)
-> §11 for the swap checklist.
+> repository is placeholder text. [`docs/STATUS.md`](docs/STATUS.md) carries the
+> swap checklist and what is still open.
 
 The catalog metadata lives in git so that it has a change history, a review
 step, and a way for someone who spots a wrong license or a bad description to
@@ -17,19 +35,20 @@ open a pull request instead of finding an email address. The data does not: it
 is built onto object storage and referenced by URL.
 
 ```
-catalog/          the published tree — STAC JSON, README.md, AGENTS.md
+metadata/         the source: catalog.yaml, assets.yaml, the markdown templates
+catalog/          the published tree, rendered from metadata/ and committed
 src/glace_catalog/ the library that builds it
-scripts/          the build commands
-tools/            publish.py (metadata) and upload_data.py (bytes)
+scripts/          the build commands, incl. render-catalog.py
+tools/            sync_data.py, which publishes the built store
 tests/            the gates, incl. rashid conformance
-docs/             MIGRATION.md (living), UPSTREAM.md, conformance.md
+docs/             DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 ```
 
 ## Quick start
 
 ```bash
 uv sync --all-groups
-uv run python3 tests/run_all.py     # every gate
+uv run tests/run_all.py             # every gate
 uv run rashid check catalog/        # Portolan conformance alone
 ```
 
@@ -41,15 +60,33 @@ rather than skips.
 
 | what | where |
 | --- | --- |
+| every title, description and display stretch | `metadata/assets.yaml`; `metadata/catalog.yaml` holds the catalog's identity and prose |
+| the README and AGENTS.md templates | `metadata/templates/` |
 | what publishes, and to which bucket | `catalog.publish.yaml` |
-| where the build reads and writes | `GLACE_SOURCE_ROOT`, `GLACE_STORE_ROOT` in `.env` |
-| the layout of a built store, and why | [`docs/MIGRATION.md`](docs/MIGRATION.md) §3 |
+| where the build writes | `GLACE_STORE_ROOT` in `.env`; the composites it reads are `publish-year.py --src` |
+| the layout of a built store, and why | [`docs/DESIGN.md`](docs/DESIGN.md) §2 |
+| every design decision, with its reason | [`docs/DESIGN.md`](docs/DESIGN.md) §9 |
+| what is done and what is open | [`docs/STATUS.md`](docs/STATUS.md) |
 | what other repos must change | [`docs/UPSTREAM.md`](docs/UPSTREAM.md) |
-| the transition from the old flat store | [`docs/MIGRATION.md`](docs/MIGRATION.md) |
 | accepted validator findings | [`docs/conformance.md`](docs/conformance.md) |
 
 Data never lands in this repository. `.gitignore` refuses `.tif` and `.parquet`,
-and `tools/publish.py` only ever syncs `catalog/`.
+and publication reads the built store on object storage, never this checkout.
+
+## Editing the metadata
+
+`catalog/` is generated output that is committed, so that the rendered tree is
+what a reviewer diffs, what rashid checks in CI, and what a release archives on
+Zenodo. Edit the source and render:
+
+```bash
+$EDITOR metadata/assets.yaml metadata/catalog.yaml metadata/templates/...
+uv run scripts/render-catalog.py            # writes catalog/
+uv run tests/test_render.py                 # the gate CI runs: catalog/ matches its source
+```
+
+A hand edit under `catalog/` fails that gate. The same vocabulary names every
+asset the build writes, so an item and its collection cannot disagree.
 
 ## Building a store
 
@@ -58,18 +95,38 @@ composite COGs, annual mosaics of them, web-map archives, and the STAC documents
 describing all of it. Two regions are defined, `ch` and `alps`, each with a
 fixed grid and a default root in `src/glace_catalog/scopes.py`.
 
-Building needs credentials for the private source bucket, read from `.env`.
+Building needs credentials for the private UZH bucket and the prefix the store
+is assembled under, read from `.env`:
+
+```bash
+GLACE_S3_PROFILE=        # a named profile in ~/.aws/credentials
+GLACE_S3_ENDPOINT_URL=   # the UZH S3 gateway, unless the profile's config section sets endpoint_url
+GLACE_STORE_ROOT=        # s3:// prefix the published tree is built under
+```
+
+Authentication is by named profile only, so no access key passes through the
+environment. The variables are read by `freezebase.settings.S3Settings`, which
+is what `deep-glacier-mapping` reads its own `GLACIERS_S3_*` with. Publishing needs nothing here: the Source Cooperative credentials
+live in the profile named in `catalog.publish.yaml`.
 
 ### 1. Once per region
 
 Compute the per-tile glacier cover. It is measured once and reused by every
 year, so a tile cannot end up with different values in different years. The
-script lives in `deep-glacier-mapping`, which owns the inventories it reads:
+script lives in `deep-glacier-mapping`, which owns the inventories it reads, and
+**runs from that checkout** — it imports `glacier_mapping`, which this project's
+environment does not have:
 
 ```bash
-uv run --env-file .env python ../deep-glacier-mapping/scripts/inventories/derive-glacier-fractions.py \
-    --scope ch --out s3://s1-bursts/data/glace-ch/glacier-fractions.parquet
+( cd ../deep-glacier-mapping &&
+  uv run --env-file .env scripts/inventories/derive-glacier-fractions.py \
+      --scope ch --perimeter-tiles 143 \
+      --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet )
 ```
+
+The subshell is the point: every later step runs from this checkout. Write the
+`--out` prefix in full, too — that checkout's `.env` does not define
+`GLACE_STORE_ROOT`, and the value has to match this repository's.
 
 ### 2. Once per year
 
@@ -83,7 +140,7 @@ every file.
 Publish the year:
 
 ```bash
-uv run --env-file .env python scripts/publish-year.py 2024 \
+uv run --env-file .env scripts/publish-year.py 2024 \
     --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch --scope ch
 ```
 
@@ -107,8 +164,31 @@ Useful options:
 - `--max-workers` — threads for the copy. It is network-bound, so more than
   you have cores is fine.
 - `--tiler-workers` — processes for the web-map tiler, one per core by
-  default. Each decodes raster blocks, so **this is what to lower if the
-  machine runs out of memory**. It is unrelated to `--max-workers`.
+  default. Each starts with a bounded GDAL cache (256 MB) and holds the
+  source it tiles open, so a worker costs well under a gigabyte. It is
+  unrelated to `--max-workers`.
+- `--concurrent-layers` — web-map layers warped at once, four by default.
+  Each warp writes one RGBA raster of the whole scope into the cache
+  directory before it is tiled, so this is what disk and memory scale with:
+  about 100 MB on disk per layer for Switzerland, 1.1 GB for the Alps.
+
+**The web-map step is sized to the machine, not to a rule.** The defaults are
+safe on a 16 GB laptop; whether to raise `--concurrent-layers` towards
+fourteen depends on the RAM and scratch disk of the machine running it, and
+the wall time follows the warps, which are serial per layer. Measured on the
+Swiss scope, 2026-09-11, on 15 cores and 60 GB:
+
+| `--tiler-workers` | `--concurrent-layers` | peak RSS, whole process tree | PMTiles step |
+| --- | --- | --- | --- |
+| 15 (default) | 4 (default) | 11 GB | 12 min |
+| 15 (default) | 7 | not sampled | 7 min |
+
+Before 2026-09-11 every worker ran with GDAL's default cache of 5 % of RAM,
+so fifteen workers claimed about 45 GB between them and the same step peaked
+at 57 GB; that is fixed in the tiler, not something to work around with fewer
+workers. If the step is killed for memory, lower `--concurrent-layers` first;
+`--tiler-workers` only matters when the machine has fewer cores than memory
+for them.
 
 Steps are safe to re-run. Each records a fingerprint of what it was built from
 and skips itself only if nothing has changed; if the source composites, the
@@ -117,16 +197,17 @@ grid or the settings move, it rebuilds rather than leaving a stale result.
 ### 3. After adding or changing any year
 
 ```bash
-uv run --env-file .env python scripts/finalize-catalog.py --scope ch \
+uv run --env-file .env scripts/finalize-catalog.py --scope ch \
     --base-url https://data.source.coop/lqgentner/glace-ch
 ```
 
 This patches the two collection documents with what depends on the run — year
-links, temporal extent, PMTiles links — concatenates
-the per-year slices into each collection's `items.parquet`, repoints the
-MapLibre styles at the newest year, and validates the result. It never touches
-the prose, providers, license or `item_assets`: those are source, edited here
-and reviewed.
+links, temporal extent, PMTiles links — concatenates the per-year slices into
+each collection's `items.parquet`, renders both collection thumbnails, stamps
+`file:size` and `file:checksum` on the assets it wrote, repoints the MapLibre
+styles at the newest year, and validates the result. It never touches the prose,
+providers, license or `item_assets`: those are rendered from `metadata/` and
+reviewed in git.
 
 `--base-url` is the address the store will be served from. It is baked into
 every asset href, so **run this with the public address before publishing**,
@@ -136,20 +217,36 @@ and step 3 again; existing years are never touched.
 ## Publishing
 
 Publishing needs the Source Cooperative profile named in `catalog.publish.yaml`.
-Two uploaders, one bucket prefix, and they do not overlap:
+The built store is the published tree, so one command streams it object by
+object from the private bucket to that profile's prefix:
 
 ```bash
-python3 tools/publish.py                # dry run, uploads nothing
-python3 tools/publish.py --confirm      # metadata: catalog/ only
-python3 tools/upload_data.py --confirm  # the rasters and parquet, from data_dir
+uv run --env-file .env tools/sync_data.py            # dry run, uploads nothing
+uv run --env-file .env tools/sync_data.py --confirm  # the whole store
+uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
 ```
 
-Publishing never deletes. Removing a file from `catalog/` leaves the object in
+The dry run prints what would be uploaded and why; `--prefix` restricts the run
+to one subtree, `--force` re-uploads objects that already match on size, and
+`--workers` sizes the transfer pool. Build state (anything whose name starts with
+a dot) never leaves the store.
+
+Publishing never deletes. Removing a file from the store leaves the object in
 the bucket; delete it separately if that is what you meant.
+
+## Citing
+
+Cite a **release**, not the bucket: Source Cooperative is not immutable, and a
+release names one edition of the pixels that a reader can check their bytes
+against through each asset's `file:checksum`. Releases are git tags archived on
+Zenodo, and `CITATION.cff` at the repository root is the machine-readable form —
+GitHub's "Cite this repository" button reads it. **The DOI arrives with the first
+release**; until then, cite the version and the repository URL.
 
 ## Contributing
 
-Wrong metadata is a pull request. Run `uv run python3 tests/run_all.py` before
+Wrong metadata is a pull request against `metadata/`, followed by
+`uv run scripts/render-catalog.py`. Run `uv run tests/run_all.py` before
 pushing — a contribution that fails CI costs a round trip.
 
 ## License

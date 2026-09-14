@@ -14,6 +14,11 @@ and it is why there is no ``build_tiles_collection`` in this package.
 ``items.parquet`` — are written from the run and are not tracked. This module
 writes those.
 
+Both ``items.parquet`` files are held to the GeoParquet vector rules on top of
+being valid stac-geoparquet — spatially ordered rows, a ``bbox`` covering column
+with per-row-group statistics, bounded row groups — so every one of them is
+written by :func:`_write_mirror` and by nothing else.
+
 Structural links are relative, so one tree of bytes is valid in the repository,
 in a preview and in production. Item *asset* hrefs are relative too
 (``./coh12_vv.tif``): they sit beside the item that names them, and a consumer
@@ -26,19 +31,31 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urljoin
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pystac
 import stac_geoparquet.arrow
+
+# The metadata builder `stac_geoparquet.arrow.to_parquet` uses on its way to the
+# file. It is not re-exported, and the alternative is writing the WGS84 PROJJSON
+# and the covering declaration out by hand — a second copy of the library's
+# answer, free to drift from it. Every mirror this module writes is sorted and
+# grouped before it is written, so `to_parquet` itself cannot be the writer.
+from stac_geoparquet.arrow._to_parquet import create_parquet_metadata
 from upath import UPath
+
+# The module, not the name: metadata imports the naming module through this
+# package, so under one import order this package is still initializing when
+# metadata is. Resolving `vocabulary` at call time keeps both orders working.
+from glace_catalog import metadata
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +89,12 @@ class UPathStacIO(pystac.stac_io.DefaultStacIO):
             return UPath(href, **self._storage_options)
         return UPath(href)
 
+    @override
     def read_text_from_href(self, href: str) -> str:
         """Read one document, from a local path or an object store."""
         return self._path(href).read_text()
 
+    @override
     def write_text_to_href(self, href: str, txt: str) -> None:
         """Write one document, to a local path or an object store."""
         target = self._path(href)
@@ -90,6 +109,13 @@ The versioned schema URI is the single signal of specification version — there
 is no separate version property — so every generated catalog must agree with the
 tracked ``catalog.json``. rashid reports a mismatch against the root as a warning
 (``PTL-CNF-002``), which makes this constant the one place a spec bump is edited.
+"""
+
+Document = dict[str, Any]
+"""One STAC document as it is read and written: JSON object keys to JSON values.
+
+The values are genuinely heterogeneous — a link list, a nested extent, a number —
+and every consumer here reads a named key rather than the mapping as a whole.
 """
 
 ITEM_NAME = "item.json"
@@ -122,7 +148,7 @@ def item_prefix(item: pystac.Item) -> str:
     return f"{MOSAICS_DIR}/{year}"
 
 
-def item_dict(item: pystac.Item) -> dict:
+def item_dict(item: pystac.Item) -> Document:
     """Serialize an item without resolving its links.
 
     A published item's links are all relative, so pystac's default href
@@ -132,23 +158,25 @@ def item_dict(item: pystac.Item) -> dict:
     return item.to_dict(include_self_link=False, transform_hrefs=False)
 
 
-def write_stac_geoparquet(payloads: Sequence[dict], out_path: Path | UPath) -> None:
+def write_stac_geoparquet(payloads: Sequence[Document], out_path: Path | UPath) -> None:
     """Write item dicts as a stac-geoparquet index.
 
-    Always through ``stac_geoparquet.arrow.to_parquet``, never a plain parquet
-    write: the geometry column needs the GeoParquet schema metadata, without
-    which a reader sees an opaque blob rather than a geometry.
+    The rows come from ``stac_geoparquet``, which turns the GeoJSON geometries
+    into WKB, derives the ``bbox`` covering column from each item's ``bbox``,
+    and builds the GeoParquet schema metadata that declares both; without that
+    metadata a reader sees an opaque blob rather than a geometry. The bytes are
+    written by :func:`_write_mirror`, because the file also has to be spatially
+    ordered and grouped, which ``to_parquet`` does not do.
     """
-    batches = stac_geoparquet.arrow.parse_stac_items_to_arrow(list(payloads))
-    out_path = UPath(out_path)
-    if out_path.protocol == "s3":
-        # stac-geoparquet writes through a path, so stage locally and put once.
-        with tempfile.TemporaryDirectory() as tmp:
-            staged = Path(tmp) / out_path.name
-            stac_geoparquet.arrow.to_parquet(batches, str(staged))
-            out_path.write_bytes(staged.read_bytes())
-    else:
-        stac_geoparquet.arrow.to_parquet(batches, str(out_path))
+    reader = stac_geoparquet.arrow.parse_stac_items_to_arrow(list(payloads))
+    table = reader.read_all()
+    table = table.replace_schema_metadata(
+        create_parquet_metadata(
+            table.schema,
+            schema_version=stac_geoparquet.arrow.DEFAULT_PARQUET_SCHEMA_VERSION,
+        ),
+    )
+    _write_mirror(table, out_path)
     logger.info("Geoparquet index with %d items saved to %s", len(payloads), out_path)
 
 
@@ -204,7 +232,9 @@ def concat_indexes(
     # concat_tables keeps the first table's schema metadata, which is where the
     # GeoParquet geometry declaration lives; the rebase must not drop it.
     combined = combined.replace_schema_metadata(tables[0].schema.metadata)
-    _write_table(combined, out_path)
+    # Written through the mirror writer rather than concatenated as-is, so the
+    # store-level file is ordered across the years instead of in year order.
+    _write_mirror(combined, out_path)
     logger.info("Wrote %s with %d rows", out_path, combined.num_rows)
     return combined.num_rows
 
@@ -255,11 +285,175 @@ def index_from_items(
     return len(dicts)
 
 
-def _write_table(table: pa.Table, out_path: Path | UPath) -> None:
-    """Write an arrow table to parquet, locally or on the object store."""
+def _mgrs_tile(item: pystac.Item) -> str:
+    """MGRS tile an item covers, as a sort key over tile items."""
+    return str(item.properties["glace:mgrs_tile"])
+
+
+HILBERT_ORDER = 16
+"""Bits per axis of the Hilbert curve the mirror rows are sorted along.
+
+An order-16 curve divides each axis into 65 536 steps, which over the Alps'
+few degrees of longitude is a cell of a few metres — far finer than the 10 km
+tiles being ordered, so no two tiles share a key by accident.
+"""
+
+MIRROR_ROW_GROUP_SIZE = 2048
+"""Rows per row group in every mirror this module writes.
+
+GeoParquet caps a row group at 150 000 rows, so a single group would be legal
+for the whole store; it would also be useless. Per-row-group min/max statistics
+only let a reader skip bytes when there is more than one group, and rashid's
+ordering metrics measure nothing below five groups. At 2 048 rows the Alps'
+store-level mirror (~2 209 tiles over eleven years, ~24 000 rows) lands around
+twelve groups, and one Swiss year (143 tiles) still fits a single group, which
+is right: a file that small is one range request either way.
+"""
+
+_BBOX_CORNERS = ("xmin", "ymin", "xmax", "ymax")
+
+_BBOX_STRUCT = pa.struct([(corner, pa.float64()) for corner in _BBOX_CORNERS])
+
+
+def hilbert_index(x: int, y: int, *, order: int = HILBERT_ORDER) -> int:
+    """Position of a grid cell along the 2-D Hilbert curve.
+
+    The Hilbert curve visits every cell of a ``2**order`` square grid once, and
+    two cells close along the curve are close on the grid. Sorting rows by this
+    index is what gives a row group a small bounding box, which is what lets a
+    reader skip it.
+
+    Parameters
+    ----------
+    x, y
+        Cell coordinates, each in ``[0, 2**order)``.
+    order
+        Bits per axis.
+
+    Returns
+    -------
+    int
+        Distance along the curve, in ``[0, 4**order)``.
+    """
+    distance = 0
+    side = 1 << (order - 1)
+    while side > 0:
+        rx = 1 if x & side else 0
+        ry = 1 if y & side else 0
+        distance += side * side * ((3 * rx) ^ ry)
+        # Rotate the quadrant so the curve enters the next one the way it left
+        # this one; without it the four sub-curves do not join up.
+        if ry == 0:
+            if rx == 1:
+                x = side - 1 - x
+                y = side - 1 - y
+            x, y = y, x
+        side >>= 1
+    return distance
+
+
+def _with_covering_bbox(table: pa.Table) -> pa.Table:
+    """Return ``table`` with a float64 ``bbox`` struct declared as the covering.
+
+    ``stac_geoparquet`` already writes the column and the
+    ``geo.columns.geometry.covering.bbox`` declaration that names it, so this
+    keeps them rather than adding a second covering. What it does add is the
+    type: a batch of items whose bboxes are all whole numbers arrives as
+    ``int64``, and two years that disagree on the type cannot be concatenated
+    into one store-level mirror.
+
+    Raises
+    ------
+    ValueError
+        If the table carries no covering column, which would leave every row
+        group without the spatial statistics ``PTL-DAT-007`` requires.
+    """
+    index = table.schema.get_field_index("bbox")
+    geo = json.loads((table.schema.metadata or {}).get(b"geo", b"{}"))
+    columns = geo.get("columns", {})
+    covering = columns.get(geo.get("primary_column"), {}).get("covering", {}).get("bbox")
+    if index < 0 or not isinstance(covering, dict):
+        msg = (
+            "The mirror carries no bbox covering column declared in its GeoParquet "
+            "metadata, so its row groups would hold no spatial statistics."
+        )
+        raise ValueError(msg)
+    if table.schema.field(index).type == _BBOX_STRUCT:
+        return table
+    field = pa.field("bbox", _BBOX_STRUCT)
+    return table.set_column(index, field, table.column("bbox").cast(_BBOX_STRUCT))
+
+
+def _hilbert_sorted(table: pa.Table) -> pa.Table:
+    """Sort rows along a Hilbert curve over the bbox centres.
+
+    The curve is laid over the table's own total bounds, so the ordering is
+    scale-free: a Swiss year and an Alpine one are each ordered across their own
+    extent. Rows without a bbox have no position and cannot be out of spatial
+    order, so they go last rather than anywhere in particular.
+    """
+    bbox = table.column("bbox").combine_chunks()
+    corners = {
+        corner: bbox.field(corner).to_numpy(zero_copy_only=False) for corner in _BBOX_CORNERS
+    }
+    centre_x = (corners["xmin"] + corners["xmax"]) / 2
+    centre_y = (corners["ymin"] + corners["ymax"]) / 2
+    placed = np.isfinite(centre_x) & np.isfinite(centre_y)
+    if not placed.any():
+        return table
+    cells = 2**HILBERT_ORDER - 1
+    grid_x = _grid_coordinates(centre_x, placed, cells)
+    grid_y = _grid_coordinates(centre_y, placed, cells)
+    # 4**16 - 1 is the last cell on the curve, so the unplaced rows' key is one
+    # past it and sorts them last; both fit an int64 many times over.
+    keys = np.full(table.num_rows, 4**HILBERT_ORDER, dtype=np.int64)
+    keys[placed] = [
+        hilbert_index(int(x), int(y)) for x, y in zip(grid_x[placed], grid_y[placed], strict=True)
+    ]
+    order = np.argsort(keys, kind="stable")
+    return table.take(pa.array(order))
+
+
+def _grid_coordinates(values: np.ndarray, placed: np.ndarray, cells: int) -> np.ndarray:
+    """Map coordinates onto ``[0, cells]`` over the extent of the placed ones."""
+    low, high = values[placed].min(), values[placed].max()
+    span = high - low
+    if span <= 0:
+        return np.zeros(values.shape, dtype=np.int64)
+    scaled = np.rint((values - low) / span * cells)
+    return np.clip(np.nan_to_num(scaled), 0, cells).astype(np.int64)
+
+
+def _write_mirror(
+    table: pa.Table,
+    out_path: Path | UPath,
+    *,
+    row_group_size: int = MIRROR_ROW_GROUP_SIZE,
+) -> None:
+    """Write one item mirror, locally or on the object store.
+
+    The single writer for every parquet this module produces, because the
+    GeoParquet rules Portolan enforces (``PTL-DAT-006`` to ``PTL-DAT-008``) are
+    properties of the file, not of which mirror it happens to be: spatially
+    ordered rows, a bbox covering column, bounded row groups, and per-row-group
+    statistics over that column's four leaves. ``write_statistics`` is on by
+    default and is passed explicitly because the file is worthless without it.
+
+    Parameters
+    ----------
+    table
+        Rows to write, carrying the GeoParquet schema metadata.
+    out_path
+        Destination parquet file.
+    row_group_size
+        Rows per row group. The default is the store's; a caller passes a
+        smaller one only to reach several groups over a handful of rows.
+    """
+    table = _with_covering_bbox(table)
+    table = _hilbert_sorted(table)
     out_path = UPath(out_path)
     with out_path.open("wb") as handle:
-        pq.write_table(table, handle)
+        pq.write_table(table, handle, row_group_size=row_group_size, write_statistics=True)
 
 
 def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) -> dict[str, str]:
@@ -278,7 +472,7 @@ def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) 
     return link
 
 
-def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> dict:
+def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> Document:
     """Render one item as the JSON the store publishes.
 
     The structural links follow from the layout alone, so a year can be written
@@ -317,11 +511,9 @@ def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) ->
 
 def _collection_title(collection_id: str) -> str:
     """Short human title for a link to one of the store's collections."""
-    if collection_id.endswith("-mosaics"):
-        return "GLACE mosaics"
     if collection_id.startswith("labels-"):
         return "GLACE labels"
-    return "GLACE tiles"
+    return metadata.vocabulary().collection_short_title(_collection_dir(collection_id))
 
 
 def _collection_dir(collection_id: str) -> str:
@@ -342,98 +534,41 @@ def year_catalog_document(
     scope_title: str,
     portolan_schema: str,
     collection_id: str,
-) -> dict:
+) -> Document:
     """Build the sub-catalog listing one year's tile items.
 
     A catalog, not a collection: Portolan forbids a collection inside a
     collection but explicitly allows "a catalog below a collection to organize
     its items (for example, a raster collection grouping items by year)". It
-    carries no assets, because a catalog may not have any — the year's manifest
-    and configuration are registered on the collection instead.
+    carries no assets, because a catalog may not have any — and the year's manifest
+    and configuration are not published at all (M-32).
     """
     return {
         "type": "Catalog",
         "stac_version": "1.1.0",
         "stac_extensions": [portolan_schema],
         "id": f"{collection_id}-{year}",
-        "title": f"GLACE tiles {year}",
-        "description": (
-            f"The {len(item_hrefs_and_titles)} MGRS tiles composited in {year}, one item "
-            "each, every item carrying that tile's twelve single-band composites. "
-            "For anything beyond browsing, query the collection's items.parquet "
-            "instead: it holds every year in one file, so a filter costs one range "
-            "request rather than one HTTP fetch per tile."
-        ),
+        "title": _year_title(collection_id, year),
+        "description": metadata.vocabulary().year_description(year),
         "links": [
             _link("root", f"../../{CATALOG_NAME}", scope_title),
             _link("parent", "../collection.json", _collection_title(collection_id)),
-            _link("describedby", "./README.md", f"GLACE tiles {year} documentation")
+            _link(
+                "describedby",
+                "./README.md",
+                f"{_year_title(collection_id, year)} documentation",
+            )
             | {"type": "text/markdown"},
-            _link("agents", "./AGENTS.md", f"GLACE tiles {year} agent guide")
+            _link("agents", "./AGENTS.md", f"{_year_title(collection_id, year)} agent guide")
             | {"type": "text/markdown"},
             *[_link("item", href, title, item=True) for href, title in item_hrefs_and_titles],
         ],
     }
 
 
-def year_catalog_prose(year: int, n_items: int) -> tuple[str, str]:
-    """Render the ``README.md`` and ``AGENTS.md`` a year sub-catalog owes.
-
-    Portolan requires both in every catalog directory (``PTL-FIL-001``) and
-    requires them linked (``PTL-FIL-002``, ``PTL-FIL-003``). They are generated
-    rather than written because there are one per year per scope and the only
-    thing that distinguishes them is the year — but they are kept short and
-    specific rather than padded, so that a reader who opens one learns something.
-
-    Returns
-    -------
-    tuple of str
-        ``(README.md, AGENTS.md)`` contents.
-    """
-    readme = f"""# GLACE tiles {year}
-
-The {n_items} MGRS tiles composited in {year}. Each item carries twelve
-single-band Cloud-Optimized GeoTIFFs at 10 m, in that tile's own UTM zone.
-
-This sub-catalog exists to group the year's items for browsing. It holds no
-assets of its own — a STAC catalog may not have any — and adds no metadata:
-everything about the pixels is on the items, and everything about the run that
-wrote them is in each GeoTIFF's tags.
-
-## Reading it
-
-Do not walk this catalog: one HTTP request per tile, to learn what one range
-request already holds. `../items.parquet` covers every year in one file, so
-selecting this year is a predicate rather than a different URL. The
-[collection README](../README.md) has the worked query.
-
-## License
-
-CC-BY-4.0. Contains modified Copernicus Sentinel data.
-
-## Provenance
-
-Produced at the University of Zurich, Department of Geography, from Copernicus
-Sentinel-1 SLC data. Per-file provenance is embedded in each GeoTIFF's tags and
-mirrored into the item properties, including the software versions, the DEM and
-the compositing window and parameters.
-"""
-    agents = f"""# GLACE tiles {year} — agent guide
-
-A browse-only grouping of {n_items} tile items. It carries no assets and adds no
-metadata; everything below it is described by the
-[tiles collection](../collection.json), whose `AGENTS.md` is the one to read.
-
-**Query `../items.parquet`, not this catalog.** It covers every year in one
-file, so filtering by year is a predicate rather than a different URL. Walking
-these item links costs one HTTP request each and tells you nothing the mirror
-does not.
-
-The year in this path is the **composite window**, not an acquisition date. Each
-item carries `start_datetime` and `end_datetime` giving the window its
-composites were drawn from.
-"""
-    return readme, agents
+def _year_title(collection_id: str, year: int) -> str:
+    """Title of one year sub-catalog, e.g. ``GLACE tiles 2024``."""
+    return f"{_collection_title(collection_id)} {year}"
 
 
 def write_year_items(
@@ -447,6 +582,7 @@ def write_year_items(
     scope_title: str,
     portolan_schema: str,
     year: int,
+    year_prose: tuple[str, str],
 ) -> list[Path]:
     """Write one year's generated documents into a locally staged tree.
 
@@ -472,6 +608,9 @@ def write_year_items(
         Portolan profile schema URI the year sub-catalog declares.
     year
         Year being written.
+    year_prose
+        The year sub-catalog's ``README.md`` and ``AGENTS.md``, rendered by
+        :func:`glace_catalog.documents.render_year_prose`.
 
     Returns
     -------
@@ -480,7 +619,7 @@ def write_year_items(
     """
     written: list[Path] = []
     listed: list[tuple[str, str]] = []
-    for item in sorted(tile_items, key=lambda i: str(i.properties["glace:mgrs_tile"])):
+    for item in sorted(tile_items, key=_mgrs_tile):
         tile = str(item.properties["glace:mgrs_tile"])
         path = tiles_dir / tile / ITEM_NAME
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -501,7 +640,7 @@ def write_year_items(
             collection_id=tiles_collection_id,
         )
         (tiles_dir / CATALOG_NAME).write_text(json.dumps(catalog, indent=2) + "\n")
-        readme, agents = year_catalog_prose(year, len(listed))
+        readme, agents = year_prose
         (tiles_dir / "README.md").write_text(readme)
         (tiles_dir / "AGENTS.md").write_text(agents)
         written += [tiles_dir / CATALOG_NAME, tiles_dir / "README.md", tiles_dir / "AGENTS.md"]
@@ -529,7 +668,7 @@ def read_item(path: Path | UPath) -> pystac.Item:
 
 def year_child_link(year: int) -> dict[str, str]:
     """Build the ``child`` link a tiles collection carries for one published year."""
-    return _link("child", f"./{year}/{CATALOG_NAME}", f"GLACE tiles {year}")
+    return _link("child", f"./{year}/{CATALOG_NAME}", f"{_collection_title('-tiles')} {year}")
 
 
 def mosaic_item_link(year: int) -> dict[str, str]:
@@ -541,6 +680,6 @@ def mosaic_item_link(year: int) -> dict[str, str]:
     return _link(
         "item",
         f"./{year}/{ITEM_NAME}",
-        f"GLACE annual mosaic, {year}",
+        f"{_collection_title('-mosaics')}, {year}",
         item=True,
     )

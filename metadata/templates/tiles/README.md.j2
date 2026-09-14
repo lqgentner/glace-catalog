@@ -1,0 +1,47 @@
+# {{ tiles.title }}
+
+One item per (MGRS square, year), each carrying {{ n_assets }} single-band
+Cloud-Optimized GeoTIFFs on the 10 km MGRS grid at 10 m grid spacing, in that
+square's own UTM zone. Agents: read [`AGENTS.md`](AGENTS.md).
+
+## The {{ n_assets }} assets
+
+| asset key | title | dtype | nodata |
+| --- | --- | --- | --- |
+{% for row in tile_assets %}
+| `{{ row.key }}` | {{ row.title }} | {{ row.data_type }} | {{ row.nodata }} |
+{% endfor %}
+
+The asset key is the filename stem. Dates are in the item properties and the GeoTIFF tags.
+
+## Reading the data
+
+Query the item mirror rather than walking the tree. `items.parquet` holds every
+item of every year, so one range request replaces one HTTP fetch per tile:
+
+```python
+import duckdb
+
+duckdb.sql("INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;")
+duckdb.sql("""
+    SELECT id, datetime, "glace:glacier_fraction"
+    FROM read_parquet('{{ public_base }}/tiles/items.parquet')
+    WHERE "glace:glacier_fraction" > 0.2
+    ORDER BY "glace:glacier_fraction" DESC
+""").show()
+```
+
+The item JSON under each year sub-catalog stays the normative representation;
+the mirror is a derived copy of it.
+
+## Units
+
+`rtc_*` is **linear power, not decibels**. Convert with `10*log10(x)`, which
+the collection's `renders` block declares.
+
+`*_qa_cqm` is a linear ratio. It is a weighted average of the observations' local resolution
+and does not carry a unit. For visualization, convert to decibels with `10*log10(x)`.
+
+## License
+
+**{{ catalog.license }}.** Contains modified Copernicus Sentinel data.
