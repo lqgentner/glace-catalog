@@ -57,7 +57,10 @@ Ordered by what blocks what. Everything not listed here is done.
   each layer once into a local raster and tiles from that (R-12), which the
   Swiss measurement puts at 5.5 min a year against 40 min before; the Alpine
   projection is 1.4-1.6 h a year, and fourteen concurrent intermediates are
-  15 GB of scratch (`--concurrent-layers` bounds it). *Verified when* an
+  15 GB of scratch (`--concurrent-layers` bounds it). On 2026-09-11 the step
+  was found to run a 60 GB machine to 57 GB because every tiler worker had
+  GDAL's default cache of 5 % of RAM; bounded to 256 MB per worker it peaks
+  at 11 GB with the defaults (README, "Once per year"). *Verified when* an
   Alpine year completes `--steps vrt,mosaics,pmtiles` without a rewrite, with
   its peak scratch and RSS recorded.
 - **P-7 — The run manifest at scale.** Implemented on both sides and gated by

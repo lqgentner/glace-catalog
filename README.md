@@ -162,13 +162,31 @@ Useful options:
 - `--max-workers` — threads for the copy. It is network-bound, so more than
   you have cores is fine.
 - `--tiler-workers` — processes for the web-map tiler, one per core by
-  default. Each decodes raster blocks, so **this is what to lower if the
-  machine runs out of memory**. It is unrelated to `--max-workers`.
+  default. Each starts with a bounded GDAL cache (256 MB) and holds the
+  source it tiles open, so a worker costs well under a gigabyte. It is
+  unrelated to `--max-workers`.
 - `--concurrent-layers` — web-map layers warped at once, four by default.
-  Each layer is warped once into an RGBA raster in the cache before it is
-  tiled, so **this is what to lower if the machine runs out of disk**, and
-  what to raise towards fourteen where there is room: an Alpine raster is
-  about 1.1 GB.
+  Each warp writes one RGBA raster of the whole scope into the cache
+  directory before it is tiled, so this is what disk and memory scale with:
+  about 100 MB on disk per layer for Switzerland, 1.1 GB for the Alps.
+
+**The web-map step is sized to the machine, not to a rule.** The defaults are
+safe on a 16 GB laptop; whether to raise `--concurrent-layers` towards
+fourteen depends on the RAM and scratch disk of the machine running it, and
+the wall time follows the warps, which are serial per layer. Measured on the
+Swiss scope, 2026-09-11, on 15 cores and 60 GB:
+
+| `--tiler-workers` | `--concurrent-layers` | peak RSS, whole process tree | PMTiles step |
+| --- | --- | --- | --- |
+| 15 (default) | 4 (default) | 11 GB | 12 min |
+| 15 (default) | 7 | not sampled | 7 min |
+
+Before 2026-09-11 every worker ran with GDAL's default cache of 5 % of RAM,
+so fifteen workers claimed about 45 GB between them and the same step peaked
+at 57 GB; that is fixed in the tiler, not something to work around with fewer
+workers. If the step is killed for memory, lower `--concurrent-layers` first;
+`--tiler-workers` only matters when the machine has fewer cores than memory
+for them.
 
 Steps are safe to re-run. Each records a fingerprint of what it was built from
 and skips itself only if nothing has changed; if the source composites, the

@@ -578,9 +578,9 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "worker processes for the web-map tiler; defaults to one per core. "
-            "Each decodes raster blocks, so this is the lever to pull on a memory-"
-            "constrained machine -- unlike --max-workers, it is not a thread count"
+            "worker processes for the web-map tiler; defaults to one per core. Each "
+            "runs with a bounded GDAL cache and costs well under a gigabyte -- unlike "
+            "--max-workers, it is not a thread count"
         ),
     )
     parser.add_argument(
@@ -590,8 +590,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "web-map layers warped at once before tiling. Each holds one RGBA raster of "
             "the whole scope in the cache while it runs (about 100 MB for ch, 1.1 GB for "
-            "the Alps), so this is the lever to pull on a disk-constrained machine; "
-            "raise it towards 14 where there is room"
+            "the Alps), so this is what disk and memory scale with; raise it towards 14 "
+            "where the machine has room, lower it first when it is killed for memory"
         ),
     )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
