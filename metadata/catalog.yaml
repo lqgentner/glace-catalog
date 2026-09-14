@@ -49,10 +49,10 @@ description: >-
 
   The composites are available in two separate collections: tiles
   (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
-  one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every raster is
-  a LERC-compressed, cloud-optimized GeoTIFF carrying the full processing
-  record in its own tags. In addition, raster PMTiles in Web Mercator are
-  provided for web maps, such as the
+  one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every
+  cloud-optimized GeoTIFF is LERC-compressed and carries its processing
+  record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator
+  are provided for web maps, such as the
   [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
 
 
