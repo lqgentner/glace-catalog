@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-09-09, evening.** Update this in the same commit as the change it describes;
+**As of 2026-09-14.** Update this in the same commit as the change it describes;
 a stale status record is worse than none, because the next person trusts it. The
 design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
@@ -15,7 +15,7 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, styles per year, asset stamps, coverage check, validate); run end to end over 2021–2024 on 2026-09-09 with the archives in the item directories, one style per year and the remeasured stretches |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | rendered from the latest year's `coh12_rgb_viz.pmtiles`, gated by `tests/test_thumbnails.py` |
-| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published in the item-asset layout (2026-09-09), the old `mosaics/pmtiles/` prefix deleted on both sides. Change detection is size, then single-part ETags, then which side is newer (P-17) |
+| publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published in the item-asset layout (2026-09-09) and republished 2026-09-14 with the R-18 metadata (asset-key band names, vocabulary titles, remeasured `renders`); `rashid check --live` over the mirrored store reports 0 errors. Change detection is size, then single-part ETags, then which side is newer (P-17) |
 | published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared |
 | scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps` (DESIGN.md §8) |
 
