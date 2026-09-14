@@ -93,22 +93,17 @@ cube = odc.stac.load(
 change = cube.coh12_vv.sel(time="2024") - cube.coh12_vv.sel(time="2021")
 ```
 
-**Open the tiles in QGIS.** Build a virtual raster over the tiles of one year
-and layer; it reads the COGs in place:
+**Open the tiles in QGIS.** Build a virtual raster of one year and product
+to stream the COGs:
 
 ```python
-items = rustac.search_sync(
-    tiles,
-    bbox=bbox,
-    datetime="2024-01-01/2025-01-01",
-)
-with open("coh12_vv_2024.txt", "w") as f:
-    for item in items:
-        f.write("/vsicurl/" + item["assets"]["coh12_vv"]["href"] + "\n")
-```
+from osgeo import gdal
 
-```bash
-gdalbuildvrt -input_file_list coh12_vv_2024.txt coh12_vv_2024.vrt
+items = rustac.search_sync(tiles, bbox=bbox, datetime="2024-01-01/2025-01-01")
+gdal.BuildVRT(
+    "coh12_vv_2024.vrt",
+    ["/vsicurl/" + item["assets"]["coh12_vv"]["href"] for item in items],
+)
 ```
 
 Tiles from different UTM zones need one VRT per zone; the item mirror's
