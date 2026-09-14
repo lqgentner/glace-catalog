@@ -252,11 +252,9 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
 WORKER_GDAL_CACHE_MB = 256
 """GDAL block cache of one tiler worker, in megabytes.
 
-GDAL sizes its cache at 5 % of physical memory *per process* unless told
-otherwise, so fifteen spawned workers on a 60 GB machine claimed about 45 GB
-between them and the 2022 Swiss build ran the machine to 57 GB (2026-09-11). A
-worker reads 256 px tiles from one local raster; a few hundred megabytes of
-cache is more than it can use.
+Set per process at start, in place of GDAL's default of 5 % of physical
+memory. A worker reads 256 px tiles from one local raster, so with this bound
+it stays well under a gigabyte.
 """
 
 

@@ -1,12 +1,14 @@
-# glace-catalog
-
 <p align="center">
-<a href="https://lqgentner.github.io/glace-viewer">
+<a href="https://source.coop/lqgentner/glace-ch">
 <img src="assets/glace-wordmark.svg" alt="GLACE" width="350">
 </a>
 </p>
+<p align="center">
+Annual local resolution weighted composites of Sentinel-1 coherence and
+backscatter over Swiss glaciers
+</p>
 
-Contents
+---
 
 - 🗺️ [Interactive web map](https://lqgentner.github.io/glace-viewer)
 - 💾 [Dataset on Source Cooperative](https://source.coop/lqgentner/glace-ch)

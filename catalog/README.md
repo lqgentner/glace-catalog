@@ -1,12 +1,13 @@
-# GLACE Switzerland (preliminary) – Sentinel-1 Glacier Coherence and Backscatter
-
 <p align="center">
-<a href="https://lqgentner.github.io/glace-viewer">
+<a href="https://source.coop/lqgentner/glace-ch">
 <img src="https://data.source.coop/lqgentner/glace-ch/_assets/glace-wordmark.svg" alt="GLACE" width="350">
 </a>
 </p>
+<p align="center">
+Annual local resolution weighted composites of Sentinel-1 coherence and backscatter over Swiss glaciers
+</p>
 
-Contents
+---
 
 - 🗺️ [Interactive web map](https://lqgentner.github.io/glace-viewer)
 - 💾 Dataset on Source Cooperative (you are here)

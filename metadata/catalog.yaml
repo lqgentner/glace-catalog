@@ -22,6 +22,10 @@ years:
 
 title: GLACE Switzerland (preliminary)
 subtitle: Sentinel-1 Glacier Coherence and Backscatter
+# Under the wordmark at the top of both READMEs, in place of a heading.
+tagline: >-
+  Annual local resolution weighted composites of Sentinel-1 coherence and
+  backscatter over Swiss glaciers
 
 # Shown once, in the root README and AGENTS.md. Drop it with the "(preliminary)"
 # in the title when the Alpine catalog replaces this one.

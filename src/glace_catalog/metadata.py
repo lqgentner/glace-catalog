@@ -148,6 +148,7 @@ class CatalogConfig:
     last_year: int
     title: str
     subtitle: str
+    tagline: str
     preliminary_notice: str
     description: str
     license: str
@@ -201,6 +202,7 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
         last_year=int(years["last"]),
         title=str(document["title"]),
         subtitle=str(document["subtitle"]),
+        tagline=str(document["tagline"]),
         preliminary_notice=str(document["preliminary_notice"]),
         description=str(document["description"]),
         license=str(document["license"]),
