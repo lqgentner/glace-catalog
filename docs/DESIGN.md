@@ -148,12 +148,19 @@ tiling, and the tiler reads that. Tiling straight from the VRT was measured at
 spike): every tile of every zoom re-warped the remote UTM composites, nine zoom
 levels deep, so the object store was read nine times per archive. The tiler
 itself is in-tree (`glace_catalog.tiler`, adapted from rio-pmtiles under its MIT
-licence, see `THIRD_PARTY_NOTICES.md`): rio-pmtiles 1.2.1 leaks the overview
-level it chose for a coarse tile into every finer tile the same worker renders
-afterwards, so a source with overviews came out blurred at max zoom, and
-running it as a subprocess meant one worker pool, one environment and one
-`rio` executable per archive. The archive itself is written by the `pmtiles`
-package's own writer. What is owned here is the warp of one tile.
+licence, see `THIRD_PARTY_NOTICES.md`): running rio-pmtiles as a subprocess
+meant one worker pool, one environment and one `rio` executable per archive,
+where one pool now serves every layer of a year; and two output rules differ on
+purpose, the tile image declares no nodata (so pure white is not clamped to
+254) and a tile is empty when its own footprint is, not a one-pixel margin. The
+overview leak that first prompted the move (rio-pmtiles 1.2.1 carried the level
+chosen for a coarse tile into every finer tile the same worker rendered, so a
+source with overviews came out blurred at max zoom) was fixed upstream in 1.2.2
+(protomaps/PMTiles#670) and is no longer a reason to stay in-tree; the shared
+pool and the output rules are, and going back would rebuild every archive,
+since the pmtiles fingerprint carries the tiler's identity. The archive itself
+is written by the `pmtiles` package's own writer. What is owned here is the warp
+of one tile.
 
 **The style is rendered from the vocabulary and committed.**
 `mosaics/styles/default.json` holds every published layer of one year; its

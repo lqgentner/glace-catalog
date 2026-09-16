@@ -8,17 +8,19 @@ from Sean Gillies's rio-mbtiles.
 
 Why it lives here rather than behind the ``rio pmtiles`` command it came from:
 
-- The per-tile worker upstream keeps the ``OVERVIEW_LEVEL`` it chose in a
-  module-level dictionary and never clears it, so once a coarse zoom has picked
-  an overview, every finer tile that follows in the same worker is read from
-  that overview and upsampled — the max-zoom tiles of a source with overviews
-  come out blurred. :func:`render_tile` chooses the level per call instead.
-- The archive is written by :class:`pmtiles.writer.Writer`, the maintained
-  writer of the PMTiles package, so the only code owned here is the warp of one
-  tile and the enumeration of which tiles to warp.
 - One :class:`~concurrent.futures.ProcessPoolExecutor` serves every layer of a
   year, instead of one subprocess per archive with its own worker pool, its own
   environment and a ``rio`` executable to find.
+- The archive is written by :class:`pmtiles.writer.Writer`, the maintained
+  writer of the PMTiles package, so the only code owned here is the warp of one
+  tile and the enumeration of which tiles to warp.
+
+What first prompted the move is no longer a reason: the per-tile worker in
+rio-pmtiles 1.2.1 kept the ``OVERVIEW_LEVEL`` it chose in a module-level
+dictionary and never cleared it, so every finer tile the same worker rendered
+afterwards was read from that overview and upsampled. Upstream fixed that in
+1.2.2 (protomaps/PMTiles#670); :func:`render_tile` chooses the level per call,
+as the fixed version does.
 
 The tile bytes are the ones rio-pmtiles produces from the same source: the
 reprojection call and the image creation options are kept as they were. Two
