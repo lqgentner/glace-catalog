@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright the portolan-catalog-template authors
+#
+# Taken from portolan-sdi/portolan-catalog-template and modified. See
+# THIRD_PARTY_NOTICES.md; the deviations are marked where they occur.
 """Every relative link and asset href resolves to a file that exists.
 
 This catches the most common hand-edit mistake: adding a child link before the

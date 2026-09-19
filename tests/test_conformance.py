@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright the portolan-catalog-template authors
+#
+# Taken from portolan-sdi/portolan-catalog-template and modified. See
+# THIRD_PARTY_NOTICES.md; the deviations are marked where they occur.
 """Portolan conformance gate, via rashid.
 
 Fails on any error-severity finding whose rule is not in ACCEPTED.

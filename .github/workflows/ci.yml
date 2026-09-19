@@ -1,3 +1,5 @@
+# Derived from portolan-sdi/portolan-catalog-template (Apache-2.0) and
+# rewritten; see THIRD_PARTY_NOTICES.md.
 name: CI
 
 on:

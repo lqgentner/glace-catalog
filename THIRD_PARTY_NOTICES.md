@@ -1,15 +1,35 @@
 # Third-party notices
 
-## rio-pmtiles
+`glace-catalog` includes third-party code that is distributed under licenses
+different from its own (MIT, see [`LICENSE`](LICENSE)). The files named below
+stay under the license given for them here. In the event that a required notice
+is missing, please [raise an issue](https://github.com/lqgentner/glace-catalog/issues).
 
-`src/glace_catalog/tiler.py` is adapted from
-[rio-pmtiles](https://github.com/protomaps/PMTiles/tree/main/python/rio-pmtiles)
-1.2.1 (`rio_pmtiles/worker.py` and `rio_pmtiles/scripts/cli.py`), which is
-itself derived from rio-mbtiles by Sean Gillies at Mapbox. The PMTiles
-repository as a whole is BSD-3-Clause; the `python/rio-pmtiles` package carries
-its own MIT licence, reproduced here as it requires.
+## License notice for portolan-catalog-template
 
-```
+This repository was scaffolded from `portolan-sdi/portolan-catalog-template` and
+still carries code from it. `tests/test_conformance.py`, `tests/test_links.py`
+and `tests/test_stac_valid.py` are kept close to upstream on purpose, so that a
+fix from the template can be merged; `tests/run_all.py` and
+`.github/workflows/ci.yml` are derived from their upstream counterparts and
+substantially rewritten. All five have been modified, and each marks its own
+deviations where they occur.
+
+Copyright the portolan-catalog-template authors
+Licensed under the Apache License, Version 2.0
+
+A copy of the license is in [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt).
+
+Available at
+https://github.com/portolan-sdi/portolan-catalog-template/blob/main/LICENSE
+
+## License notice for rio-pmtiles
+
+`src/glace_catalog/tiler.py` is adapted from rio-pmtiles 1.2.1
+(`rio_pmtiles/worker.py` and `rio_pmtiles/scripts/cli.py`), which is itself
+derived from rio-mbtiles by Sean Gillies at Mapbox.
+
+```text
 The MIT License (MIT)
 
 Copyright © 2025 Protomaps LLC, 2014-2021 Mapbox
@@ -32,3 +52,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+Available at
+https://github.com/protomaps/PMTiles/blob/main/python/rio-pmtiles/LICENSE

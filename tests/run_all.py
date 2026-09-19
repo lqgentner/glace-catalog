@@ -5,6 +5,9 @@ The list is explicit rather than globbed so that the gates are visible in one
 place and adding one is a deliberate edit. Run from anywhere:
 
     uv run tests/run_all.py
+
+Derived from portolan-sdi/portolan-catalog-template (Apache-2.0) and rewritten;
+see THIRD_PARTY_NOTICES.md.
 """
 
 from pathlib import Path
