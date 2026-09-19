@@ -14,37 +14,27 @@ jobs:
   gates:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      # setup-uv publishes no floating major tag past v7, so this pins exact.
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
-      # uv.lock is tracked (R-15) so that CI and a fresh clone resolve to the
-      # same dependency set. --locked fails instead of re-resolving when the
-      # lock and pyproject.toml have drifted apart, which is the whole point of
-      # committing it. The interpreter comes from requires-python.
-      #
-      # --all-groups installs `dev` (ruff, pyrefly, the typing stubs that
-      # tests/test_lint.py needs) and `validate` (rashid, stac-check). rashid
-      # takes a floor there, not a pin: a pin goes stale the day it is written,
-      # and the gate checks the same range at run time, so a local rashid
-      # cannot be older either. stac-check stays unpinned on purpose — the
-      # stac-check exemption in docs/conformance.md expires when the upstream
-      # crash stops, which only happens if CI takes each new release.
+      # --locked fails rather than re-resolving when uv.lock and pyproject.toml
+      # have drifted apart (R-15). --all-groups adds dev and validate; only
+      # stac-check stays unpinned, so CI takes the release that fixes the crash
+      # docs/conformance.md tolerates.
       - name: Install the locked environment
         run: uv sync --all-groups --locked
 
-      # pyflakes covers the three gates vendored from the catalog template,
-      # which ruff deliberately excludes so a re-sync stays a merge. It is not
-      # a project dependency for that reason. The ruff and pyrefly gates in
-      # tests/test_lint.py cover everything this repo writes, tools/ included.
+      # ruff excludes the vendored gates so a re-sync stays a merge; pyflakes
+      # covers them instead, and is not a project dependency for that reason.
       - name: Lint the vendored gates
         run: uv run --with pyflakes pyflakes tests/test_links.py tests/test_stac_valid.py tests/test_conformance.py
 
-      # CI_LIGHT exempts asset hrefs with a data suffix from the link check.
-      # The checkout holds the metadata and not the bytes. Structural links
-      # and every non-data asset still resolve. Leave it unset locally.
+      # The checkout holds the metadata and not the bytes, so CI_LIGHT exempts
+      # asset hrefs with a data suffix from the link check. Unset locally.
       - name: Catalog gates
         env:
           CI_LIGHT: "1"
