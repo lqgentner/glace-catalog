@@ -1,21 +1,25 @@
 <p align="center">
-<a href="https://source.coop/lqgentner/glace-ch">
-<img src="https://data.source.coop/lqgentner/glace-ch/_assets/glace-wordmark.svg" alt="GLACE" width="350">
-</a>
+  <br />
+  <img src="https://data.source.coop/lqgentner/glace-ch/_assets/glace-wordmark.svg" alt="GLACE" width="350">
+  <br />
 </p>
+
+<h1 align="center">GLACE Switzerland (preliminary)</h1>
+
 <p align="center">
-Annual local resolution weighted composites of Sentinel-1 coherence and backscatter over Swiss glaciers
+  Sentinel-1 interferometric coherence and backscatter composites of the European Alps
+  <br />
+  <br />
+  <a href="https://lqgentner.github.io/glace-viewer">🗺️ Web map</a>
+  ·
+  <a href="https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json">🧭 Portolan/STAC browser</a>
+  ·
+  <a href="https://github.com/lqgentner/glace-catalog">🏷️ Git-backed metadata</a>
+  ·
+  <a href="https://github.com/lqgentner/glace-production">⚙️ Production pipeline</a>
 </p>
 
----
-
-- 🗺️ [Interactive web map](https://lqgentner.github.io/glace-viewer)
-- 💾 Dataset on Source Cooperative (you are here)
-- 🧭 [Portolan browser of the STAC catalog](https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json)
-- ⚙️ Production pipeline on GitHub (coming soon)
-- 🏷️ [Dataset metadata on GitHub](https://github.com/lqgentner/glace-catalog)
-
----
+## About
 
 > **This is a preliminary release over the Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is produced. The dataset is GLACE Alps, over the Alpine Convention perimeter, which uses this same pipeline and supersedes this catalog. These URLs are provisional: do not cite them, and expect the coverage, the years and the identifiers to change.**
 

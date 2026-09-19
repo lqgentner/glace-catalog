@@ -1,21 +1,25 @@
 <p align="center">
-<a href="{{ catalog.links.about.href }}">
-<img src="{{ public_base }}/_assets/glace-wordmark.svg" alt="GLACE" width="350">
-</a>
+  <br />
+  <img src="{{ public_base }}/_assets/glace-wordmark.svg" alt="GLACE" width="350">
+  <br />
 </p>
+
+<h1 align="center">{{ catalog.title }}</h1>
+
 <p align="center">
-{{ catalog.tagline }}
+  {{ catalog.tagline }}
+  <br />
+  <br />
+  <a href="{{ catalog.links.related.href }}">🗺️ Web map</a>
+  ·
+  <a href="{{ browser_url }}">🧭 Portolan/STAC browser</a>
+  ·
+  <a href="{{ catalog.links.vcs.href }}">🏷️ Git-backed metadata</a>
+  ·
+  <a href="{{ catalog.links.via.href }}">⚙️ Production pipeline</a>
 </p>
 
----
-
-- 🗺️ [Interactive web map]({{ catalog.links.related.href }})
-- 💾 Dataset on Source Cooperative (you are here)
-- 🧭 [Portolan browser of the STAC catalog]({{ browser_url }})
-- ⚙️ Production pipeline on GitHub (coming soon)
-- 🏷️ [Dataset metadata on GitHub]({{ catalog.links.vcs.href }})
-
----
+## About
 
 > **{{ preliminary_notice }}**
 

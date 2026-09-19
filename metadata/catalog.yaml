@@ -22,10 +22,10 @@ years:
 
 title: GLACE Switzerland (preliminary)
 subtitle: Sentinel-1 Glacier Coherence and Backscatter
-# Under the wordmark at the top of both READMEs, in place of a heading.
+# The subtitle under the wordmark and heading at the top of both READMEs.
 tagline: >-
-  Annual local resolution weighted composites of Sentinel-1 coherence and
-  backscatter over Swiss glaciers
+  Sentinel-1 interferometric coherence and backscatter composites of the
+  European Alps
 
 # Shown once, in the root README and AGENTS.md. Drop it with the "(preliminary)"
 # in the title when the Alpine catalog replaces this one.
@@ -98,6 +98,9 @@ links:
   related:
     href: https://lqgentner.github.io/glace-viewer
     title: GLACE Viewer, a web map over the PMTiles archives
+  via:
+    href: https://github.com/lqgentner/glace-production
+    title: Production pipeline
 
 collections:
   tiles:

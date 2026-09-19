@@ -63,6 +63,11 @@
       "rel": "related",
       "href": "https://lqgentner.github.io/glace-viewer",
       "title": "GLACE Viewer, a web map over the PMTiles archives"
+    },
+    {
+      "rel": "via",
+      "href": "https://github.com/lqgentner/glace-production",
+      "title": "Production pipeline"
     }
   ]
 }
