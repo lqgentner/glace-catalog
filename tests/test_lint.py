@@ -6,9 +6,9 @@ Three checks, all of which must be reproducible from a clean checkout:
 - ``ruff format --check`` — formatting is not a matter of taste here, it is a
   property the diff depends on. A reformatting commit that touches a file it
   did not mean to change costs a reviewer more than it saves a writer.
-- ``ruff check`` — the lint rule set is in ``pyproject.toml`` and is the same
-  one deep-glacier-mapping uses, so code moving between the two repositories
-  does not change shape on the way.
+- ``ruff check`` — the lint rule set is in ``pyproject.toml``, deliberately the
+  same one the sibling repositories use, so code moving between them does not
+  change shape on the way.
 - ``pyrefly check`` under the ``strict`` preset, over the paths
   ``[tool.pyrefly] project-includes`` names.
 

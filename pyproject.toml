@@ -10,12 +10,9 @@ license.file = "LICENSE"
 dynamic = ["version"]
 
 dependencies = [
-    # tools/sync_data.py names botocore's exceptions; boto itself arrives via freezebase[s3].
     "botocore>=1.36",
     "cmcrameri>=1.9",
     "defusedxml>=0.7.1",
-    # 0.7.1 carries S3Settings, list_object_sizes, atomic_write_text,
-    # content_type_for and the profile-configured endpoint in s3_env.
     "freezebase[s3]>=0.7.1,<0.8",
     "fsspec>=2026.6.0",
     "geopandas>=1.1",
@@ -24,9 +21,6 @@ dependencies = [
     "numpy>=1.24",
     "pandas>=2.3",
     "pillow",
-    # The PMTiles v3 reader the thumbnails cut from and the writer the in-tree
-    # tiler (glace_catalog.tiler) packs archives with. Previously a transitive
-    # dependency of rio-pmtiles, which the tiler replaced.
     "pmtiles>=3.7",
     "pyarrow",
     "pydantic-settings>=2.13.1",
@@ -49,8 +43,7 @@ dependencies = [
 [dependency-groups]
 # Tighter floors for development dependencies: they track the toolchain CI
 # actually runs. That matters most for ruff and pyrefly, whose output is
-# version-dependent, and these match s1bursts so a finding in one repository
-# reproduces in the other.
+# version-dependent.
 dev = [
     "pandas-stubs>=3.0",
     "pyrefly>=1.2.0",
@@ -59,11 +52,6 @@ dev = [
     "types-requests>=2.33",
     "types-tqdm>=4.67",
 ]
-# The conformance gate. Pinned as a floor, not a pin: a pin goes stale on the
-# next release and rashid's rule set is what this catalog claims to pass. 0.1.8
-# is the first release carrying the spec v0.2.0 rules — 0.1.5 through 0.1.7
-# report an error for a `self` link and for an absolute structural href, both of
-# which v0.2.0 allows.
 validate = [
     "rashid>=0.1.8,<0.2.0",
     "stac-check",
@@ -113,9 +101,6 @@ include = [
 [tool.ruff.lint]
 # The en dash is the separator every asset title carries (glace_catalog.metadata).
 allowed-confusables = ["–"]
-# Taken verbatim from s1bursts, which carries the current first-party rule set.
-# deep-glacier-mapping has an older one; where the two differ, s1bursts wins, so
-# that code moving between first-party repositories does not change shape.
 extend-select = [
     "E",    # Pycodestyle errors (style issues)
     "W",    # Pycodestyle warnings (style issues)
@@ -173,10 +158,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
-# The gates shell out to git, ruff and pyrefly with argv lists they build
-# themselves. There is no shell and no external input, so flake8-bandit's
-# subprocess rules have nothing to catch here; leaving them on would only teach
-# the next person that a noqa is the normal way to write a gate.
 "tests/**/*.py" = [
     "S101",     # Allow asserts in tests
     "S603",     # Gates run git, ruff and pyrefly with an argv list, never a shell
@@ -194,9 +175,6 @@ suppress-dummy-args = false
 known-first-party = ["glace_catalog"]
 force-sort-within-sections = true
 
-# Pyrefly infers from installed sources, so the geo/scientific stack needs no
-# stubs. `project-excludes` repeats the vendored list above: code kept
-# byte-close to upstream is not held to this repository's typing standard.
 [tool.pyrefly]
 project-includes = ["src/glace_catalog", "scripts", "tools", "tests"]
 project-excludes = [
@@ -204,8 +182,5 @@ project-excludes = [
     "tests/test_stac_valid.py",
     "tests/test_conformance.py",
 ]
-# Repo root, so `tools.*` and `tests.*` modules resolve the way the gates
-# import them; `tools` itself, so tests/test_sync_data.py can import the tool
-# by module name after putting it on sys.path.
 search-path = [".", "src", "tools"]
 preset = "strict"

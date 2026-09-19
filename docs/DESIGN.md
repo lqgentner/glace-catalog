@@ -148,7 +148,7 @@ tiling, and the tiler reads that. Tiling straight from the VRT was measured at
 spike): every tile of every zoom re-warped the remote UTM composites, nine zoom
 levels deep, so the object store was read nine times per archive. The tiler
 itself is in-tree (`glace_catalog.tiler`, adapted from rio-pmtiles under its MIT
-licence, see `THIRD_PARTY_NOTICES.md`): running rio-pmtiles as a subprocess
+license, see `THIRD_PARTY_NOTICES.md`): running rio-pmtiles as a subprocess
 meant one worker pool, one environment and one `rio` executable per archive,
 where one pool now serves every layer of a year; and two output rules differ on
 purpose, the tile image declares no nodata (so pure white is not clamped to

@@ -167,7 +167,7 @@ def load_attribution(path: Path, year: int | None = None) -> str:
     ------
     ValueError
         If no source declares one. Publishing Sentinel data without the
-        attribution is a licence problem, so this is not defaulted.
+        attribution is a license problem, so this is not defaulted.
     """
     document = json.loads(Path(path).read_text())
     for source in document.get("sources", {}).values():

@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-09-14.** Update this in the same commit as the change it describes;
+**As of 2026-09-19.** Update this in the same commit as the change it describes;
 a stale status record is worse than none, because the next person trusts it. The
 design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
@@ -8,7 +8,7 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 
 | | state |
 | --- | --- |
-| repository | scaffolded from `portolan-sdi/portolan-catalog-template`; the vendored publishers are gone (R-8) |
+| repository | scaffolded from `portolan-sdi/portolan-catalog-template` (Apache-2.0); the vendored publishers are gone (R-8), the three conformance gates stay, attributed in `THIRD_PARTY_NOTICES.md` with the license copy in `licenses/` |
 | catalog documents | rendered from `metadata/` (R-18) and committed under `tests/test_render.py`; **0 rashid errors**, two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)). Reviewed in the Portolan browser 2026-09-09: asset titles unified across collections, items, links and style; `renders` re-synced with the remeasured stretches; QA assets badged `cloud-optimized`; projection extension dropped |
 | gates | real: ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, sync, stac-check, rashid |
 | source composites | Swiss 2021–2024 **regenerated with s1bursts 0.5.0** and verified 2026-09-08 through `load_and_verify_manifest`: 1 716 files across 143 tiles per year, every row carrying a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
@@ -103,6 +103,16 @@ Worth doing, blocking nothing:
 - **P-15 — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
   (raster styling).** This catalog is the first Portolan raster PMTiles case; the
   style files and the `renders` blocks may both need changing when it settles.
+- **P-19 — Repoint the production repository, once there is one.** The composite
+  pipeline moves out of `deep-glacier-mapping` into
+  [`glace-production`](https://github.com/lqgentner/glace-production), which is
+  still empty. **The old name stays here until the code is there, deliberately:**
+  the references are runnable, not prose — `AGENTS.md` §1 is a
+  `cd ../deep-glacier-mapping` subshell — so repointing them early sends a reader
+  into a checkout that does not exist, which is worse than a name that is merely
+  old. Both READMEs already link the new repository, and nobody executes a link
+  row. *Verified when* `git grep -l deep-glacier-mapping` comes back empty and
+  the subshell in `AGENTS.md` §1 runs from `../glace-production`.
 
 ## Swapping Switzerland for the Alps
 
