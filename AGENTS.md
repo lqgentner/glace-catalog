@@ -158,6 +158,14 @@ by the tracked metadata.
 embedded in every asset href. Adding a year requires building that year and
 finalizing again; existing years are unchanged.
 
+Thumbnails are drawn from the latest year's `coh12_vv.tif` COGs over an
+OpenStreetMap basemap, so this step needs network access to the tile service.
+`--thumbnail-basemap` takes another contextily provider or a local georeferenced
+raster, and `--thumbnail-attribution` overrides the credit — an empty string is
+refused for a tile provider and is only for attribution-free local data.
+`--skip-thumbnail` keeps the thumbnails already in the store and fails if they
+are not there, so it can never leave a collection pointing at a missing image.
+
 ## Publish the store
 
 `tools/sync_data.py` streams the built store from `settings.store_root`

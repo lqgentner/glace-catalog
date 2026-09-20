@@ -49,7 +49,7 @@ reading the collection document first.
 
 README_NAME = "README.md"
 AGENTS_NAME = "AGENTS.md"
-THUMBNAIL_NAME = "thumbnail.png"
+THUMBNAIL_NAME = "thumbnail.webp"
 ASSETS_DIR = "_assets"
 """Root directory of files the catalog documents link but do not describe."""
 
@@ -130,7 +130,7 @@ class StoreLayout:
         |-- tiles/
         |   |-- collection.json  README.md  AGENTS.md
         |   |-- items.parquet          # collection-mirror, every year
-        |   |-- thumbnail.png
+        |   |-- thumbnail.webp
         |   |-- glacier-fractions.parquet
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
@@ -138,7 +138,7 @@ class StoreLayout:
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
-            |-- items.parquet  thumbnail.png  styles/
+            |-- items.parquet  thumbnail.webp  styles/
             `-- {year}/item.json + 12 analysis COGs + 14 web-map archives
 
     One thing is deliberately not mirrored from the old flat layout: there is no

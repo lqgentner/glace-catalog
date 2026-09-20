@@ -1,417 +1,290 @@
-"""Collection thumbnails, cut out of the published web-map archives.
+"""Collection thumbnails from the latest analysis COGs over a muted OpenStreetMap basemap.
 
-A thumbnail is a picture of the data, so it must be drawn the way the data is
-drawn. The one rendering of GLACE that is already reviewed is the committed
-MapLibre style (M-27), and the PMTiles archives ``publish-year`` bakes are that
-style applied to the pixels — colour-mapped, stretched and resampled once, in
-the build. Reading the framed area back out of an archive therefore obeys the
-published style *by construction*: no stretch, ramp or range is repeated here,
-and there is nothing to keep in sync (R-9).
+Both collections use a 1400 x 933 landscape frame. 3:2 is what a catalog
+browser's card is shaped like, so it is what Portolan's thumbnail guidance
+frames to; no conformance rule fixes an aspect (rashid checks only that a
+geospatial collection carries a thumbnail asset whose type is PNG, JPEG or
+WebP), but a thumbnail drawn at any other shape is letterboxed or cropped by
+the reader that matters most. The mosaic and the actual MGRS tile keep their
+projected proportions inside that frame: the short axis grows, nothing is cut.
 
-That is also why there is no headless map renderer in this module. A raster
-PMTiles archive already holds rendered tiles; chiitiler or MapLibre would only
-re-render what the tiler has drawn.
-
-Both images come from the latest year's ``coh12_rgb`` archive: the mosaics
-collection gets its scope's whole display extent, the tiles collection gets one
-MGRS tile. Each is framed to 3:2 — the shape a catalog browser's card wants —
-by *widening* the short side about the centre, never by cropping data away.
+1400 px wide is twice the widest card, so the image is still sharp where the
+card is laid out at 700 CSS px on a 2x display — the case where a smaller
+thumbnail is upscaled and reads as soft. A browser downscales for everyone
+else at no visible cost.
 """
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-import gzip
 import io
 import logging
-import math
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from freezebase.mgrs import MGRSGeoBox
+import contextily as cx
+from freezebase.raster import rasterio_open
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+import numpy as np
 from PIL import Image
-from pmtiles.reader import Reader
-from pmtiles.tile import Compression, TileType
-from upath import UPath
+from rasterio.enums import Resampling
+from xyzservices.providers import providers
 
-from glace_catalog.scopes import MERCATOR_ORIGIN, TILE_PX, zoom_resolution
+from glace_catalog.stac.naming import published_name
+from glace_catalog.styles import DEFAULT_STYLE_PATH, load_styles, resolve_cmap
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
-    from pathlib import Path
+    from matplotlib.axes import Axes
+    from rasterio.crs import CRS
+    from upath import UPath
+    from xyzservices import TileProvider
 
-    from pmtiles.tile import HeaderDict
-
-    from glace_catalog.scopes import Scope
     from glace_catalog.stac.store import StoreLayout
 
 logger = logging.getLogger(__name__)
 
-Bbox = tuple[float, float, float, float]
-"""A bounding box as ``(west, south, east, north)``."""
-
-THUMBNAIL_LAYER = "coh12_rgb"
-"""Archive both thumbnails are cut out of.
-
-The false-colour coherence composition is the flagship product — it is what the
-viewer opens on and what the dataset is about — and it is the one layer that
-shows all three bands at once, so a single image says what the collection holds.
-"""
-
+THUMBNAIL_LAYER = "coh12_vv"
 THUMBNAIL_TILE = "32TMS24"
-"""MGRS tile the per-tile collection is pictured by.
+THUMBNAIL_WIDTH = 1400
+THUMBNAIL_HEIGHT = 933
+THUMBNAIL_MARGIN = 0.05
+THUMBNAIL_QUALITY = 90
+FIGURE_WIDTH_IN = 6.0
+"""Figure width in inches, held constant so the dpi carries the pixel size.
 
-Aletsch: the largest glacier in the Alps, entirely inside one 10 km tile, and
-the scene a reader is most likely to recognise.
+Matplotlib sizes text in points, so a figure whose inches grow with the output
+draws the credit at a fixed pixel height that shrinks against an ever-larger
+picture. Fixing the inches and deriving the dpi instead makes every typographic
+size a constant fraction of the image, at any :data:`THUMBNAIL_WIDTH`.
 """
 
-THUMBNAIL_WIDTH = 1200
-"""Width of a written thumbnail, in pixels; the height follows from the 3:2 frame."""
+ATTRIBUTION_SIZE = "small"
+"""Credit size, named rather than numeric so it scales with :data:`FIGURE_WIDTH_IN`."""
 
-FRAME_ASPECT = 3.0 / 2.0
-"""Width-to-height ratio a thumbnail is framed to, in projected space."""
+ASCII_COPYRIGHT = "(C)"
+"""What xyzservices spells the copyright sign as in a provider's own credit."""
 
-EARTH_RADIUS_M = 6378137.0
-"""Sphere radius WebMercator is defined on."""
-
-MERCATOR_TOP_M = -MERCATOR_ORIGIN
-"""Northern edge of the WebMercatorQuad matrix; pixel rows count down from it."""
-
-_RASTER_TILE_TYPES = frozenset({TileType.PNG, TileType.JPEG, TileType.WEBP, TileType.AVIF})
-"""Tile types Pillow can decode. A vector archive is refused rather than drawn empty."""
+DEFAULT_BASEMAP = "OpenStreetMap.Mapnik"
 
 
-def to_mercator(lon: float, lat: float) -> tuple[float, float]:
-    """Project one WGS84 coordinate to WebMercator metres."""
-    return (
-        math.radians(lon) * EARTH_RADIUS_M,
-        math.log(math.tan(math.pi / 4.0 + math.radians(lat) / 2.0)) * EARTH_RADIUS_M,
-    )
+def cache_dir() -> Path:
+    """Per-user directory contextily keeps downloaded tiles in.
 
-
-def to_wgs84(x: float, y: float) -> tuple[float, float]:
-    """Unproject one WebMercator coordinate, in metres, to WGS84 degrees."""
-    return (
-        math.degrees(x / EARTH_RADIUS_M),
-        math.degrees(2.0 * math.atan(math.exp(y / EARTH_RADIUS_M)) - math.pi / 2.0),
-    )
-
-
-def frame_3_2(bbox: Bbox) -> Bbox:
-    """Widen the short side of a bounding box until its projected aspect is 3:2.
-
-    The aspect that matters is the one the picture is drawn at, which is
-    WebMercator's, not the degree box's: at 46 degrees north a square kilometre
-    is 1.45 times wider in degrees of longitude than in degrees of latitude.
-    So the box is converted, grown about its centre, and converted back.
-
-    Growing, never cutting: a thumbnail that cropped the collection's extent
-    would show less than the collection holds, and the empty margin a widened
-    box gains is transparent rather than wrong.
-
-    Parameters
-    ----------
-    bbox
-        Bounding box in WGS84 degrees, ``(west, south, east, north)``.
-
-    Returns
-    -------
-    tuple of float
-        The framed box, in WGS84 degrees.
+    Under ``XDG_CACHE_HOME`` rather than the system temporary directory: a
+    fixed name in a world-writable ``/tmp`` is a directory another account can
+    already own, which turns the first cache write into a ``PermissionError``
+    that has nothing to do with the catalog.
     """
-    west, south, east, north = bbox
-    left, bottom = to_mercator(west, south)
-    right, top = to_mercator(east, north)
-    span_x, span_y = right - left, top - bottom
-    if span_x <= 0.0 or span_y <= 0.0:
-        msg = f"Cannot frame the empty bounding box {bbox}."
-        raise ValueError(msg)
-
-    if span_x < span_y * FRAME_ASPECT:
-        grow = (span_y * FRAME_ASPECT - span_x) / 2.0
-        left, right = left - grow, right + grow
-    else:
-        grow = (span_x / FRAME_ASPECT - span_y) / 2.0
-        bottom, top = bottom - grow, top + grow
-
-    west, south = to_wgs84(left, bottom)
-    east, north = to_wgs84(right, top)
-    return (west, south, east, north)
+    base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(base) / "glace-catalog" / "basemap-tiles"
 
 
-def mosaics_bbox(scope: Scope) -> Bbox:
-    """WGS84 bounds of a scope's display grid, which the mosaics cover exactly.
-
-    The committed extent, not one measured off the archive: the grid is what the
-    collection publishes, and an archive drops its empty tiles, so its own header
-    describes the data perimeter rather than the collection's footprint.
-    """
-    left, bottom, right, top = scope.display_grid.bounds
-    west, south = to_wgs84(left, bottom)
-    east, north = to_wgs84(right, top)
-    return (west, south, east, north)
-
-
-def tile_bbox(tile: str) -> Bbox:
-    """WGS84 bounds of one MGRS tile, from the same geobox the items are built on."""
-    extent = MGRSGeoBox.from_mgrs(tile).geographic_extent
-    west, south, east, north = extent.boundingbox.bbox
-    return (float(west), float(south), float(east), float(north))
-
-
-def pixel_bounds(bbox: Bbox, zoom: int) -> tuple[float, float, float, float]:
-    """Position of a WGS84 box on the WebMercatorQuad pixel grid at ``zoom``.
-
-    Returns
-    -------
-    tuple of float
-        ``(left, top, right, bottom)`` in pixels from the matrix origin, as
-        fractions rather than whole pixels: the crop is resampled, so rounding
-        it to a pixel would shift the frame off centre for no gain.
-    """
-    resolution = zoom_resolution(zoom)
-    west, south, east, north = bbox
-    left, bottom = to_mercator(west, south)
-    right, top = to_mercator(east, north)
-    return (
-        (left - MERCATOR_ORIGIN) / resolution,
-        (MERCATOR_TOP_M - top) / resolution,
-        (right - MERCATOR_ORIGIN) / resolution,
-        (MERCATOR_TOP_M - bottom) / resolution,
-    )
-
-
-def choose_zoom(bbox: Bbox, *, width: int, min_zoom: int, max_zoom: int) -> int:
-    """Coarsest zoom in an archive at which ``bbox`` is at least ``width`` pixels wide.
-
-    Downsampling loses nothing a viewer can see; upsampling invents nothing and
-    shows it, so the level read is the first one that already carries every
-    output pixel. Going finer still would only download tiles to throw their
-    detail away -- for the Swiss display extent the difference is z9's 24 tiles
-    against z10's 88, for the same 1200 px picture.
-
-    If even the archive's finest level is narrower than the output -- a small
-    box, such as a single MGRS tile at the maximum zoom -- that level is used
-    and the crop is scaled up, because there is nothing better to read.
-    """
-    for zoom in range(min_zoom, max_zoom):
-        left, _, right, _ = pixel_bounds(bbox, zoom)
-        if right - left >= width:
-            return zoom
-    return max_zoom
-
-
-@contextmanager
-def _range_reader(archive: Path | UPath) -> Iterator[Callable[[int, int], bytes]]:
-    """Open an archive as the ``get_bytes(offset, length)`` callable the reader wants.
-
-    One handle, seeked per read. On S3 that is a range request per call, which is
-    what keeps a thumbnail to a few dozen kilobytes off an archive of gigabytes.
-    """
-    with UPath(archive).open("rb") as handle:
-
-        def get_bytes(offset: int, length: int) -> bytes:
-            handle.seek(offset)
-            return bytes(handle.read(length))
-
-        yield get_bytes
-
-
-def _decode_tile(payload: bytes, compression: Compression) -> Image.Image:
-    """Decode one tile's bytes into an RGBA image.
+def resolve_basemap(basemap: str) -> TileProvider | str:
+    """Look ``basemap`` up as a contextily provider, else as a local raster.
 
     Raises
     ------
     ValueError
-        If the archive declares a compression other than ``NONE`` or ``GZIP``.
-        The in-tree tiler writes neither BROTLI nor ZSTD, so an archive that
-        does was written by something else; failing here beats handing
-        compressed bytes to Pillow and reading its unrecognised-format error.
+        If the name is neither. Falling through to contextily would hand it a
+        provider name as a file path, and the run would fail with a
+        "no such file or directory" that names the wrong problem.
     """
-    if compression == Compression.GZIP:
-        payload = gzip.decompress(payload)
-    elif compression != Compression.NONE:
-        msg = (
-            f"the archive's tiles are {compression.name}-compressed; only "
-            f"{Compression.NONE.name} and {Compression.GZIP.name} are supported"
-        )
-        raise ValueError(msg)
-    with Image.open(io.BytesIO(payload)) as tile:
-        return tile.convert("RGBA")
-
-
-def _paste_tiles(
-    reader: Reader,
-    header: HeaderDict,
-    zoom: int,
-    bounds: tuple[float, float, float, float],
-) -> tuple[Image.Image, tuple[int, int], int]:
-    """Composite every archive tile covering ``bounds`` onto a transparent canvas.
-
-    Returns
-    -------
-    tuple
-        The canvas, its own upper-left corner in pixels from the matrix origin
-        so a caller can place ``bounds`` on it, and how many tiles were found.
-    """
-    left, top, right, bottom = bounds
-    last = 2**zoom - 1
-    x_range = range(
-        min(max(math.floor(left / TILE_PX), 0), last),
-        min(max(math.ceil(right / TILE_PX) - 1, 0), last) + 1,
+    known = providers.flatten()
+    if basemap in known:
+        return known[basemap]
+    if Path(basemap).exists():
+        return basemap
+    msg = (
+        f"{basemap!r} is neither a contextily provider nor an existing raster; "
+        f"provider names look like {DEFAULT_BASEMAP!r}"
     )
-    y_range = range(
-        min(max(math.floor(top / TILE_PX), 0), last),
-        min(max(math.ceil(bottom / TILE_PX) - 1, 0), last) + 1,
-    )
-    origin = (x_range.start * TILE_PX, y_range.start * TILE_PX)
-    canvas = Image.new(
-        "RGBA",
-        (len(x_range) * TILE_PX, len(y_range) * TILE_PX),
-        (0, 0, 0, 0),
-    )
-    found = 0
-    for x in x_range:
-        for y in y_range:
-            payload = reader.get(zoom, x, y)
-            if payload is None:
-                # The tiler drops fully transparent tiles, so a hole in the
-                # archive is nodata and stays transparent on the canvas.
-                continue
-            canvas.paste(
-                _decode_tile(payload, header["tile_compression"]),
-                (x * TILE_PX - origin[0], y * TILE_PX - origin[1]),
-            )
-            found += 1
-    logger.info("z%d: %d of %d tile(s) present", zoom, found, len(x_range) * len(y_range))
-    return canvas, origin, found
+    raise ValueError(msg)
 
 
-def render_from_pmtiles(
-    archive: Path | UPath,
-    bbox_wgs84: Bbox,
+def add_background(
+    ax: Axes,
+    basemap: str,
+    attribution: str | None,
+    crs: CRS,
     *,
-    width: int = THUMBNAIL_WIDTH,
-) -> Image.Image:
-    """Cut one WGS84 box out of a raster PMTiles archive as an RGBA image.
-
-    Parameters
-    ----------
-    archive
-        The ``.pmtiles`` file, local or on object storage. It is read through
-        range requests and never downloaded whole.
-    bbox_wgs84
-        Area to draw, ``(west, south, east, north)``. Frame it with
-        :func:`frame_3_2` first if the output shape matters.
-    width
-        Output width in pixels. The height follows from the box's projected
-        aspect, so a 3:2 box at the default width gives 1200x800.
-
-    Returns
-    -------
-    PIL.Image.Image
-        RGBA image; the archive's missing tiles stay fully transparent.
+    attribution_size: str | float = ATTRIBUTION_SIZE,
+) -> None:
+    """Add a credited basemap; render standard OSM tiles in grayscale.
 
     Raises
     ------
     ValueError
-        If the archive holds vector tiles, which are not an image, or if not one
-        tile covering ``bbox_wgs84`` is in it. The second is the failure worth
-        catching: an empty read returns a perfectly valid fully transparent
-        picture, which would be published, checksummed and validated without a
-        word.
+        If a tile provider's credit is suppressed with ``attribution=""``. The
+        published thumbnails carry the basemap's cartography into a CC-BY-4.0
+        release, so the credit is the licence term, not a caption: only an
+        attribution-free local raster may go without one.
     """
-    with _range_reader(archive) as get_bytes:
-        reader = Reader(get_bytes)
-        header = reader.header()
-        tile_type = header["tile_type"]
-        if tile_type not in _RASTER_TILE_TYPES:
-            msg = f"{archive} holds {tile_type.name} tiles, which cannot be decoded as an image."
-            raise ValueError(msg)
-        zoom = choose_zoom(
-            bbox_wgs84,
-            width=width,
-            min_zoom=header["min_zoom"],
-            max_zoom=header["max_zoom"],
-        )
-        bounds = pixel_bounds(bbox_wgs84, zoom)
-        canvas, origin, found = _paste_tiles(reader, header, zoom, bounds)
-
-    if not found:
+    source = resolve_basemap(basemap)
+    if attribution is None and not isinstance(source, str):
+        # The provider's own wording, with the copyright sign it spells out in
+        # ASCII: xyzservices carries "(C)" for portability, and the thumbnail is
+        # a picture, where the sign itself is what a reader expects to see.
+        declared = str(source.get("attribution") or "")
+        attribution = declared.replace(ASCII_COPYRIGHT, "\N{COPYRIGHT SIGN}") or None
+    if attribution == "" and not isinstance(source, str):
         msg = (
-            f"{archive} holds no tile covering {bbox_wgs84} at z{zoom}; "
-            "the box misses the archive's coverage, or the level is empty."
+            f"{basemap!r} is a tile provider, whose credit cannot be suppressed; "
+            "an empty attribution is only for an attribution-free local raster"
         )
         raise ValueError(msg)
-
-    left, top, right, bottom = bounds
-    height = max(1, round(width * (bottom - top) / (right - left)))
-    # Crop and rescale in one resampling pass: `box` takes the fractional crop
-    # in source pixels, so the frame is not first rounded to a whole pixel.
-    #
-    # Through premultiplied alpha, so the transparent canvas behind the data
-    # cannot bleed a dark fringe into the edge of the perimeter. Pillow 12.3
-    # premultiplies internally and gives the same pixels either way; saying it
-    # here does not depend on that staying true.
-    scaled = canvas.convert("RGBa").resize(
-        (width, height),
-        Image.Resampling.LANCZOS,
-        box=(left - origin[0], top - origin[1], right - origin[0], bottom - origin[1]),
+    if basemap == DEFAULT_BASEMAP:
+        # Reuse downloaded tiles between runs, as required by OSM's tile policy.
+        cache = cache_dir()
+        cache.mkdir(parents=True, exist_ok=True)
+        cx.set_cache_dir(str(cache))
+    cx.add_basemap(
+        ax,
+        source=source,
+        crs=crs,
+        attribution=False if attribution == "" else attribution,
+        zoom_adjust=1,
+        attribution_size=attribution_size,
+        headers={"user-agent": "glace-catalog-thumbnail/0.1"},
+        timeout=30,
+        zorder=0,
     )
-    return scaled.convert("RGBA")
+    if basemap == DEFAULT_BASEMAP:
+        for artist in ax.images:
+            rgba = np.asarray(artist.get_array()).copy()
+            gray = rgba[..., :3] @ np.array([0.2126, 0.7152, 0.0722])
+            rgba[..., :3] = gray[..., None].astype("uint8")
+            artist.set_data(rgba)
+
+
+def render_from_cog(
+    source: Path | UPath,
+    *,
+    basemap: str = DEFAULT_BASEMAP,
+    attribution: str | None = None,
+    width: int = THUMBNAIL_WIDTH,
+    height: int = THUMBNAIL_HEIGHT,
+    attribution_size: str | float = ATTRIBUTION_SIZE,
+) -> Image.Image:
+    """Plot coherence VV over a basemap, preserving native projected aspect.
+
+    Read only a thumbnail-sized overview of the source. Nodata and values outside [0, 1]
+    are transparent; zero coherence is valid. Basemap failures and empty data fail the render, so a
+    basemap alone cannot masquerade as a successful thumbnail.
+
+    ``basemap`` accepts a contextily provider name or a local georeferenced
+    raster. Providers retain their credit, which only an attribution-free local
+    raster (for example Natural Earth) may drop with ``attribution=""``.
+    """
+    if width < 1 or height < 1:
+        msg = "Thumbnail dimensions must be positive"
+        raise ValueError(msg)
+    with rasterio_open(source) as src:
+        if src.crs is None or not src.crs.is_projected:
+            msg = f"{source} must have a projected CRS"
+            raise ValueError(msg)
+        if src.transform.b != 0 or src.transform.d != 0:
+            msg = f"{source} must be an axis-aligned raster"
+            raise ValueError(msg)
+        if src.transform.a <= 0 or src.transform.e >= 0:
+            # `imshow` draws row 0 at `top` and column 0 at `left`. A south-up
+            # or east-left raster satisfies both checks above and comes out
+            # mirrored -- a wrong picture that is neither blank nor an error,
+            # so nothing downstream would catch it.
+            msg = f"{source} must be north-up and east-right"
+            raise ValueError(msg)
+        left, bottom, right, top = src.bounds
+        span_x, span_y = right - left, top - bottom
+        read_height = max(1, round(width * span_y / span_x))
+        data = src.read(
+            1,
+            out_shape=(read_height, width),
+            masked=True,
+            resampling=Resampling.average,
+        )
+        crs = src.crs
+    data = np.ma.masked_invalid(data)
+    data = np.ma.masked_outside(data, 0, 1)
+    if data.count() == 0:
+        msg = f"{source} has no valid coherence"
+        raise ValueError(msg)
+    styles, _ = load_styles(DEFAULT_STYLE_PATH)
+    style = styles[THUMBNAIL_LAYER]
+
+    figure = Figure(
+        figsize=(FIGURE_WIDTH_IN, FIGURE_WIDTH_IN * height / width),
+        dpi=width / FIGURE_WIDTH_IN,
+    )
+    canvas = FigureCanvasAgg(figure)
+    ax = figure.add_axes((0, 0, 1, 1))
+    ax.set_axis_off()
+    frame_x = span_x * (1 + 2 * THUMBNAIL_MARGIN)
+    frame_y = span_y * (1 + 2 * THUMBNAIL_MARGIN)
+    aspect = width / height
+    frame_x = max(frame_x, frame_y * aspect)
+    frame_y = max(frame_y, frame_x / aspect)
+    center_x, center_y = (left + right) / 2, (bottom + top) / 2
+    xlim = (center_x - frame_x / 2, center_x + frame_x / 2)
+    ylim = (center_y - frame_y / 2, center_y + frame_y / 2)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    add_background(ax, basemap, attribution, crs, attribution_size=attribution_size)
+    ax.imshow(
+        data,
+        extent=(left, right, bottom, top),
+        cmap=resolve_cmap(style.cmap),
+        vmin=style.vmin,
+        vmax=style.vmax,
+        interpolation="nearest",
+        zorder=1,
+    )
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    canvas.draw()
+    image = Image.frombuffer("RGBA", canvas.get_width_height(), bytes(canvas.buffer_rgba())).copy()
+    figure.clear()
+    return image
 
 
 def write_collection_thumbnails(
     layout: StoreLayout,
     year: int,
     *,
-    scope: Scope,
+    basemap: str = DEFAULT_BASEMAP,
+    attribution: str | None = None,
 ) -> None:
-    """Render and write both collection thumbnails from one year's archive.
+    """Write the mosaic and Aletsch tile thumbnails from the selected latest year.
 
-    The mosaics collection is pictured by the whole scope, the tiles collection
-    by :data:`THUMBNAIL_TILE`. Both are framed to 3:2 and written as PNG, which
-    is what the ``thumbnail`` asset on each collection document declares.
+    Render both before writing either, so a missing tile or failed basemap does
+    not leave a newly rendered mosaic paired with an older tile thumbnail.
 
-    Parameters
-    ----------
-    layout
-        The store being finalized.
-    year
-        Published year to draw; normally the most recent one.
-    scope
-        Scope the store covers, for the mosaics collection's extent.
-
-    Raises
-    ------
-    ValueError
-        If either image comes back with nothing drawn on it. A blank thumbnail
-        is a publication failure that looks like a success everywhere else: the
-        PNG is valid, the checksum is over real bytes, and the collection
-        validates.
+    Written as lossy WebP at :data:`THUMBNAIL_QUALITY`, flattened to RGB: the
+    frame is opaque, the basemap covers it edge to edge, and the losslessly
+    stored copy of these pixels is the COG the picture is drawn from. Lossless
+    here would roughly treble the bytes a card loads to preserve detail no
+    reader sees, and at this quality the only visible cost is a trace of
+    smoothing in the speckle.
     """
-    archive = layout.viz(year, THUMBNAIL_LAYER)
-    if not archive.exists():
-        logger.warning("%s does not exist; thumbnails not rendered", archive)
-        return
-
-    for destination, bbox in (
-        (layout.mosaics_thumbnail, mosaics_bbox(scope)),
-        (layout.tiles_thumbnail, tile_bbox(THUMBNAIL_TILE)),
-    ):
-        image = render_from_pmtiles(archive, frame_3_2(bbox))
-        if image.getchannel("A").getextrema()[1] == 0:
-            msg = f"{destination} would be blank: nothing inside {bbox} is drawn in {archive}."
-            raise ValueError(msg)
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        payload = buffer.getvalue()
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(payload)
-        logger.info(
-            "Wrote %s from %d (%dx%d, %.0f kB)",
+    images = [
+        (
             destination,
-            year,
-            image.width,
-            image.height,
-            len(payload) / 1e3,
+            render_from_cog(
+                source,
+                basemap=basemap,
+                attribution=attribution,
+            ),
         )
+        for destination, source in (
+            (layout.mosaics_thumbnail, layout.mosaic_year(year) / published_name(THUMBNAIL_LAYER)),
+            (
+                layout.tiles_thumbnail,
+                layout.tile(year, THUMBNAIL_TILE) / published_name(THUMBNAIL_LAYER),
+            ),
+        )
+    ]
+    for destination, image in images:
+        buffer = io.BytesIO()
+        image.convert("RGB").save(buffer, format="WEBP", quality=THUMBNAIL_QUALITY)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(buffer.getvalue())
+        logger.info("Wrote %s from %d (%dx%d)", destination, year, image.width, image.height)

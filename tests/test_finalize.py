@@ -165,6 +165,26 @@ def check_coverage(
         checks["a link to a layer no style holds is refused"] = True
 
 
+def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+    """Check that skipping the thumbnails needs thumbnails already in the store."""
+    layout = stac.StoreLayout(store)
+    try:
+        fin.require_existing_thumbnails(layout)
+        checks["--skip-thumbnail refuses a store with no thumbnail"] = False
+    except FileNotFoundError as error:
+        checks["--skip-thumbnail refuses a store with no thumbnail"] = "--skip-thumbnail" in str(
+            error
+        )
+    for path in (layout.tiles_thumbnail, layout.mosaics_thumbnail):
+        Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
+        Path(str(path)).write_bytes(b"")
+    try:
+        fin.require_existing_thumbnails(layout)
+        checks["--skip-thumbnail accepts thumbnails already written"] = True
+    except FileNotFoundError:
+        checks["--skip-thumbnail accepts thumbnails already written"] = False
+
+
 def main() -> int:
     """Run every check; print the failures."""
     fin = _finalizer()
@@ -181,6 +201,7 @@ def main() -> int:
         check_registration(checks, fin, document)
         links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024], "https://example.org/x")
         check_coverage(checks, fin, document, written, links)
+        check_skip_thumbnail(checks, fin, store)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

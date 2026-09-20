@@ -224,8 +224,8 @@ def _collection_assets(
             "alternate": bases.alternate(f"{collection}/glacier-fractions.parquet"),
         }
     assets["thumbnail"] = {
-        "href": bases.href(f"{collection}/thumbnail.png"),
-        "type": "image/png",
+        "href": bases.href(f"{collection}/thumbnail.webp"),
+        "type": "image/webp",
         "title": f"{short} preview",
         "roles": ["thumbnail"],
     }

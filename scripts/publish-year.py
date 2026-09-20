@@ -51,7 +51,7 @@ from glace_catalog.documents import render_year_prose
 from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
-from glace_catalog.stac.naming import ASSET_KEYS
+from glace_catalog.stac.naming import ASSET_KEYS, published_name
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 from glace_catalog.styles import RgbStyle
@@ -473,7 +473,7 @@ def mosaic_assets(
         if statistics:
             band["statistics"] = statistics
         assets[asset_key] = stac.MosaicAsset(
-            href=f"{asset_key}.tif",
+            href=published_name(asset_key),
             title=entry["title"],
             description=entry["description"],
             roles=list(entry["roles"]),

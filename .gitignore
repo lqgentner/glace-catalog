@@ -45,7 +45,7 @@ __pycache__/
 catalog/tiles/[0-9][0-9][0-9][0-9]/
 catalog/mosaics/[0-9][0-9][0-9][0-9]/
 catalog/**/items.parquet
-catalog/**/thumbnail.png
+catalog/**/thumbnail.webp
 
 # Build state and the per-year slice of the item mirror. Never published.
 .build-state.json

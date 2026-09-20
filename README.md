@@ -63,7 +63,10 @@ Coming soon. Once the first release is out, the metadata will be archived on Zen
 
 The code is MIT, except for the vendored files listed in
 [Third Party Notices](THIRD_PARTY_NOTICES.md), which stay under their own licenses.
-See [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified Copernicus Sentinel data.
+See [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
+Copernicus Sentinel data. The collection thumbnails are drawn over
+[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that credit
+in the image.
 
 ## Comments and contributions
 

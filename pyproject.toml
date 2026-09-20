@@ -12,6 +12,7 @@ dynamic = ["version"]
 dependencies = [
     "botocore>=1.36",
     "cmcrameri>=1.9",
+    "contextily>=1.7.1",
     "defusedxml>=0.7.1",
     "freezebase[s3]>=0.7.1,<0.8",
     "fsspec>=2026.6.0",

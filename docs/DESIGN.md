@@ -43,14 +43,14 @@ collections, and the year sub-catalogs come for free.
 ├── tiles/
 │   ├── collection.json  README.md  AGENTS.md
 │   ├── items.parquet            ← collection-mirror, every year in one file
-│   ├── thumbnail.png  glacier-fractions.parquet
+│   ├── thumbnail.webp  glacier-fractions.parquet
 │   └── {year}/
 │       ├── catalog.json  README.md  AGENTS.md
 │       ├── .build-state.json  .items.parquet     ← never published
 │       └── {tile}/item.json + 12 COGs
 └── mosaics/
     ├── collection.json  README.md  AGENTS.md
-    ├── items.parquet  thumbnail.png
+    ├── items.parquet  thumbnail.webp
     ├── styles/{year}.json           # MapLibre GL, one per year, from the committed template
     └── {year}/item.json + 12 analysis COGs + 14 {stem}_viz.pmtiles
 ```
@@ -474,7 +474,7 @@ struck through — git holds them.
 | R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |
-| R-9 | Thumbnails are cut from the latest year's `coh12_rgb.pmtiles` archive, so they obey the committed style by construction: the whole scope for the mosaics, tile `32TMS24` (Aletsch) for the tiles, both framed 3:2 | 3 |
+| R-9 | Thumbnails render the latest year's mosaic and `32TMS24` tile `coh12_vv.tif` COGs as 1400 × 933 WebP images (quality 90) over grayscale OSM (`zoom_adjust=1`, the provider's own credit with the © sign at a named `small` size). 3:2 is Portolan's thumbnail guidance, not a conformance rule — rashid checks only the `thumbnail` role and a PNG/JPEG/WebP type — but it is the browser card's shape, so any other aspect is letterboxed or cropped where it is read. 1400 px is twice the widest browser card, so a 2x display does not upscale. The figure is a fixed six inches wide and the dpi carries the pixel size, so the credit keeps its proportion at any width. Both keep the full footprint and its projected proportions, with at least 5% margins; the short axis grows, nothing is cut. Colormap and stretch match coherence VV PMTiles | 3 |
 | R-10 | The root catalog carries a `rel: "icon"` link to `_assets/glace-wordmark.svg` | 2 |
 | R-11 | No `.portolan/metadata.yaml`: `portolan add` is not used here. Title, license and contact live in `metadata/catalog.yaml`, the only copy (R-18) | 4 |
 | R-12 | **Warp once per layer, tile locally.** The RGBA intermediate is a local overview-free GeoTIFF; the tiler is in-tree (`glace_catalog.tiler`, from rio-pmtiles, MIT) and shares one worker pool across the year's layers; `rio-pmtiles` is no longer a dependency | 3 |

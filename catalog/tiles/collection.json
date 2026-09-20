@@ -492,8 +492,8 @@
       }
     },
     "thumbnail": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/thumbnail.png",
-      "type": "image/png",
+      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/thumbnail.webp",
+      "type": "image/webp",
       "title": "GLACE tiles preview",
       "roles": [
         "thumbnail"

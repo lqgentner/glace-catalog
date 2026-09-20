@@ -590,8 +590,8 @@
       }
     },
     "thumbnail": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.png",
-      "type": "image/png",
+      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.webp",
+      "type": "image/webp",
       "title": "GLACE mosaics preview",
       "roles": [
         "thumbnail"

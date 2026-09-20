@@ -48,7 +48,8 @@ import sys
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
-from freezebase.s3 import content_type_for, make_s3_upath
+from freezebase.s3 import content_type_for as default_content_type_for
+from freezebase.s3 import make_s3_upath
 from tqdm import tqdm
 from upath import UPath
 import yaml
@@ -66,6 +67,13 @@ COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
 SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
 """An ETag that is the object's MD5: one hex digest, no part count after it."""
+
+
+def content_type_for(path: str) -> str:
+    """Include WebP thumbnails until freezebase's media-type table supports them."""
+    if PurePosixPath(path).suffix.lower() == ".webp":
+        return "image/webp"
+    return default_content_type_for(path)
 
 
 def read_target(path: Path = PUBLISH_CONFIG) -> UPath:

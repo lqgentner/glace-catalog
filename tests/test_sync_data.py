@@ -242,7 +242,7 @@ def check_content_types() -> dict[str, bool]:
             "image/tiff; application=geotiff; profile=cloud-optimized"
         ),
         "mosaics/2024/coh12_rgb_viz.pmtiles": "application/vnd.pmtiles",
-        "mosaics/thumbnail.png": "image/png",
+        "mosaics/thumbnail.webp": "image/webp",
         "_assets/glace-wordmark.svg": "image/svg+xml",
         "tiles/2024/config.yaml": "application/yaml",
         "tiles/2024/32TMS24/COH12_VV.TIF": (

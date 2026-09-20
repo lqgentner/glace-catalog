@@ -15,9 +15,9 @@ design and the reasons behind it are in [`DESIGN.md`](DESIGN.md).
 | glacier fractions | `tiles/glacier-fractions.parquet` is on the bucket, derived once per region from the inventories (AGENTS.md step 1); `finalize-catalog` stamps its `file:size` and `file:checksum` |
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, styles per year, asset stamps, coverage check, validate); run end to end over 2021–2024 on 2026-09-09 with the archives in the item directories, one style per year and the remeasured stretches |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
-| thumbnails | rendered from the latest year's `coh12_rgb_viz.pmtiles`, gated by `tests/test_thumbnails.py` |
+| thumbnails | rendered from the latest year's mosaic and Aletsch tile `coh12_vv.tif` COGs over muted OSM, both 1400 × 933 WebP at quality 90 (3:2, twice the widest browser card); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
 | publication | `tools/sync_data.py`, store → Source Cooperative, gated offline by `tests/test_sync_data.py`; the four Swiss years are published in the item-asset layout (2026-09-09) and republished 2026-09-14 with the R-18 metadata (asset-key band names, vocabulary titles, remeasured `renders`); `rashid check --live` over the mirrored store reports 0 errors. Change detection is size, then single-part ETags, then which side is newer. Republished 2026-09-19: the restyled READMEs, the `via` link to `glace-production`, 17 objects |
-| published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared |
+| published store | the old flat tree on the UZH bucket is being deleted; the old flat publication at `lqgentner/glace-ch` on Source Cooperative (over a thousand objects) still has to be cleared. `mosaics/thumbnail.png` and `tiles/thumbnail.png` are orphaned by the WebP rename and have to be deleted by hand in the store and on Source Cooperative once the WebP thumbnails are published — `sync_data.py` never deletes |
 | scope | **`glace-ch`, a rehearsal.** The dataset is `glace-alps` (DESIGN.md §8) |
 
 ## Open
@@ -52,11 +52,6 @@ Ordered by what blocks what. Everything not listed here is done.
   2015–2025, which holds more of the S1A+S1B era. *Verified when* the ranges in
   `metadata/assets.yaml` are re-derived from published Alpine mosaics and
   `catalog/` re-rendered.
-- **P-18 — Thumbnails over a basemap.** The browser review asked for a single
-  tile in front of a contextily basemap for the tiles collection, and the whole
-  mosaic over one for the mosaics, both framed 3:2. `thumbnails.py` cuts from
-  the archive alone today. *Verified when* both thumbnails show a basemap and
-  `tests/test_thumbnails.py` is green.
 - **P-9 — First release: the DOI fields.** Enable the Zenodo bridge for this
   repository on zenodo.org, cut the release (DESIGN.md §7), then add `sci:doi`
   (the concept DOI) and `sci:citation` to `catalog/catalog.json`,

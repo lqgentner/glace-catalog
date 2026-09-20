@@ -49,7 +49,7 @@ from glace_catalog.stac.store import (
     upload_tree,
 )
 from glace_catalog.styles import YEAR_IN_TEXT
-from glace_catalog.thumbnails import write_collection_thumbnails
+from glace_catalog.thumbnails import DEFAULT_BASEMAP, write_collection_thumbnails
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -474,6 +474,34 @@ def stamp_style_assets(
         logger.info("Stamped %s/%s: %d bytes", MOSAICS_DIR, key, len(payload))
 
 
+def require_existing_thumbnails(layout: stac.StoreLayout) -> None:
+    """Fail unless ``--skip-thumbnail`` really does leave a usable thumbnail behind.
+
+    Skipping only holds when the store already carries the file the collection
+    documents name. It stops holding the moment the thumbnail is renamed or its
+    format changes: the documents point at the new name, no bytes answer to it,
+    and :func:`stamp_collection_assets` only warns, so the run would publish two
+    collections whose thumbnail link 404s -- with no ``file:size`` or
+    ``file:checksum`` to make the gap visible -- and still validate locally.
+
+    Raises
+    ------
+    FileNotFoundError
+        If either collection's thumbnail is missing from the store.
+    """
+    missing = [
+        path for path in (layout.tiles_thumbnail, layout.mosaics_thumbnail) if not path.exists()
+    ]
+    if missing:
+        names = ", ".join(str(path) for path in missing)
+        msg = (
+            f"--skip-thumbnail keeps the thumbnails already in the store, but {names} "
+            f"{'are' if len(missing) > 1 else 'is'} not there; "
+            "rerun without --skip-thumbnail to render them"
+        )
+        raise FileNotFoundError(msg)
+
+
 def stamp_collection_assets(
     documents: Mapping[str, Document],
     layout: stac.StoreLayout,
@@ -540,6 +568,16 @@ def parse_args() -> argparse.Namespace:
         help="tracked catalog/ directory holding the hand-maintained documents",
     )
     parser.add_argument("--skip-thumbnail", action="store_true")
+    parser.add_argument(
+        "--thumbnail-basemap",
+        default=DEFAULT_BASEMAP,
+        help="contextily provider name or local georeferenced basemap raster",
+    )
+    parser.add_argument(
+        "--thumbnail-attribution",
+        default=None,
+        help="credit override; use an empty string only for attribution-free basemaps",
+    )
     parser.add_argument("--skip-validate", action="store_true")
     return parser.parse_args()
 
@@ -582,8 +620,15 @@ def main() -> None:
     )
     if mosaic_items:
         stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=args.base_url)
-    if not args.skip_thumbnail:
-        write_collection_thumbnails(layout, years[-1], scope=scope)
+    if args.skip_thumbnail:
+        require_existing_thumbnails(layout)
+    else:
+        write_collection_thumbnails(
+            layout,
+            years[-1],
+            basemap=args.thumbnail_basemap,
+            attribution=args.thumbnail_attribution,
+        )
 
     stamp_collection_assets(documents, layout)
     write_documents(

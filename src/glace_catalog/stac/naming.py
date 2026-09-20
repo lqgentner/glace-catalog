@@ -38,6 +38,18 @@ ASSET_KEYS: tuple[str, ...] = tuple(
 )
 """The twelve LRW asset keys a complete tile or mosaic item carries."""
 
+
+def published_name(asset_key: str) -> str:
+    """Filename an asset key takes in the store, e.g. ``coh12_vv.tif``.
+
+    The date range leaves the filename — the directory carries the year and the
+    item properties carry the window — so the published name is exactly the
+    asset key. Every writer and every reader of a store raster goes through
+    here, so the convention has one definition rather than one per call site.
+    """
+    return f"{asset_key}.tif"
+
+
 _COMPOSITE_RE = re.compile(
     r"^S1_(?P<product>COH\d{2}|RTC)"
     r"_(?:LRW|COMP_(?P<orbit>[AD]))"
@@ -88,13 +100,8 @@ class CompositeFile:
 
     @property
     def published_name(self) -> str:
-        """Filename this composite takes in the store, e.g. ``coh12_vv.tif``.
-
-        The date range leaves the filename — the directory carries the year and
-        the item properties carry the window — so the published name is exactly
-        the asset key.
-        """
-        return f"{self.asset_key}.tif"
+        """Filename this composite takes in the store, e.g. ``coh12_vv.tif``."""
+        return published_name(self.asset_key)
 
 
 VIZ_SUFFIX = "_viz"

@@ -62,6 +62,7 @@ from rasterio.warp import transform_bounds
 from upath import UPath
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.stac.naming import published_name
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.stac.tags import BandStatistics
 
@@ -645,7 +646,7 @@ def build_mosaic_cogs(
         for asset_key in selected:
             written[asset_key] = build_mosaic_cog(
                 vrts.linear[asset_key],
-                out_dir / f"{asset_key}.tif",
+                out_dir / published_name(asset_key),
                 asset_key=asset_key,
                 band_name=band_names.get(asset_key, asset_key),
                 tags=tags.get(asset_key),
