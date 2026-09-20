@@ -1,60 +1,49 @@
 # GLACE mosaics – agent guide
 
-One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at 40 m.
-Twelve analysis rasters per year and fourteen PMTiles archives beside
-them, which are what drawing uses.
+Each annual item contains twelve analysis COGs on ETRS89-LAEA
+(EPSG:3035) at 40 m, plus fourteen PMTiles archives for web maps.
 
-## The grid is the point
+## Grid and analysis
 
-Every year shares one fixed extent, resolution and transform. Two things
-follow, and both are what this collection exists for:
-
-1. **Temporal stacking is free.** No reprojection, no alignment, no resampling.
-2. **Areas are pixel counts.** The grid is equal-area, so summing pixels gives an
-   area without a latitude correction. Do not do this on a Web Mercator raster.
+The extent is a fixed constant, so every year has identical `proj:shape` and
+`proj:transform`. Stack years without alignment or resampling. The grid is
+equal-area: multiply a pixel count by 1600 m² to calculate area.
 
 ```python
-import odc.stac, pystac
-col = pystac.Collection.from_file(
-    "https://data.source.coop/lqgentner/glace-ch/mosaics/collection.json")
+import odc.stac
+import pystac
+
+collection = pystac.Collection.from_file(
+    "https://data.source.coop/lqgentner/glace-ch/mosaics/collection.json"
+)
 cube = odc.stac.load(
-    list(col.get_items(recursive=True)),
-    bands=["coh12_vv", "coh12_vh"], chunks={},
+    list(collection.get_items(recursive=True)),
+    bands=["coh12_vv", "coh12_vh"],
+    chunks={},
 )
 change = cube.sel(time="2024") - cube.sel(time="2021")
 ```
 
-## Drawing versus reading
+Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
+counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
-Two products, and they are not interchangeable.
+## Web maps
 
-**PMTiles**, `{stem}_viz.pmtiles` in each year's item directory, are what a map
-client uses. Each one is an asset of that item with the `visual` role and a
-`rel: "pmtiles"` link on this collection, and each year has its own MapLibre
-style as a `style-{year}` asset under `styles/`; the latest year's also carries
-the `default` role. Their pixels are 8-bit display codes under a fixed stretch,
-and the backscatter and quality-map archives are in **decibels** while every
-raster in this catalog is linear. They are renderings. Never read one for a
-value.
+`{stem}_viz.pmtiles` archives contain 8-bit imagery under fixed display ranges.
+Backscatter and quality maps use decibels; coherence remains linear. Do not
+use these pixels as measurements.
 
-**The COGs** carry the measurements. The `renders` block declares the stretch,
-the ramp and the decibel `expression`, so a client can colorize them at draw
-time and get the same picture with the numbers still underneath.
+Archives are item assets with the `visual` role and collection links with
+`rel: "pmtiles"`. Each year has a MapLibre style at `styles/{year}.json`,
+registered as a `style-{year}` collection asset. The latest also has the
+`default` role.
 
-## Rendering parameters
+Display ranges use the 2nd–98th percentiles measured on the published display
+mosaics over 2021–2024 and stay fixed across years.
+Styles contain the designed color ramps; `renders` uses portable colormap
+names and declares the decibel conversions for COG display.
 
-Every stretch is fixed across years and was measured on the published display
-mosaics (2 to 98 % over 2021–2024). The archives bake these; the `renders`
-block declares the same numbers with portable colormap names, which any
-titiler-compatible client accepts verbatim:
-
-```
-https://titiler.xyz/cog/preview.png
-  ?url=https://data.source.coop/lqgentner/glace-ch/mosaics/2024/rtc_vv.tif
-  &expression=10*log10(b1)&rescale=-16.5,-4&colormap_name=gray
-```
-
-| asset key | title | stretch | ramp |
+| Asset key | Title | Display range | Color ramp |
 | --- | --- | --- | --- |
 | `coh12_vv` | Coherence VV | 0.1 to 0.75 | `cmc.lipari` |
 | `coh12_vv_qa_num` | Coherence VV – Contributing Observations | 0 to 90 | `cmc.glasgow` |
@@ -69,9 +58,7 @@ https://titiler.xyz/cog/preview.png
 | `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | 0 to 90 | `cmc.glasgow` |
 | `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | -4 to 8 dB | `cmc.glasgow` |
 
-## Related
+## Compare with tiles
 
-The tiles collection is the archive these are derived from: same measurements
-at 10 m in each square's own UTM zone, one item per (square, year). A mosaic
-year matches the tile items with the same `datetime`; reproject before
-comparing pixels, since the tiles are in UTM and the mosaics in LAEA.
+Mosaics are derived from the 10 m tiles. Match items by year and reproject
+before comparing pixels: tiles use UTM zones; mosaics use ETRS89-LAEA.

@@ -1,14 +1,12 @@
 # {{ tiles.short_title }} {{ year }} – agent guide
 
-A browse-only grouping of the {{ year }} tile items. It carries no assets and
-adds no metadata; everything below it is described by the
-[tiles collection](../collection.json), whose `AGENTS.md` is the one to read.
+This catalog groups the {{ year }} tile items for browsing. It has no assets.
+Read the [tiles agent guide](../AGENTS.md) for queries, units and processing
+metadata.
 
-**Query `../items.parquet`, not this catalog.** It covers every year in one
-file, so filtering by year is a predicate rather than a different URL. Walking
-these item links costs one HTTP request each and tells you nothing the mirror
-does not.
+Search `../items.parquet` and filter by year to avoid fetching every item.
+The index contains all years.
 
-The year in this path is the **composite window**, not an acquisition date. Each
-item carries `start_datetime` and `end_datetime` giving the window its
-composites were drawn from.
+The path's year identifies the compositing window. Each item's
+`start_datetime` and `end_datetime` give that window; individual acquisition
+dates may differ.

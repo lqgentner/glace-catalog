@@ -1,68 +1,55 @@
 # {{ mosaics.short_title }} – agent guide
 
-One item per year on a fixed ETRS89-LAEA (EPSG:3035) grid at {{ analysis_grid.resolution | int }} m.
-{{ n_assets | capitalize }} analysis rasters per year and {{ n_viz }} PMTiles archives beside
-them, which are what drawing uses.
+Each annual item contains {{ n_assets }} analysis COGs on ETRS89-LAEA
+(EPSG:3035) at {{ analysis_grid.resolution | int }} m, plus {{ n_viz }} PMTiles archives for web maps.
 
-## The grid is the point
+## Grid and analysis
 
-Every year shares one fixed extent, resolution and transform. Two things
-follow, and both are what this collection exists for:
-
-1. **Temporal stacking is free.** No reprojection, no alignment, no resampling.
-2. **Areas are pixel counts.** The grid is equal-area, so summing pixels gives an
-   area without a latitude correction. Do not do this on a Web Mercator raster.
+The extent is a fixed constant, so every year has identical `proj:shape` and
+`proj:transform`. Stack years without alignment or resampling. The grid is
+equal-area: multiply a pixel count by {{ (analysis_grid.resolution ** 2) | int }} m² to calculate area.
 
 ```python
-import odc.stac, pystac
-col = pystac.Collection.from_file(
-    "{{ public_base }}/mosaics/collection.json")
+import odc.stac
+import pystac
+
+collection = pystac.Collection.from_file(
+    "{{ public_base }}/mosaics/collection.json"
+)
 cube = odc.stac.load(
-    list(col.get_items(recursive=True)),
-    bands=["coh12_vv", "coh12_vh"], chunks={},
+    list(collection.get_items(recursive=True)),
+    bands=["coh12_vv", "coh12_vh"],
+    chunks={},
 )
 change = cube.sel(time="{{ last_year }}") - cube.sel(time="{{ first_year }}")
 ```
 
-## Drawing versus reading
+Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
+counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
-Two products, and they are not interchangeable.
+## Web maps
 
-**PMTiles**, `{stem}_viz.pmtiles` in each year's item directory, are what a map
-client uses. Each one is an asset of that item with the `visual` role and a
-`rel: "pmtiles"` link on this collection, and each year has its own MapLibre
-style as a `style-{year}` asset under `styles/`; the latest year's also carries
-the `default` role. Their pixels are 8-bit display codes under a fixed stretch,
-and the backscatter and quality-map archives are in **decibels** while every
-raster in this catalog is linear. They are renderings. Never read one for a
-value.
+`{stem}_viz.pmtiles` archives contain 8-bit imagery under fixed display ranges.
+Backscatter and quality maps use decibels; coherence remains linear. Do not
+use these pixels as measurements.
 
-**The COGs** carry the measurements. The `renders` block declares the stretch,
-the ramp and the decibel `expression`, so a client can colorize them at draw
-time and get the same picture with the numbers still underneath.
+Archives are item assets with the `visual` role and collection links with
+`rel: "pmtiles"`. Each year has a MapLibre style at `styles/{year}.json`,
+registered as a `style-{year}` collection asset. The latest also has the
+`default` role.
 
-## Rendering parameters
+Display ranges use the 2nd–98th percentiles measured on the published display
+mosaics over {{ first_year }}–{{ last_year }} and stay fixed across years.
+Styles contain the designed color ramps; `renders` uses portable colormap
+names and declares the decibel conversions for COG display.
 
-Every stretch is fixed across years and was measured on the published display
-mosaics (2 to 98 % over {{ first_year }}–{{ last_year }}). The archives bake these; the `renders`
-block declares the same numbers with portable colormap names, which any
-titiler-compatible client accepts verbatim:
-
-```
-https://titiler.xyz/cog/preview.png
-  ?url={{ public_base }}/mosaics/{{ last_year }}/rtc_vv.tif
-  &expression={{ expression("rtc_vv") }}&rescale={{ rescale("rtc_vv") }}&colormap_name={{ portable_cmap("rtc_vv") }}
-```
-
-| asset key | title | stretch | ramp |
+| Asset key | Title | Display range | Color ramp |
 | --- | --- | --- | --- |
 {% for row in mosaic_assets %}
 | `{{ row.key }}` | {{ row.title }} | {{ row.stretch }} | `{{ row.cmap }}` |
 {% endfor %}
 
-## Related
+## Compare with tiles
 
-The tiles collection is the archive these are derived from: same measurements
-at 10 m in each square's own UTM zone, one item per (square, year). A mosaic
-year matches the tile items with the same `datetime`; reproject before
-comparing pixels, since the tiles are in UTM and the mosaics in LAEA.
+Mosaics are derived from the 10 m tiles. Match items by year and reproject
+before comparing pixels: tiles use UTM zones; mosaics use ETRS89-LAEA.

@@ -9,20 +9,11 @@ The grid has two deliberate properties:
 
 - **It is equal-area.** A pixel covers the same 1600 m² everywhere, so a
   glacier area or an area change is a pixel count.
-- **It is the same every year.** The extent is a fixed constant, not recomputed
-  from whichever tiles happen to exist, so every year has identical
-  `proj:shape` and `proj:transform`. Stacking and differencing are a read.
+- **It is the same every year.** The extent is a fixed constant, so every year
+  has identical `proj:shape` and `proj:transform`.
 
-**To read values**, use the COGs. The `renders` block on this collection carries
-the fixed stretch, the color ramp and, for backscatter and the quality map, the
-decibel `expression`, so a titiler-compatible client draws them correctly
-without a style file:
-
-```
-https://titiler.xyz/cog/preview.png
-  ?url=https://data.source.coop/lqgentner/glace-ch/mosaics/2024/rtc_vv.tif
-  &expression=10*log10(b1)&rescale=-16.5,-4&colormap_name=gray
-```
+Use the COGs for analysis. The collection's `renders` block defines display
+ranges, color ramps and decibel conversions for clients that support them.
 
 ## Building a cube
 
@@ -48,7 +39,7 @@ resampling step.
 In addition to the LAEA COGs for scientific analysis, PMTiles archives are
 provided for web maps. They are tiled on WebMercatorQuad up to zoom
 13, resampled from the MGRS tiles, and carry a `_viz` suffix to
-mark them as renderings for visualization only. They are pre-rendered with the
+mark them as 8-bit imagery for visualization only. Coherence remains linear. They are pre-rendered with the
 [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
 ([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)) over fixed
 ranges, as their style files declare. To suit visualization, the backscatter
@@ -67,18 +58,6 @@ new maplibregl.Map({
   style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/2024.json",
 });
 ```
-
-## The two products are not interchangeable
-
-`{year}/rtc_vv.tif` is linear power. `{year}/rtc_vv_viz.pmtiles` is the same
-measurement rendered: 8-bit, pre-stretched, and in **decibels**. They sit side by
-side, and the `_viz` suffix is what keeps them apart: without it the names would
-differ by one extension while the quantities differ by a logarithm.
-
-Coherence is not converted: `coh12_*` archives are linear values under a fixed
-stretch. Only `rtc_*` and `*_qa_cqm` are in decibels, because backscatter spans
-decades of linear power and the quality ratio spans decades too, and a linear
-8-bit stretch would collapse either.
 
 ## License
 
