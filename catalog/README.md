@@ -1,10 +1,10 @@
 <p align="center">
   <br />
-  <img src="https://data.source.coop/lqgentner/glace-ch/_assets/glace-wordmark.svg" alt="GLACE" width="350">
+  <img src="https://data.source.coop/giuz/glace-alps/_assets/glace-wordmark.svg" alt="GLACE" width="350">
   <br />
 </p>
 
-<h1 align="center">GLACE Switzerland (preliminary)</h1>
+<h1 align="center">GLACE Alps</h1>
 
 <p align="center">
   Sentinel-1 interferometric coherence and backscatter composites of the European Alps
@@ -12,7 +12,7 @@
   <br />
   <a href="https://lqgentner.github.io/glace-viewer">🗺️ Web map</a>
   ·
-  <a href="https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json">🧭 Portolan/STAC browser</a>
+  <a href="https://browser.portolan-sdi.org/#/external/data.source.coop/giuz/glace-alps/catalog.json">🧭 Portolan/STAC browser</a>
   ·
   <a href="https://github.com/lqgentner/glace-catalog">🏷️ Metadata repository</a>
   ·
@@ -21,16 +21,14 @@
 
 Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
 coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
-Switzerland, 2021–2024. The data is available as
+the Alpine Convention perimeter, 2015–2025. The data is available as
 Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
-
-> **Preliminary release.** This is a preliminary release over the Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is produced. The dataset is GLACE Alps, over the Alpine Convention perimeter, which uses this same pipeline and supersedes this catalog. These URLs are provisional: do not cite them, and expect the coverage, the years and the identifiers to change.
 
 ## Collections
 
 | Collection | One item per | Grid | Use it for |
 | --- | --- | --- | --- |
-| [Tiles](tiles/) | (MGRS square, year) | 10 m, UTM 32N | Detailed analysis, machine learning |
+| [Tiles](tiles/) | (MGRS square, year) | 10 m, UTM 31N/32N/33N | Detailed analysis, machine learning |
 | [Mosaics](mosaics/) | year | 40 m, ETRS89-LAEA | Regional analysis, inspection, time series |
 
 Both represent the same source composites on different grids. The tiles hold
@@ -43,7 +41,7 @@ To explore the data visually, open the [GLACE Viewer](https://lqgentner.github.i
 ## Get started
 
 All files are publicly readable on Source Cooperative, with no API key required,
-over HTTPS (`https://data.source.coop/lqgentner/glace-ch/`) or S3 (`s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/`). Each collection
+over HTTPS (`https://data.source.coop/giuz/glace-alps/`) or S3 (`s3://eu-central-1.opendata.source.coop/giuz/glace-alps/`). Each collection
 provides a searchable item index, `items.parquet`, in STAC-GeoParquet format,
 so you can find data without fetching each item's JSON individually.
 
@@ -57,9 +55,9 @@ import rasterio
 import rustac
 
 items = rustac.search_sync(
-    "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+    "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
     bbox=[7.9, 46.4, 8.2, 46.6],
-    datetime="2024-01-01/2025-01-01",
+    datetime="2025-01-01/2026-01-01",
 )
 if not items:
     raise ValueError("No tiles found for this area and year")
@@ -119,8 +117,7 @@ See the [production pipeline](https://github.com/lqgentner/glace-production) for
 
 A dataset citation will be added with the preprint. Until then, cite the
 specific [metadata repository release](https://github.com/lqgentner/glace-catalog/releases)
-you used. The preliminary catalog URLs are provisional and should not be used
-as persistent citation identifiers.
+you used. Catalog URLs are not persistent citation identifiers.
 
 ## Feedback and contributions
 

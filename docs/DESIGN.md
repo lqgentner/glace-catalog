@@ -401,9 +401,9 @@ Switzerland.
 
 | what | where | how it changes |
 | --- | --- | --- |
-| scope constants | `src/glace_catalog/scopes.py` | already there: `SCOPES["alps"]`, both grids, 2 209 perimeter tiles, 45.4 % coverage. Nothing to write |
+| scope constants | `src/glace_catalog/scopes.py` | `SCOPES["alps"]`, both grids, 2 210 perimeter tiles (the 2025 perimeter edition; the grids hold every tile of both editions), 45.4 % coverage, store root `s3://s1-bursts/data/glace-alps` |
 | collection ids | derived from the scope | `glace-ch-tiles` → `glace-alps-tiles`, automatic |
-| publication target | `catalog.publish.yaml` | `write_prefix` and `public_base` both name `glace-ch` |
+| publication target | `catalog.publish.yaml` | `write_prefix` and `public_base` name `giuz/glace-alps`; the rehearsal was `lqgentner/glace-ch` |
 | absolute asset hrefs | both `collection.json` | built from `public_base`; every `alternate` `s3://` href too |
 | root catalog identity and every document's prose | `metadata/catalog.yaml` | `scope`, `region`, `years`, `title`, the preliminary notice; the prose below the root title already reads "the Alpine Convention perimeter", so nothing else is retyped |
 | the rendered tree | `catalog/` | `uv run scripts/render-catalog.py` after the edit above |

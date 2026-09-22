@@ -261,8 +261,8 @@ SCOPES: Mapping[str, Scope] = {
     ),
     "alps": Scope(
         key="alps",
-        title="European Alps",
-        root="s3://glace-alps",
+        title="Alps",
+        root="s3://s1-bursts/data/glace-alps",
         analysis_grid=Grid(
             crs=LAEA,
             resolution=ANALYSIS_RESOLUTION,
@@ -278,8 +278,11 @@ SCOPES: Mapping[str, Scope] = {
                 6173665.900537115,
             ),
         ),
-        # The Alpine Convention perimeter, via MGRSGrid.
-        perimeter_tiles=2209,
+        # The Alpine Convention perimeter, 2025 edition, via MGRSGrid. The 2018
+        # edition gave 2 209 tiles; the 2025 one adds 31TFL60, 32TKP81 and
+        # 32TPR24 and drops 33TWM56 and 33TXP00. Every tile of either edition
+        # lies inside both extents above, so the grids did not move.
+        perimeter_tiles=2210,
         coverage=0.454,
         # The perimeter spans about 5°E to 17°E.
         utm_zones=("31N", "32N", "33N"),

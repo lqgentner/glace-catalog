@@ -272,7 +272,7 @@ def check_target_config() -> dict[str, bool]:
     checks = {
         "the target is an S3 path": target.protocol == "s3",
         "catalog.publish.yaml names the account bucket and the product prefix": str(target)
-        == "s3://lqgentner/glace-ch",
+        == "s3://giuz/glace-alps",
         "the profile is the one catalog.publish.yaml names": options.get("profile")
         == "source-coop",
         "no endpoint is passed; the profile's config section carries it": options.get(
@@ -600,8 +600,8 @@ def check_workers_floor() -> dict[str, bool]:
 
 
 DRY_RUN = """\
-source:  s3://s1-bursts/data/glace-ch
-target:  s3://lqgentner/glace-ch  (profile source-coop)
+source:  s3://s1-bursts/data/glace-alps
+target:  s3://giuz/glace-alps  (profile source-coop)
 
   new             4     3.0 MiB
   changed         1     2.0 KiB
@@ -618,7 +618,7 @@ def check_summary() -> dict[str, bool]:
     """Check the table a person reads before typing ``--confirm``."""
     plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     rendered = "\n".join(
-        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-ch", sync_data.read_target()),
+        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-alps", sync_data.read_target()),
     )
     if rendered != DRY_RUN:
         print("--- rendered ---")

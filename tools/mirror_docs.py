@@ -9,7 +9,7 @@ for ``--schema``, ``--data`` and ``--live`` to check what is actually published:
 
     uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
     uv run rashid check /tmp/glace-docs --schema --data --live
-        --live-base-url https://data.source.coop/lqgentner/glace-ch
+        --live-base-url https://data.source.coop/giuz/glace-alps
 
 Build state (anything whose name starts with a dot) is not mirrored: it is not
 part of the published tree.

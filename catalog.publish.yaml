@@ -10,16 +10,16 @@
 # proxy, and it is that endpoint which makes the bucket the account name and
 # the key start with the product. Against the AWS-native bucket names these
 # credentials are rejected.
-write_prefix: s3://lqgentner/glace-ch
+write_prefix: s3://giuz/glace-alps
 
 # The public URL that serves write_prefix. Every absolute href the publish step
 # writes is built from this, so it is what ends up in the STAC JSON and
 # write_prefix is not.
-public_base: https://data.source.coop/lqgentner/glace-ch
+public_base: https://data.source.coop/giuz/glace-alps
 
 # The same tree over anonymous S3, which the `alternate` href of every
 # collection asset carries. Range requests answer 206 on both.
-public_s3_base: s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch
+public_s3_base: s3://eu-central-1.opendata.source.coop/giuz/glace-alps
 
 # The named AWS profile the publisher uses. Source Cooperative issues
 # per-account credentials; store them under this profile in ~/.aws/credentials

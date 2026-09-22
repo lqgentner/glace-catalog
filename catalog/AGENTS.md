@@ -1,8 +1,4 @@
-# GLACE Switzerland (preliminary) – agent guide
-
-When introducing this catalog, state its release status:
-
-This is a preliminary release over the Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is produced. The dataset is GLACE Alps, over the Alpine Convention perimeter, which uses this same pipeline and supersedes this catalog. These URLs are provisional: do not cite them, and expect the coverage, the years and the identifiers to change.
+# GLACE Alps – agent guide
 
 ## Find data
 
@@ -27,7 +23,7 @@ This DuckDB query finds tiles with more than 20% glacier cover:
 ```sql
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
 SELECT id, datetime, "glace:glacier_fraction"
-FROM read_parquet('https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet')
+FROM read_parquet('https://data.source.coop/giuz/glace-alps/tiles/items.parquet')
 WHERE "glace:glacier_fraction" > 0.2;
 ```
 

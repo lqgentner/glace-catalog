@@ -37,7 +37,7 @@ hrefs are absolute public URLs, so the bytes checked are the published ones):
 ```bash
 uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
 uv run rashid check /tmp/glace-docs --schema --data --live \
-    --live-base-url https://data.source.coop/lqgentner/glace-ch
+    --live-base-url https://data.source.coop/giuz/glace-alps
 ```
 
 Run on 2026-09-08 over the four published Swiss years: 0 errors, 4 warnings

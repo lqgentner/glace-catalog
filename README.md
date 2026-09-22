@@ -14,24 +14,23 @@
   <br />
   <a href="https://lqgentner.github.io/glace-viewer">🗺️ Web map</a>
   ·
-  <a href="https://source.coop/lqgentner/glace-ch">💾 Dataset on Source Coop</a>
+  <a href="https://source.coop/giuz/glace-alps">💾 Dataset on Source Coop</a>
   ·
-  <a href="https://browser.portolan-sdi.org/#/external/data.source.coop/lqgentner/glace-ch/catalog.json">🧭 Portolan/STAC browser</a>
+  <a href="https://browser.portolan-sdi.org/#/external/data.source.coop/giuz/glace-alps/catalog.json">🧭 Portolan/STAC browser</a>
   ·
   <a href="https://github.com/lqgentner/glace-production">⚙️ Production pipeline</a>
 </p>
 
 ## About
 
-This repository holds the metadata and the building and publishing pipeline for the the **GLACE** STAC catalog
-published to [Source Cooperative](https://source.coop/lqgentner/glace-ch). The catalog complies with
+This repository holds the metadata and the building and publishing pipeline for the **GLACE** STAC catalog
+published to [Source Cooperative](https://source.coop/giuz/glace-alps). The catalog complies with
 the [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
-> **What is published today is `glace-ch`, a rehearsal.** It covers Switzerland
-> and exists to exercise publication while the Alpine composites are produced.
-> The dataset is **`glace-alps`**; every mention of Switzerland in this
-> repository is placeholder text. [`docs/STATUS.md`](docs/STATUS.md) carries the
-> swap checklist and what is still open.
+> **The Alpine store is being built.** The metadata here describes **`glace-alps`**,
+> which is not yet published; the Swiss rehearsal `glace-ch` stays at
+> `lqgentner/glace-ch` on Source Cooperative until it is retired.
+> [`docs/STATUS.md`](docs/STATUS.md) carries what is still open.
 
 The metadata of the catalog lives on GitHub so that its change history can be reviewed, updates can be published as releases, and errors can be raised with an issue.
 

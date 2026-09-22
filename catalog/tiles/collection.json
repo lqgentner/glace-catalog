@@ -9,7 +9,7 @@
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json"
   ],
-  "id": "glace-ch-tiles",
+  "id": "glace-alps-tiles",
   "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
   "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion (`10*log10(x)`) is declared in the renders. Query the tiles with the item mirror `items.parquet`.",
   "license": "CC-BY-4.0",
@@ -50,18 +50,18 @@
     "spatial": {
       "bbox": [
         [
-          6.7676,
-          45.8288,
-          10.459,
-          47.3388
+          4.7461,
+          43.3891,
+          16.6113,
+          48.4
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2021-01-01T00:00:00Z",
-          "2025-01-01T00:00:00Z"
+          "2015-01-01T00:00:00Z",
+          "2026-01-01T00:00:00Z"
         ]
       ]
     }
@@ -462,7 +462,7 @@
   },
   "assets": {
     "items": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
       "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
@@ -471,13 +471,13 @@
       ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/items.parquet",
           "alternate:name": "S3"
         }
       }
     },
     "glacier-fractions": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/glacier-fractions.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "Per-tile glacier cover fractions (RGI7)",
       "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, computed once per scope: the lookup behind the glace:glacier_fraction properties on every item.",
@@ -486,13 +486,13 @@
       ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/glacier-fractions.parquet",
           "alternate:name": "S3"
         }
       }
     },
     "thumbnail": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/thumbnail.webp",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/thumbnail.webp",
       "type": "image/webp",
       "title": "GLACE tiles preview",
       "roles": [
@@ -505,13 +505,13 @@
       "rel": "root",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "parent",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "describedby",

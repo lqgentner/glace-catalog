@@ -38,10 +38,11 @@ Validate the full built tree before publication.
 
 ## Scope and layout
 
-`glace-ch` is the Swiss rehearsal; `glace-alps` is the full dataset.
-`src/glace_catalog/scopes.py` defines both scopes, grids and default store
-roots. Switching scope also requires updating `scope`, `region`, `years`,
-`title` and the preliminary notice in `metadata/catalog.yaml`.
+`glace-alps` is the dataset and the scope `metadata/catalog.yaml` names;
+`glace-ch` was the Swiss rehearsal. `src/glace_catalog/scopes.py` defines both
+scopes, grids and default store roots. Switching scope also requires updating
+`scope`, `region`, `years`, `title` and the preliminary notice in
+`metadata/catalog.yaml`.
 See `docs/DESIGN.md` §8 and the checklist in `docs/STATUS.md`.
 
 Preserve these rules:
@@ -80,14 +81,15 @@ Publication uses the separate profile in `catalog.publish.yaml`.
 ### 1. Compute glacier fractions once per region
 
 Run this in `deep-glacier-mapping`, which provides the inventory data and
-`glacier_mapping` package. Use a full output prefix matching this store;
-that checkout does not define `GLACE_STORE_ROOT`.
+`glacier_mapping` package. It runs on pixi, whose activation loads that
+checkout's `.env`. Use a full output prefix matching this store; that checkout
+does not define `GLACE_STORE_ROOT`.
 
 ```bash
 ( cd ../deep-glacier-mapping &&
-  uv run --env-file .env scripts/inventories/derive-glacier-fractions.py \
-      --scope ch --perimeter-tiles 143 \
-      --out s3://s1-bursts/data/glace-ch/tiles/glacier-fractions.parquet )
+  pixi run python scripts/inventories/derive-glacier-fractions.py \
+      --scope alps --perimeter-tiles 2210 \
+      --out s3://s1-bursts/data/glace-alps/tiles/glacier-fractions.parquet )
 ```
 
 Every year reuses this lookup so a tile's glacier fraction stays constant.
@@ -100,8 +102,8 @@ If missing, rerun the upstream year: it skips complete tiles and describes and
 hashes their files. This repository does not create source manifests.
 
 ```bash
-uv run --env-file .env scripts/publish-year.py 2024 \
-    --src s3://s1-bursts/data/alps-total/2024/s1-comp-ch --scope ch
+uv run --env-file .env scripts/publish-year.py 2023 \
+    --src s3://s1-bursts/data/alps-total/2023/s1-comp --scope alps
 ```
 
 | Step | Result |
@@ -144,8 +146,8 @@ fix replaced that behavior on 2026-09-11.
 ### 3. Finalize after adding or changing a year
 
 ```bash
-uv run --env-file .env scripts/finalize-catalog.py --scope ch \
-    --base-url https://data.source.coop/lqgentner/glace-ch
+uv run --env-file .env scripts/finalize-catalog.py --scope alps \
+    --base-url https://data.source.coop/giuz/glace-alps
 ```
 
 Finalization updates collection year links, temporal extent and PMTiles links;
@@ -186,7 +188,7 @@ build files, including `.build-state.json` and `.items.parquet`, are excluded.
 
 The `source-coop` profile uses `endpoint_url = https://data.source.coop`.
 At this S3 proxy, the account is the bucket and the product starts the key:
-`write_prefix = s3://lqgentner/glace-ch`. AWS-native bucket names reject these
+`write_prefix = s3://giuz/glace-alps`. AWS-native bucket names reject these
 credentials.
 
 Public reads use HTTPS at `data.source.coop` or anonymous S3 at

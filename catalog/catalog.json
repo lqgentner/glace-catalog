@@ -4,15 +4,15 @@
   "stac_extensions": [
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
-  "id": "glace-ch",
-  "title": "GLACE Switzerland (preliminary) – Sentinel-1 Glacier Coherence and Backscatter",
-  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2021–2024. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every cloud-optimized GeoTIFF is LERC-compressed and carries its processing record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator are provided for web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer).\n\nThis is a preliminary release over the Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is produced. The dataset is GLACE Alps, over the Alpine Convention perimeter, which uses this same pipeline and supersedes this catalog. These URLs are provisional: do not cite them, and expect the coverage, the years and the identifiers to change.",
+  "id": "glace-alps",
+  "title": "GLACE Alps – Sentinel-1 Glacier Coherence and Backscatter",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2015–2025. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every cloud-optimized GeoTIFF is LERC-compressed and carries its processing record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator are provided for web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer).",
   "links": [
     {
       "rel": "root",
       "href": "./catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "describedby",
@@ -46,7 +46,7 @@
     },
     {
       "rel": "about",
-      "href": "https://source.coop/lqgentner/glace-ch",
+      "href": "https://source.coop/giuz/glace-alps",
       "title": "Dataset on Source Cooperative"
     },
     {

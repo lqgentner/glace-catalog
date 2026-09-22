@@ -14,14 +14,14 @@ import odc.stac
 import pystac
 
 collection = pystac.Collection.from_file(
-    "https://data.source.coop/lqgentner/glace-ch/mosaics/collection.json"
+    "https://data.source.coop/giuz/glace-alps/mosaics/collection.json"
 )
 cube = odc.stac.load(
     list(collection.get_items(recursive=True)),
     bands=["coh12_vv", "coh12_vh"],
     chunks={},
 )
-change = cube.sel(time="2024") - cube.sel(time="2021")
+change = cube.sel(time="2025") - cube.sel(time="2015")
 ```
 
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
@@ -39,7 +39,7 @@ registered as a `style-{year}` collection asset. The latest also has the
 `default` role.
 
 Display ranges use the 2nd–98th percentiles measured on the published display
-mosaics over 2021–2024 and stay fixed across years.
+mosaics over 2015–2025 and stay fixed across years.
 Styles contain the designed color ramps; `renders` uses portable colormap
 names and declares the decibel conversions for COG display.
 

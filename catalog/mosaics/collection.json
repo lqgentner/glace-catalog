@@ -10,7 +10,7 @@
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json"
   ],
-  "id": "glace-ch-mosaics",
+  "id": "glace-alps-mosaics",
   "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)",
   "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area to support area statistics. Every year shares the same extent, so multitemporal stacks need no alignment step. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. Drawing is served separately by fourteen PMTiles archives per year, tiled on the WebMercatorQuad grid at zoom 13.",
   "license": "CC-BY-4.0",
@@ -51,18 +51,18 @@
     "spatial": {
       "bbox": [
         [
-          6.7676,
-          45.8288,
-          10.459,
-          47.3388
+          4.7461,
+          43.3891,
+          16.6113,
+          48.4
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2021-01-01T00:00:00Z",
-          "2025-01-01T00:00:00Z"
+          "2015-01-01T00:00:00Z",
+          "2026-01-01T00:00:00Z"
         ]
       ]
     }
@@ -575,7 +575,7 @@
   },
   "assets": {
     "items": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/items.parquet",
+      "href": "https://data.source.coop/giuz/glace-alps/mosaics/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
       "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
@@ -584,13 +584,13 @@
       ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/mosaics/items.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/mosaics/items.parquet",
           "alternate:name": "S3"
         }
       }
     },
     "thumbnail": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/mosaics/thumbnail.webp",
+      "href": "https://data.source.coop/giuz/glace-alps/mosaics/thumbnail.webp",
       "type": "image/webp",
       "title": "GLACE mosaics preview",
       "roles": [
@@ -613,13 +613,13 @@
       "rel": "root",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "parent",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "describedby",

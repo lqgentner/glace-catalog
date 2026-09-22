@@ -22,7 +22,7 @@ import odc.stac
 import pystac
 
 collection = pystac.Collection.from_file(
-    "https://data.source.coop/lqgentner/glace-ch/mosaics/collection.json"
+    "https://data.source.coop/giuz/glace-alps/mosaics/collection.json"
 )
 cube = odc.stac.load(
     list(collection.get_items(recursive=True)),
@@ -55,7 +55,7 @@ const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 new maplibregl.Map({
   container: "map",
-  style: "https://data.source.coop/lqgentner/glace-ch/mosaics/styles/2024.json",
+  style: "https://data.source.coop/giuz/glace-alps/mosaics/styles/2025.json",
 });
 ```
 

@@ -11,30 +11,25 @@
 # `src/glace_catalog/scopes.py` for the scope named here; the markdown
 # templates under templates/ see a wider context, listed in documents.py.
 
-scope: ch
+scope: alps
 region: the Alpine Convention perimeter
 # Years the tracked tree claims. `finalize-catalog` replaces the temporal
 # extent with the measured compositing windows at publication; these bound it
 # in the tracked tree and name the series in the prose.
 years:
-  first: 2021
-  last: 2024
+  first: 2015
+  last: 2025
 
-title: GLACE Switzerland (preliminary)
+title: GLACE Alps
 subtitle: Sentinel-1 Glacier Coherence and Backscatter
 # The subtitle under the wordmark and heading at the top of both READMEs.
 tagline: >-
   Sentinel-1 interferometric coherence and backscatter composites of the
   European Alps
 
-# Shown once, in the root README and AGENTS.md. Drop it with the "(preliminary)"
-# in the title when the Alpine catalog replaces this one.
-preliminary_notice: >-
-  This is a preliminary release over the Swiss Alps, published to exercise
-  the GLACE publication pipeline while the full dataset is produced. The
-  dataset is GLACE Alps, over {{ region }}, which uses this same pipeline and
-  supersedes this catalog. These URLs are provisional: do not cite them, and
-  expect the coverage, the years and the identifiers to change.
+# Shown once, in the root README and AGENTS.md when set; empty for the final
+# Alpine catalog.
+preliminary_notice: ""
 
 description: >-
   Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
@@ -54,9 +49,6 @@ description: >-
   record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator
   are provided for web maps, such as the
   [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
-
-
-  {{ preliminary_notice }}
 
 license: CC-BY-4.0
 
@@ -87,7 +79,7 @@ providers:
 
 links:
   about:
-    href: https://source.coop/lqgentner/glace-ch
+    href: https://source.coop/giuz/glace-alps
     title: Dataset on Source Cooperative
   vcs:
     href: https://github.com/lqgentner/glace-catalog

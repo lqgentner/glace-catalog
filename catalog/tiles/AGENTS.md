@@ -2,7 +2,7 @@
 
 Each item contains one year of data for a 10 km MGRS square:
 twelve single-band COGs at 10 m in the square's UTM zone.
-Coverage is Switzerland; squares outside the scope have no item.
+Coverage is the Alpine Convention perimeter; squares outside the scope have no item.
 
 ## Search tiles
 
@@ -13,8 +13,8 @@ This DuckDB query selects tiles by year and buffered glacier fraction:
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
 SELECT id, "glace:glacier_fraction_buffered" AS frac,
        "proj:code", bbox
-FROM read_parquet('https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet')
-WHERE datetime BETWEEN '2024-01-01' AND '2024-12-31'
+FROM read_parquet('https://data.source.coop/giuz/glace-alps/tiles/items.parquet')
+WHERE datetime BETWEEN '2025-01-01' AND '2025-12-31'
   AND "glace:glacier_fraction_buffered" > 0.1
 ORDER BY frac DESC;
 ```

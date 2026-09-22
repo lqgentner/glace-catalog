@@ -36,9 +36,9 @@ STAC API server is needed. Install it with `pip install rustac`.
 import rustac
 
 items = rustac.search_sync(
-    "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+    "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
     bbox=[7.9, 46.4, 8.2, 46.6],
-    datetime="2024-01-01/2025-01-01",
+    datetime="2025-01-01/2026-01-01",
 )
 for item in items:
     print(item["id"], item["assets"]["coh12_vv"]["href"])
@@ -57,7 +57,7 @@ import odc.stac
 import pystac
 import rustac
 
-tiles = "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet"
+tiles = "https://data.source.coop/giuz/glace-alps/tiles/items.parquet"
 
 bbox = [7.9, 46.4, 8.2, 46.6]
 items = rustac.search_sync(tiles, bbox=bbox)
@@ -67,7 +67,7 @@ cube = odc.stac.load(
     bbox=bbox,
     chunks={},
 )
-change = cube.coh12_vv.sel(time="2024") - cube.coh12_vv.sel(time="2021")
+change = cube.coh12_vv.sel(time="2025") - cube.coh12_vv.sel(time="2015")
 ```
 
 ## Open the tiles in QGIS
@@ -79,12 +79,12 @@ the COGs without downloading them in full:
 from osgeo import gdal
 import rustac
 
-tiles = "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet"
+tiles = "https://data.source.coop/giuz/glace-alps/tiles/items.parquet"
 bbox = [7.9, 46.4, 8.2, 46.6]
 
-items = rustac.search_sync(tiles, bbox=bbox, datetime="2024-01-01/2025-01-01")
+items = rustac.search_sync(tiles, bbox=bbox, datetime="2025-01-01/2026-01-01")
 gdal.BuildVRT(
-    "coh12_vv_2024.vrt",
+    "coh12_vv_2025.vrt",
     ["/vsicurl/" + item["assets"]["coh12_vv"]["href"] for item in items],
 )
 ```
