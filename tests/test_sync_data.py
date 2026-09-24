@@ -6,7 +6,7 @@ bucket, and its two decisions -- which objects move, and what they are served as
 -- are both made from listings rather than from bytes. That makes them checkable
 without a network, and this is where they are checked: the change detection over
 a synthetic pair of listings, the content types, the target the publication
-file names, the refusal of a local store root, and the dry run, which is the
+file names, publication from a local store root, and the dry run, which is the
 last thing a person reads before typing ``--confirm``.
 
 Both sides of a transfer are in-memory filesystems, because the tool only ever
@@ -110,7 +110,7 @@ class TwoRoots:
     def __init__(self, source_root: UPath, target_root: UPath) -> None:
         self.patches = (
             patch.object(sync_data, "read_target", self._returning(target_root)),
-            patch.object(sync_data, "bucket_root", self._returning(source_root)),
+            patch.object(sync_data, "store_root", self._returning(source_root)),
         )
 
     @staticmethod
@@ -309,18 +309,39 @@ def check_target_config() -> dict[str, bool]:
 
 
 def check_local_root() -> dict[str, bool]:
-    """Check that a local store root is refused: there is no staging mode."""
+    """Check that a store built on local disk publishes like one on the bucket.
+
+    The store root comes from the real configuration here, not from
+    :class:`TwoRoots`, so the resolution of a plain path is what is tested.
+    """
     checks: dict[str, bool] = {}
-    try:
-        sync_data.bucket_root(Path("/mnt/glace/glace-ch"))
-    except ValueError as error:
-        checks["a local store root is refused"] = True
-        checks["the refusal names the variable"] = "GLACE_STORE_ROOT" in str(error)
-    else:
-        checks["a local store root is refused"] = False
-        checks["the refusal names the variable"] = False
-    root = sync_data.bucket_root(UPath("s3://s1-bursts/data/glace-ch"))
-    checks["a bucket root is accepted"] = str(root) == "s3://s1-bursts/data/glace-ch"
+    target_root = memory_root({})
+    payload = {"catalog.json": b"{}", "tiles/2023/31TFJ68/coh12_vv.tif": b"x" * 4096}
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, data in payload.items():
+            path = Path(tmp) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        (Path(tmp) / "tiles/2023/.build-state.json").write_text("{}")
+        locations = sync_data.settings.locations
+        original = locations.store_root
+        locations.store_root = tmp
+        try:
+            with (
+                patch.object(sync_data, "read_target", lambda: target_root),
+                redirect_stdout(StringIO()),
+            ):
+                code = sync_data.main(["--confirm"])
+        finally:
+            locations.store_root = original
+    checks["a local store root publishes"] = code == 0
+    checks["every object arrives with its bytes"] = all(
+        (target_root / name).exists() and (target_root / name).read_bytes() == data
+        for name, data in payload.items()
+    )
+    checks["build state stays behind"] = not (
+        target_root / "tiles/2023/.build-state.json"
+    ).exists()
     return checks
 
 
@@ -574,14 +595,6 @@ def check_setup_failures_are_messages() -> dict[str, bool]:
     checks["it prints one line naming the profile"] = (
         len(message.strip().splitlines()) == 1 and "source-coop" in message
     )
-
-    # The store root this gate runs with is local, which is the other way the
-    # same guard fires.
-    reported = StringIO()
-    with redirect_stderr(reported):
-        code = sync_data.main([])
-    checks["a local store root exits non-zero"] = code == 1
-    checks["it names GLACE_STORE_ROOT"] = "GLACE_STORE_ROOT" in reported.getvalue()
     return checks
 
 

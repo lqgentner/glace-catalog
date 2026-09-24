@@ -8,10 +8,8 @@ different failure modes:
   ``publish-year.py --src``, because one year's archive is one prefix and a
   store may draw on more than one.
 - **store** — where the published tree is assembled: a prefix on the private UZH
-  bucket. The store *is* what gets published, object for object, so a local
-  ``GLACE_STORE_ROOT`` is a build that cannot be published —
-  ``tools/sync_data.py`` refuses one. A local path still resolves here, which is
-  what tests and offline builds use.
+  bucket or a local directory. The store *is* what gets published, object for
+  object, and ``tools/sync_data.py`` streams it from either.
 - **publish target** — Source Cooperative, which this module does *not* know
   about. It lives in ``catalog.publish.yaml`` and is read by
   ``tools/sync_data.py`` alone, so a credential for the public bucket can never

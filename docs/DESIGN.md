@@ -235,7 +235,7 @@ two ways; before R-18 the asset titles were written in eight places.
 **The build never writes into `catalog/`.** `scripts/publish-year.py` and
 `scripts/finalize-catalog.py` read the composites from the archive named by
 `publish-year.py --src` and write to `GLACE_STORE_ROOT`, a prefix on the private
-UZH gateway.
+UZH gateway or a local directory (the Alpine build, since 2026-09-24).
 `finalize-catalog` stages the tracked documents into the store and *patches* the
 copies there with what depends on the run — year links, temporal extent, PMTiles
 links, `file:size` and `file:checksum` on the collection assets it wrote — and
@@ -245,11 +245,13 @@ publication an unreviewable one.
 
 **The store is the published tree.** `tools/sync_data.py` streams every object
 under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
-documents and data alike, object to object, with nothing on local disk and no
-staging directory. Both sides are `UPath` roots from `freezebase.make_s3_upath`,
-so the listing, the reads and the writes share one client configuration and one
-retry budget, and the target needs only the profile: botocore reads the Source
-Cooperative endpoint from that profile's config section. Syncing the tracked
+documents and data alike, object to object, with no staging directory. Both
+sides are `UPath` roots; an `s3://` store comes from `freezebase.make_s3_upath`,
+so its listing, reads and writes share one client configuration and one retry
+budget with the target. A local store lists `mtime` instead of `LastModified`
+and no ETags, so its equal-size objects are decided by the timestamp rule. The
+target needs only the profile: botocore reads the Source Cooperative endpoint
+from that profile's config section. Syncing the tracked
 `catalog/` over the store afterwards would put the unpatched documents over the
 patched ones, which is why nothing does.
 Change detection is three steps from one listing per side and reads no bytes.
@@ -470,7 +472,7 @@ struck through — git holds them.
 | R-3 | PMTiles are **linked** at collection level only: `build_mosaic_item` has no `pmtiles` parameter and an item carries no `rel: "pmtiles"` link. The archive is an asset of the year item all the same (M-34) — the link is what stays collection-level, because that is where `pmtiles:layers` is defined | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7.1,<0.8` from PyPI; 0.7.1 carries `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint (UPSTREAM.md F-5) | 6 |
 | R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the fresh `ch` build lands there once it is empty | 4 |
-| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand. Each write is committed by hand and discarded on failure, so a broken transfer publishes nothing | 4 |
+| R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT`, local or on the bucket (the local-root refusal went on 2026-09-24), to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand. Each write is committed by hand and discarded on failure, so a broken transfer publishes nothing | 4 |
 | R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |
 | R-8 | The published tree is the **store**, not the tracked `catalog/`. `tools/publish.py` is deleted; syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |

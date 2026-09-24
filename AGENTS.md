@@ -76,8 +76,7 @@ GLACE_STORE_ROOT=        # built store: s3:// prefix, or a local directory
 ```
 
 `publish-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`
-unless `--root` is given. A local root works offline, but `tools/sync_data.py`
-only publishes from object storage.
+unless `--root` is given. A local root works offline and publishes the same way.
 
 Use named profiles only; do not pass access keys through the environment.
 Publication uses the separate profile in `catalog.publish.yaml`.

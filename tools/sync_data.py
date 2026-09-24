@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """Stream the built store to Source Cooperative, object to object.
 
-The store on the UZH gateway *is* the published tree: ``publish-year`` writes
-its items and rasters there and ``finalize-catalog`` patches its collection
+The store at ``GLACE_STORE_ROOT`` *is* the published tree, whether it sits on
+the UZH gateway or on local disk: ``publish-year`` writes its items and rasters
+there and ``finalize-catalog`` patches its collection
 documents with the year links, the extent and the PMTiles registrations. So
 publication copies that tree and nothing else -- no staging directory, no second
 walk over the tracked ``catalog/``, which would put the unpatched documents over
 the patched ones.
 
 Both sides are :class:`~upath.UPath` roots. The source is the store root the
-build wrote to, with the ``GLACE_S3_*`` profile, endpoint and checksum settings
-every other step uses. The target is the ``write_prefix`` in
-``catalog.publish.yaml`` opened with the ``profile`` named there, and nothing
-else: that profile's config section carries the Source Cooperative endpoint,
-and botocore reads it from there. Bytes never touch local disk. Each object is
-read from one root and written to the other in chunks, and the retry budget
-``freezebase`` puts on every S3 path covers both sides.
+build wrote to, a local directory or an ``s3://`` prefix opened with the
+``GLACE_S3_*`` profile, endpoint and checksum settings every other step uses.
+The target is the ``write_prefix`` in ``catalog.publish.yaml`` opened with the
+``profile`` named there, and nothing else: that profile's config section
+carries the Source Cooperative endpoint, and botocore reads it from there.
+Nothing is staged: each object is read from one root and written to the other
+in chunks, and the retry budget ``freezebase`` puts on every S3 path covers
+both sides.
 
 Change detection is three steps from one listing per side, and reads no bytes.
 A different size is a change. At an equal size, two single-part ETags are two
@@ -112,36 +114,9 @@ def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
     return make_s3_upath(uri, profile=str(config["profile"]))
 
 
-def bucket_root(root: Path | UPath) -> UPath:
-    """Check that the store root is on object storage, and return it.
-
-    There is no staging step: what publication reads is the bucket the build
-    wrote to, so a local root is a configuration mistake rather than a mode.
-
-    Parameters
-    ----------
-    root
-        Resolved store root.
-
-    Returns
-    -------
-    UPath
-        The same root, as an S3 path.
-
-    Raises
-    ------
-    ValueError
-        If the root is not an ``s3://`` location.
-    """
-    path = UPath(root)
-    if path.protocol != "s3":
-        msg = (
-            f"GLACE_STORE_ROOT is {root}, which is not on object storage. "
-            "Publication streams from the bucket the build wrote to; set it to "
-            "the s3:// prefix that holds the store."
-        )
-        raise ValueError(msg)
-    return path
+def store_root() -> UPath:
+    """Open the built store, on local disk or object storage, as the source root."""
+    return UPath(settings.store_root)
 
 
 def is_build_state(relative: str) -> bool:
@@ -226,7 +201,7 @@ def plan_sync(
     Parameters
     ----------
     source
-        Store-relative path to entry, from the private gateway.
+        Store-relative path to entry, from the store.
     target
         Store-relative path to entry, from Source Cooperative.
     force
@@ -394,7 +369,7 @@ class TwoPhaseFile(Protocol):
 
 
 def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
-    """Stream one object from the private gateway to Source Cooperative.
+    """Stream one object from the store to Source Cooperative.
 
     The content type goes with the write, from freezebase's table of what a
     cloud-native object is served as: Source Cooperative serves what the upload
@@ -516,7 +491,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # traceback.
     try:
         target = read_target()
-        root = bucket_root(settings.store_root)
+        root = store_root()
         source = list_subtree(root, subtree)
         published = list_subtree(target, subtree)
     except (BotoCoreError, ClientError, OSError, ValueError) as error:
