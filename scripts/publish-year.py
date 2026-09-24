@@ -550,7 +550,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("year", type=int)
     parser.add_argument("--src", required=True, help="local path or s3:// URI of one year")
     parser.add_argument("--scope", required=True, choices=["ch", "alps"])
-    parser.add_argument("--root", default=None, help="store root; defaults to the scope's")
+    parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     parser.add_argument(
         "--steps",
         default=",".join(STEPS),
@@ -615,7 +615,8 @@ def main() -> None:
     steps = stac.resolve_steps(args.steps.split(","))
 
     src = settings.resolve_path(args.src)
-    layout = stac.StoreLayout(settings.resolve_path(args.root or scope.root))
+    root = settings.resolve_path(args.root) if args.root else settings.store_root
+    layout = stac.StoreLayout(root)
     logger.info("Publishing %s %d from %s to %s", scope.key, args.year, src, layout.root)
 
     frame, files = load_and_verify_manifest(src, args.year)

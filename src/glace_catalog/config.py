@@ -11,7 +11,7 @@ different failure modes:
   bucket. The store *is* what gets published, object for object, so a local
   ``GLACE_STORE_ROOT`` is a build that cannot be published —
   ``tools/sync_data.py`` refuses one. A local path still resolves here, which is
-  what tests and throwaway builds use.
+  what tests and offline builds use.
 - **publish target** — Source Cooperative, which this module does *not* know
   about. It lives in ``catalog.publish.yaml`` and is read by
   ``tools/sync_data.py`` alone, so a credential for the public bucket can never

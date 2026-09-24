@@ -401,7 +401,7 @@ Switzerland.
 
 | what | where | how it changes |
 | --- | --- | --- |
-| scope constants | `src/glace_catalog/scopes.py` | `SCOPES["alps"]`, both grids, 2 210 perimeter tiles (the 2025 perimeter edition; the grids hold every tile of both editions), 45.4 % coverage, store root `s3://s1-bursts/data/glace-alps` |
+| scope constants | `src/glace_catalog/scopes.py` | `SCOPES["alps"]`, both grids, 2 210 perimeter tiles (the 2025 perimeter edition; the grids hold every tile of both editions), 45.4 % coverage; the store root is `GLACE_STORE_ROOT`, not a scope constant |
 | collection ids | derived from the scope | `glace-ch-tiles` → `glace-alps-tiles`, automatic |
 | publication target | `catalog.publish.yaml` | `write_prefix` and `public_base` name `giuz/glace-alps`; the rehearsal was `lqgentner/glace-ch` |
 | absolute asset hrefs | both `collection.json` | built from `public_base`; every `alternate` `s3://` href too |
@@ -469,7 +469,7 @@ struck through — git holds them.
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | PMTiles are **linked** at collection level only: `build_mosaic_item` has no `pmtiles` parameter and an item carries no `rel: "pmtiles"` link. The archive is an asset of the year item all the same (M-34) — the link is what stays collection-level, because that is where `pmtiles:layers` is defined | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7.1,<0.8` from PyPI; 0.7.1 carries `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint (UPSTREAM.md F-5) | 6 |
-| R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the `ch` scope's default root stays that value and the fresh build lands there once it is empty | 4 |
+| R-5 | The old UZH prefix `s3://s1-bursts/data/glace-ch` is being deleted by the user; the fresh `ch` build lands there once it is empty | 4 |
 | R-6 | No staging directory. Publication streams object-to-object from `GLACE_STORE_ROOT` to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`; no boto3 client is built by hand. Each write is committed by hand and discarded on failure, so a broken transfer publishes nothing | 4 |
 | R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account, the key starts with the product, `write_prefix` is `s3://lqgentner/glace-ch` | 4 |

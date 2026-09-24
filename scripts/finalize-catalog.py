@@ -17,7 +17,7 @@ than inside them.
 
 Usage:
     uv run --env-file .env scripts/finalize-catalog.py \\
-        --scope ch --base-url https://<host>/glace-ch
+        --base-url https://<host>/glace-alps
 """
 
 from __future__ import annotations
@@ -39,7 +39,6 @@ from upath import UPath
 from glace_catalog import stac
 from glace_catalog.config import settings
 from glace_catalog.metadata import vocabulary
-from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import PMTILES_LINK_REL, extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
 from glace_catalog.stac.store import (
@@ -554,8 +553,7 @@ def validate(layout: stac.StoreLayout) -> None:
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the catalogue finalizer."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scope", required=True, choices=["ch", "alps"])
-    parser.add_argument("--root", default=None, help="store root; defaults to the scope's")
+    parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     parser.add_argument(
         "--base-url",
         required=True,
@@ -587,8 +585,8 @@ def main() -> None:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    scope = get_scope(args.scope)
-    layout = stac.StoreLayout(settings.resolve_path(args.root or scope.root))
+    root = settings.resolve_path(args.root) if args.root else settings.store_root
+    layout = stac.StoreLayout(root)
     years = published_years(layout)
 
     tables = [read_year_index(layout, year) for year in years]

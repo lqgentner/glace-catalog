@@ -174,8 +174,6 @@ class Scope:
         Short identifier, ``"ch"`` or ``"alps"``.
     title
         Human-readable region name, used in collection titles.
-    root
-        Default store root, as an ``s3://`` URI.
     analysis_grid
         Equal-area grid the annual mosaics are written on (M-24).
     display_grid
@@ -198,7 +196,6 @@ class Scope:
 
     key: str
     title: str
-    root: str
     analysis_grid: Grid
     display_grid: Grid
     perimeter_tiles: int
@@ -234,7 +231,6 @@ SCOPES: Mapping[str, Scope] = {
     "ch": Scope(
         key="ch",
         title="Switzerland",
-        root="s3://s1-bursts/data/glace-ch",
         analysis_grid=Grid(
             crs=LAEA,
             resolution=ANALYSIS_RESOLUTION,
@@ -262,7 +258,6 @@ SCOPES: Mapping[str, Scope] = {
     "alps": Scope(
         key="alps",
         title="Alps",
-        root="s3://s1-bursts/data/glace-alps",
         analysis_grid=Grid(
             crs=LAEA,
             resolution=ANALYSIS_RESOLUTION,

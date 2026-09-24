@@ -40,7 +40,7 @@ Validate the full built tree before publication.
 
 `glace-alps` is the dataset and the scope `metadata/catalog.yaml` names;
 `glace-ch` was the Swiss rehearsal. `src/glace_catalog/scopes.py` defines both
-scopes, grids and default store roots. Switching scope also requires updating
+scopes and grids. Switching scope also requires updating
 `scope`, `region`, `years`, `title` and the preliminary notice in
 `metadata/catalog.yaml`.
 See `docs/DESIGN.md` §8 and the checklist in `docs/STATUS.md`.
@@ -72,8 +72,12 @@ Building reads `.env` through `freezebase.settings.S3Settings`:
 ```bash
 GLACE_S3_PROFILE=        # named profile in ~/.aws/credentials
 GLACE_S3_ENDPOINT_URL=   # UZH gateway, unless set in the profile
-GLACE_STORE_ROOT=        # destination s3:// prefix for the built store
+GLACE_STORE_ROOT=        # built store: s3:// prefix, or a local directory
 ```
+
+`publish-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`
+unless `--root` is given. A local root works offline, but `tools/sync_data.py`
+only publishes from object storage.
 
 Use named profiles only; do not pass access keys through the environment.
 Publication uses the separate profile in `catalog.publish.yaml`.
@@ -143,10 +147,27 @@ Swiss measurements on 2026-09-11, with 15 cores and 60 GB RAM:
 The old 57 GB peak came from GDAL's per-worker default cache; the bounded cache
 fix replaced that behavior on 2026-09-11.
 
+Alpine 2023 on 2026-09-24, same machine, default workers, local source and
+store root on one disk (2 210 tiles, 35 GB store):
+
+| Step | Time |
+| --- | --- |
+| `copy` | 4 min |
+| `vrt` | 4 min |
+| `mosaics` | 48 min |
+| `pmtiles` | 1 h 44 min |
+| `items` | 1 min |
+| Total | 2 h 41 min |
+
+About 18 GB of system memory was in use when sampled during `pmtiles`; the
+process-tree peak was not measured. Scratch peaked near 4 GB of RGBA rasters
+beside 2.7 GB of staged mosaics. Finalizing this one year took 11 s, including
+thumbnails and validation.
+
 ### 3. Finalize after adding or changing a year
 
 ```bash
-uv run --env-file .env scripts/finalize-catalog.py --scope alps \
+uv run --env-file .env scripts/finalize-catalog.py \
     --base-url https://data.source.coop/giuz/glace-alps
 ```
 
