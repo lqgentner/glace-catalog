@@ -297,8 +297,8 @@ def main() -> int:
         checks |= _writer_checks(root)
         first = _year_payloads(tiles, 2023)
         second = _year_payloads(tiles, 2024)
-        # A tile missing one polarization (2023 33UTP83 is VH only) leaves a
-        # null in that asset's struct field for its row.
+        # A tile missing one polarization leaves a null in that asset's struct
+        # field for its row.
         for payload in second[1:]:
             payload["assets"]["coh12_vh"] = {
                 **payload["assets"]["coh12_vv"],
