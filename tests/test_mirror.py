@@ -297,6 +297,13 @@ def main() -> int:
         checks |= _writer_checks(root)
         first = _year_payloads(tiles, 2023)
         second = _year_payloads(tiles, 2024)
+        # A tile missing one polarization (2023 33UTP83 is VH only) leaves a
+        # null in that asset's struct field for its row.
+        for payload in second[1:]:
+            payload["assets"]["coh12_vh"] = {
+                **payload["assets"]["coh12_vv"],
+                "href": payload["assets"]["coh12_vv"]["href"].replace("_vv", "_vh"),
+            }
 
         year_paths = []
         for year, payloads in ((2023, first), (2024, second)):
@@ -347,6 +354,7 @@ def main() -> int:
             asset["href"]
             for assets in table.column("assets").to_pylist()
             for asset in assets.values()
+            if asset is not None
         }
         checks["two years concatenated: the asset hrefs are rebased"] = all(
             href.startswith(f"{BASE_URL}/tiles/") for href in hrefs

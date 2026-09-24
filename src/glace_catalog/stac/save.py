@@ -193,6 +193,10 @@ def _rebase_hrefs(table: pa.Table, base_url: str) -> pa.Table:
         if row is None:
             continue
         for asset in row.values():
+            # A struct column holds every key any item has; a tile without one
+            # of them (a single-polarization tile) carries a null there.
+            if asset is None:
+                continue
             href = asset.get("href")
             if href is not None and "://" not in href:
                 asset["href"] = f"{base}/{href.lstrip('/')}"
