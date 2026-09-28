@@ -290,7 +290,7 @@ class StoreLayout:
 
         Same directory, distinct stem: ``coh12_vv_viz.pmtiles`` next to
         ``coh12_vv.tif``. The archive is an asset of the year item with the
-        ``visual`` role and, on the collection, a ``rel="pmtiles"`` link.
+        ``visual`` role.
         """
         return self.mosaic_year(year) / viz_filename(asset_key)
 

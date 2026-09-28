@@ -13,8 +13,7 @@ A tile whose files disagree about the window is refused rather than widened,
 and the window-to-range translation is checked once, since every item uses it.
 
 The mosaic item is checked for what its web-map archives are: assets with the
-``visual`` role beside the COGs they render, and never a link — the link with
-``pmtiles:layers`` stays on the collection.
+``visual`` role beside the COGs they render, and never a link.
 
 Reads no data and needs no network.
 
@@ -260,12 +259,11 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         == "2023-07-21",
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
-    # The item carries the archives as `visual` assets; the link with
-    # `pmtiles:layers` stays on the collection (PORTO-FMT-011), which is
-    # `finalize-catalog`'s job. So the item declares no web-map-links extension,
-    # whose version the collection alone is the source of. Checked on the item
-    # that actually carries the renderings, since that is where a link or an
-    # extension declaration would creep in.
+    # The item carries the archives as `visual` assets and nothing links them
+    # (docs/conformance.md, `PORTO-FMT-011`), so the item declares no
+    # web-map-links extension. Checked on the item that actually carries the
+    # renderings, since that is where a link or an extension declaration would
+    # creep in.
     built = _publisher().visual_assets(_pmtiles_state())
     rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()

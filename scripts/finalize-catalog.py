@@ -39,7 +39,7 @@ from upath import UPath
 from glace_catalog import stac
 from glace_catalog.config import settings
 from glace_catalog.metadata import vocabulary
-from glace_catalog.stac.items import PMTILES_LINK_REL, extent_from_items
+from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
 from glace_catalog.stac.store import (
     ASSETS_DIR,
@@ -210,8 +210,8 @@ def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict
     but the year is the one part that follows from the run rather than from a
     design decision, so it is the one part rewritten here. The stretch is per
     product and does not vary by year, which is why one reviewed template can
-    describe every published year; writing a copy per year is what makes every
-    ``pmtiles:layers`` id resolve to a layer some published style actually draws.
+    describe every published year; writing a copy per year is what gives every
+    published archive a layer some published style actually draws.
 
     Returns
     -------
@@ -289,55 +289,33 @@ def register_style_assets(document: Document, years: Sequence[int], latest: int)
     document["assets"] = rebuilt
 
 
-def check_style_coverage(document: Document, styles: Mapping[str, Path]) -> None:
-    """Refuse a published archive link whose layer no published style draws.
+def check_style_coverage(
+    layout: stac.StoreLayout,
+    years: Sequence[int],
+    styles: Mapping[str, Path],
+) -> None:
+    """Refuse a published web-map archive its year's style does not draw.
 
-    ``pmtiles:layers`` is a promise that a client switching that layer on finds
-    it in the collection's style. Before one style was written per year, 42 of
-    the 56 ids named a layer no published style held, and the only symptom was a
-    legend that never appeared.
+    A client finds an archive as a ``visual`` asset of the year item and draws
+    it through the year's style, under the layer id ``glace-{key}-{year}``.
+    Before one style was written per year, 42 of 56 archives had no layer in
+    any published style, and the only symptom was a legend that never appeared.
 
     Raises
     ------
     SystemExit
-        On the first linked layer id absent from its year's style.
+        On the first archive whose layer is absent from its year's style.
     """
-    drawn: dict[str, set[str]] = {}
+    drawn: dict[int, set[str]] = {}
     for path in styles.values():
         match = re.search(r"(\d{4})", path.stem)
         if match is None:
             continue
         style = json.loads(path.read_text())
-        ids = drawn.setdefault(match[1], set())
+        ids = drawn.setdefault(int(match[1]), set())
         ids.update(str(layer["id"]) for layer in style.get("layers", []))
 
-    for link in document.get("links", []):
-        if link.get("rel") != PMTILES_LINK_REL:
-            continue
-        href = str(link.get("href", ""))
-        year = re.search(r"/(\d{4})/", href)
-        if year is None:
-            msg = f"{href} is registered as a web-map archive but names no year"
-            raise SystemExit(msg)
-        ids = drawn.get(year[1], set())
-        for layer_id in link.get("pmtiles:layers", []):
-            if layer_id not in ids:
-                msg = f"{href} names {layer_id}, which styles/{year[1]}.json does not draw"
-                raise SystemExit(msg)
-
-
-def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int]) -> list[Document]:
-    """Register every published web-map archive on the mosaics collection.
-
-    Portolan puts PMTiles registration at collection level (``PORTO-FMT-011``),
-    so a per-year archive is a link here rather than an asset of the year item.
-    The ``pmtiles:layers`` array names the MapLibre style layer a client switches
-    on, which is what the field is for; it is the same id the styles use.
-
-    The hrefs are relative to the collection, like its item links and the
-    style sources, so these links do not name the publication target.
-    """
-    links: list[Document] = []
+    archives = 0
     for year in years:
         directory = layout.mosaic_year(year)
         if not directory.exists():
@@ -345,18 +323,15 @@ def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int]) -> list[Docume
         for archive in sorted(directory.iterdir()):
             if archive.suffix != ".pmtiles" or not archive.stem.endswith(stac.VIZ_SUFFIX):
                 continue
-            layer = stac.data_key(archive.stem)
-            links.append(
-                {
-                    "rel": PMTILES_LINK_REL,
-                    "href": f"./{year}/{archive.name}",
-                    "type": "application/vnd.pmtiles",
-                    "title": vocabulary().pmtiles_link_title(archive.stem, year),
-                    "pmtiles:layers": [f"glace-{layer}-{year}"],
-                },
-            )
-    logger.info("Registered %d web-map archive(s)", len(links))
-    return links
+            layer_id = f"glace-{stac.data_key(archive.stem)}-{year}"
+            if layer_id not in drawn.get(year, set()):
+                msg = (
+                    f"{MOSAICS_DIR}/{year}/{archive.name} is published, but "
+                    f"styles/{year}.json draws no layer {layer_id}"
+                )
+                raise SystemExit(msg)
+            archives += 1
+    logger.info("Every one of %d web-map archive(s) is drawn by its year's style", archives)
 
 
 def write_documents(
@@ -413,9 +388,8 @@ def write_documents(
         styles = repoint_styles(source_dir, staged, years)
         register_style_assets(documents[MOSAICS_DIR], years, max(years))
         stamp_style_assets(documents, styles)
-        # The links are already on the document, so this is the last chance to
-        # catch one naming a layer no published style draws.
-        check_style_coverage(documents[MOSAICS_DIR], styles)
+        # The last chance to catch an archive no published style draws.
+        check_style_coverage(layout, years, styles)
 
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
@@ -604,7 +578,6 @@ def main() -> None:
         years,
         mosaic_items,
     )
-    documents["mosaics"]["links"] += pmtiles_links(layout, years)
 
     # The indexes and the thumbnails are written before the documents are staged
     # because the documents declare their size and digest, and those can only be

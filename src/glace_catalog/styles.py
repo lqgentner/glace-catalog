@@ -182,7 +182,7 @@ def layer_key(layer_id: str) -> str:
     """Strip a style layer id down to the asset key its archive is named after.
 
     ``glace-coh12_vv-2024`` is ``coh12_vv``. The year is in the id because
-    ``pmtiles:layers`` names a specific archive, but the stretch is a per-product
+    the layer draws one year's archive, but the stretch is a per-product
     constant and does not vary with it — which is what lets one style file
     describe every year.
     """

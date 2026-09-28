@@ -4,8 +4,8 @@
 renderings once; ``metadata/catalog.yaml`` holds the catalog's identity and
 prose. This module reads both and answers every naming question the repository
 has, so that a collection's ``item_assets``, an item's assets, a ``renders``
-entry, a style legend, a ``rel: "pmtiles"`` link and a README table all say the
-same thing about the same file because they were all asked here.
+entry, a style legend and a README table all say the same thing about the same
+file because they were all asked here.
 
 Before this module, the asset titles were written in eight places that did not
 read each other, and the ``renders`` stretches had drifted from the style's
@@ -303,10 +303,6 @@ class Vocabulary:
         if ref.viz:
             parts.append("PMTiles")
         return TITLE_SEPARATOR.join(parts)
-
-    def pmtiles_link_title(self, key: str, year: int) -> str:
-        """Title of the collection's ``rel: "pmtiles"`` link to one archive."""
-        return f"{self.asset_title(key)}, {year}"
 
     def collection_title(self, collection: str) -> str:
         """Full title of one collection."""

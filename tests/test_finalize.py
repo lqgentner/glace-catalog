@@ -3,13 +3,12 @@
 
 Three things only this script does, and each one can go wrong quietly:
 
-- the ``rel: "pmtiles"`` links, which point into the year's item directory,
-  relative to the collection, and must skip the COGs sitting beside the
-  archives;
 - the published styles, one per year written from the one tracked template, so
   every year's archives have a style that names their layers;
-- the coverage check between the two, which is what makes a ``pmtiles:layers``
-  id naming a layer no style draws a failed run rather than a dead legend.
+- the style registrations on the collection, one per year with the latest the
+  default;
+- the coverage check between the store's archives and the styles, which is what
+  makes an archive no style draws a failed run rather than a dead legend.
 
 Runs the script's own functions against a temporary store of empty files. Reads
 no data, writes nothing outside the temporary directory and needs no network.
@@ -75,24 +74,6 @@ def _source(root: Path) -> Path:
     return root
 
 
-def check_links(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
-    """Check the archive links: one per archive, into the year directory."""
-    links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024])
-    checks["one link per archive, none for COGs"] = len(links) == 2
-    checks["the link is relative to the collection"] = (
-        links[1]["href"] == "./2024/coh12_vv_viz.pmtiles"
-    )
-    checks["every link resolves to an archive in the store"] = all(
-        (store / "mosaics" / str(link["href"])).is_file() for link in links
-    )
-    checks["pmtiles:layers names the data stem's style layer"] = links[1]["pmtiles:layers"] == [
-        "glace-coh12_vv-2024"
-    ]
-    checks["the link is titled by the vocabulary"] = (
-        links[1]["title"] == "Coherence VV – PMTiles, 2024"
-    )
-
-
 def check_styles(
     checks: dict[str, bool],
     fin: ModuleType,
@@ -150,23 +131,35 @@ def check_registration(
 def check_coverage(
     checks: dict[str, bool],
     fin: ModuleType,
-    document: dict[str, Any],
+    store: Path,
     written: dict[str, Path],
-    links: list[dict[str, object]],
 ) -> None:
-    """Check that a linked layer no published style draws stops the run."""
-    document["links"] = [*document["links"], *links]
+    """Check that an archive no published style draws stops the run."""
+    layout = stac.StoreLayout(store)
     try:
-        fin.check_style_coverage(document, written)
-        checks["every linked layer is in its year's style"] = True
+        fin.check_style_coverage(layout, [2023, 2024], written)
+        checks["every archive is in its year's style, and the COG is ignored"] = True
     except SystemExit:
-        checks["every linked layer is in its year's style"] = False
-    document["links"].append({**links[1], "pmtiles:layers": ["glace-nonesuch-2024"]})
+        checks["every archive is in its year's style, and the COG is ignored"] = False
     try:
-        fin.check_style_coverage(document, written)
-        checks["a link to a layer no style holds is refused"] = False
+        fin.check_style_coverage(layout, [2022], written)
+        checks["a year the store holds no archives of passes"] = True
     except SystemExit:
-        checks["a link to a layer no style holds is refused"] = True
+        checks["a year the store holds no archives of passes"] = False
+    try:
+        fin.check_style_coverage(layout, [2024], {"style-2023": written["style-2023"]})
+        checks["an archive whose year has no style is refused"] = False
+    except SystemExit:
+        checks["an archive whose year has no style is refused"] = True
+    stray = store / "mosaics" / "2024" / "nonesuch_vv_viz.pmtiles"
+    stray.write_bytes(b"")
+    try:
+        fin.check_style_coverage(layout, [2023, 2024], written)
+        checks["an archive no style draws is refused"] = False
+    except SystemExit as error:
+        checks["an archive no style draws is refused"] = "glace-nonesuch_vv-2024" in str(error)
+    finally:
+        stray.unlink()
 
 
 def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
@@ -199,12 +192,10 @@ def main() -> int:
         source = _source(work / "source")
         staged = work / "staged"
 
-        check_links(checks, fin, store)
         written = check_styles(checks, fin, source, staged)
         document = json.loads((source / "mosaics" / "collection.json").read_text())
         check_registration(checks, fin, document)
-        links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024])
-        check_coverage(checks, fin, document, written, links)
+        check_coverage(checks, fin, store, written)
         check_skip_thumbnail(checks, fin, store)
 
     failed = [name for name, ok in checks.items() if not ok]

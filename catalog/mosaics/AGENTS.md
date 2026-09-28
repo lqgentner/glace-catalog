@@ -33,10 +33,12 @@ counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata
 Backscatter and quality maps use decibels; coherence remains linear. Do not
 use these pixels as measurements.
 
-Archives are item assets with the `visual` role and collection links with
-`rel: "pmtiles"`. Each year has a MapLibre style at `styles/{year}.json`,
-registered as a `style-{year}` collection asset. The latest also has the
-`default` role.
+Archives are assets of their year's item with the `visual` role; the
+collection does not link them. The key is `{stem}_viz`, and the href is
+relative to the item. Each year has a MapLibre style at
+`styles/{year}.json`, registered as a `style-{year}` collection asset. It draws
+the archive `{stem}_viz.pmtiles` as the layer `glace-{stem}-{year}`. The latest
+style also has the `default` role.
 
 Display ranges use the 2nd–98th percentiles measured on the published display
 mosaics over 2015–2025 and stay fixed across years.

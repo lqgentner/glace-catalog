@@ -61,6 +61,30 @@ The alternative — leaving the mirror registration out of the committed
 the committed document differ from the published one, which is a worse property
 than a finding whose cause is written down.
 
+### `PORTO-FMT-011` — no `rel: "pmtiles"` links
+
+| Requirement | Where | Why accepted | Tracking |
+|---|---|---|---|
+| `PORTO-FMT-011`, `PORTO-FMT-012` | mosaics collection, built tree | The web-map archives are item assets with the `visual` role and the collection does not link them. | none yet |
+
+*"A PMTiles file … MUST be registered through a collection-level
+`rel: "pmtiles"` link."* The rule reads as written for a vector collection,
+which has one archive. This catalog uses PMTiles the way it uses COGs: one archive per
+product and year, fourteen a year, 154 across the Alpine years. Linked from the
+collection they were a flat list that long on the collection page, and the
+viewer was their only reader.
+
+rashid does not report the omission. `PTL-VIZ-003` checks a collection that
+carries a PMTiles asset or link, and the mosaics collection carries neither, so
+the `ACCEPTED` list in `tests/test_conformance.py` is unchanged. The deviation
+is recorded here because a clean run would otherwise read as conformance.
+
+What the links did is kept elsewhere. Each year's item lists its archives as
+assets, with size and checksum. Each year's style draws the archive
+`{stem}_viz.pmtiles` as the layer `glace-{stem}-{year}`, the id `pmtiles:layers`
+used to carry, and `finalize-catalog` refuses a store holding an archive its
+year's style does not draw.
+
 ## Warnings Carried Deliberately
 
 Neither of these fails the build; both are recorded so a clean run is not

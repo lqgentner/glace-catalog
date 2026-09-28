@@ -12,8 +12,7 @@ the tracked tree to a fresh render.
 
 Rendering is a commit-time step and nothing else: ``finalize-catalog`` still
 patches the rendered documents with what only a build knows (the years, the
-temporal extent, the archive links, the digests, the ``self`` link) and never
-touches prose.
+temporal extent, the digests, the ``self`` link) and never touches prose.
 """
 
 from __future__ import annotations
@@ -55,7 +54,6 @@ TEMPLATES_DIR = METADATA_DIR / "templates"
 
 PORTOLAN_SCHEMA = "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
 RENDER_EXTENSION_URI = "https://stac-extensions.github.io/render/v2.0.0/schema.json"
-WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
 RASTER_EXTENSION_URI = "https://stac-extensions.github.io/raster/v2.0.0/schema.json"
 FILE_EXTENSION_URI = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
 ALTERNATE_ASSETS_EXTENSION_URI = (
@@ -248,7 +246,7 @@ def collection_document(
     """One ``collection.json``, every field.
 
     What depends on a build is left for ``finalize-catalog``: the year links,
-    the measured temporal extent, the archive links and the digests.
+    the measured temporal extent and the digests.
     """
     catalog = vocabulary.catalog
     scope = catalog.scope
@@ -256,7 +254,6 @@ def collection_document(
     extensions = [
         PORTOLAN_SCHEMA,
         RENDER_EXTENSION_URI,
-        *([WEB_MAP_LINKS_EXTENSION_URI] if collection == MOSAICS_DIR else []),
         RASTER_EXTENSION_URI,
         FILE_EXTENSION_URI,
         ALTERNATE_ASSETS_EXTENSION_URI,

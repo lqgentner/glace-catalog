@@ -51,16 +51,17 @@ Preserve these rules:
   Year catalogs sit below collections and only group items.
 - Catalogs have no assets. Assets belong to collections or items. Run manifests
   and configurations are never published (M-32).
-- Structural links, `rel: "pmtiles"` links, item asset hrefs and the
-  collections' style asset hrefs are relative. The other collection asset hrefs
-  and the hrefs in `items.parquet` are absolute HTTPS; `s3://` hrefs appear only
-  in the `alternate` extension.
+- Structural links, item asset hrefs and the collections' style asset hrefs are
+  relative. The other collection asset hrefs and the hrefs in `items.parquet`
+  are absolute HTTPS; `s3://` hrefs appear only in the `alternate` extension.
 - Tracked documents have no `self` link. Publication adds it from `public_base`.
 - Analysis COGs store linear values. PMTiles contain 8-bit display imagery;
   backscatter and QA-CQM displays use decibels.
-- `{stem}_viz.pmtiles` belongs in its year's item directory, with the `visual`
-  role and a collection `rel: "pmtiles"` link. Annual MapLibre styles are
-  collection assets under `styles/` with the `style` role. Neither uses `data`.
+- `{stem}_viz.pmtiles` belongs in its year's item directory, as an item asset
+  with the `visual` role. The collection carries no `rel: "pmtiles"` links, a
+  recorded deviation from `PORTO-FMT-011` (`docs/conformance.md`). Annual
+  MapLibre styles are collection assets under `styles/` with the `style` role.
+  Neither uses `data`.
 
 ## Build a store
 
@@ -172,8 +173,7 @@ uv run --env-file .env scripts/finalize-catalog.py \
     --base-url https://data.source.coop/giuz/glace-alps
 ```
 
-Finalization updates collection year links, temporal extent and PMTiles links;
-combines item-index slices into `items.parquet`; creates thumbnails; records
+Finalization updates collection year links and temporal extent; combines item-index slices into `items.parquet`; creates thumbnails; records
 asset sizes and checksums; points default styles to the latest year; and
 validates the store. Prose, providers, license and `item_assets` remain defined
 by the tracked metadata.

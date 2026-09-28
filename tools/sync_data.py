@@ -4,7 +4,7 @@
 The store at ``GLACE_STORE_ROOT`` *is* the published tree, whether it sits on
 the UZH gateway or on local disk: ``publish-year`` writes its items and rasters
 there and ``finalize-catalog`` patches its collection
-documents with the year links, the extent and the PMTiles registrations. So
+documents with the year links, the extent and the style registrations. So
 publication copies that tree and nothing else -- no staging directory, no second
 walk over the tracked ``catalog/``, which would put the unpatched documents over
 the patched ones.

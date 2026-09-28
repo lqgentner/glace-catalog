@@ -4,9 +4,9 @@ Colour-maps a display-grid mosaic into RGBA and packs it into one PMTiles
 archive per layer, named ``{layer}_viz.pmtiles`` so it sits beside the COG it
 renders without sharing its stem. Nothing is written beside them: what a reader
 needs in order to draw a legend lives in the committed MapLibre style (M-27),
-and what it needs in order to find an archive is a ``rel="pmtiles"`` link on the
-mosaics collection (M-26) and an asset with the ``visual`` role on the year
-item, which ``publish-year`` writes from the record this module returns. The
+and what it needs in order to find an archive is an asset with the ``visual``
+role on the year item (M-26), which ``publish-year`` writes from the record
+this module returns. The
 ``layers.json`` manifest both used to travel in is retired.
 
 The source is the **VRT chain's canonical-grid mosaic**, which already sits on
@@ -108,8 +108,8 @@ class LayerInfo:
 
     A build-time record, not a published document: ``publish-year`` writes it
     into the year's build state so a later run can tell what changed. What a
-    reader sees instead is the archive's own header, the collection's
-    ``rel="pmtiles"`` link, and the style's legend.
+    reader sees instead is the archive's own header, the year item's
+    ``visual`` asset, and the style's legend.
     """
 
     id: str

@@ -78,18 +78,6 @@ declaration anyway: it enumerates no Composite Backscatter product.
 
 """Where a tile item finds its year's manifest, relative to the item."""
 
-PMTILES_LINK_REL = "pmtiles"
-"""Web Map Links relation type of a PMTiles archive.
-
-A pre-styled RGBA pyramid is a rendering, not a measurement — no bands, no
-units, no values to read — so it is a link rather than an asset or an item. That
-also keeps the asset key ``coh12_vv`` naming one thing inside the mosaics
-collection rather than both a COG and an archive.
-
-Portolan registers PMTiles at collection level (``PORTO-FMT-011``), so the link
-is written by ``finalize-catalog``; a mosaic item carries none.
-"""
-
 
 def _add_specification_link(target: pystac.Item | pystac.Collection) -> None:
     """Link to the CEOS-ARD PFS the metadata borrows its vocabulary from.
