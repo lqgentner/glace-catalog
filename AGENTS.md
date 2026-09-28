@@ -51,8 +51,10 @@ Preserve these rules:
   Year catalogs sit below collections and only group items.
 - Catalogs have no assets. Assets belong to collections or items. Run manifests
   and configurations are never published (M-32).
-- Structural links are relative. Primary asset hrefs are absolute HTTPS;
-  `s3://` hrefs appear only in the `alternate` extension.
+- Structural links, `rel: "pmtiles"` links, item asset hrefs and the
+  collections' style asset hrefs are relative. The other collection asset hrefs
+  and the hrefs in `items.parquet` are absolute HTTPS; `s3://` hrefs appear only
+  in the `alternate` extension.
 - Tracked documents have no `self` link. Publication adds it from `public_base`.
 - Analysis COGs store linear values. PMTiles contain 8-bit display imagery;
   backscatter and QA-CQM displays use decibels.
@@ -177,7 +179,10 @@ validates the store. Prose, providers, license and `item_assets` remain defined
 by the tracked metadata.
 
 **Use the public serving address for `--base-url` before publication.** It is
-embedded in every asset href. Adding a year requires building that year and
+written into the root `self` link and every asset href in `items.parquet`. The
+absolute collection asset hrefs come from `public_base` in
+`catalog.publish.yaml` when the catalog is rendered, so the two must name the
+same address. Adding a year requires building that year and
 finalizing again; existing years are unchanged.
 
 Thumbnails are drawn from the latest year's `coh12_vv.tif` COGs over an

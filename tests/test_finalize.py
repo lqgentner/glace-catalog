@@ -3,8 +3,9 @@
 
 Three things only this script does, and each one can go wrong quietly:
 
-- the ``rel: "pmtiles"`` links, which now point into the year's item directory
-  and must skip the COGs sitting beside the archives;
+- the ``rel: "pmtiles"`` links, which point into the year's item directory,
+  relative to the collection, and must skip the COGs sitting beside the
+  archives;
 - the published styles, one per year written from the one tracked template, so
   every year's archives have a style that names their layers;
 - the coverage check between the two, which is what makes a ``pmtiles:layers``
@@ -76,10 +77,13 @@ def _source(root: Path) -> Path:
 
 def check_links(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
     """Check the archive links: one per archive, into the year directory."""
-    links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024], "https://example.org/x")
+    links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024])
     checks["one link per archive, none for COGs"] = len(links) == 2
-    checks["the link points into the year directory"] = (
-        links[1]["href"] == "https://example.org/x/mosaics/2024/coh12_vv_viz.pmtiles"
+    checks["the link is relative to the collection"] = (
+        links[1]["href"] == "./2024/coh12_vv_viz.pmtiles"
+    )
+    checks["every link resolves to an archive in the store"] = all(
+        (store / "mosaics" / str(link["href"])).is_file() for link in links
     )
     checks["pmtiles:layers names the data stem's style layer"] = links[1]["pmtiles:layers"] == [
         "glace-coh12_vv-2024"
@@ -199,7 +203,7 @@ def main() -> int:
         written = check_styles(checks, fin, source, staged)
         document = json.loads((source / "mosaics" / "collection.json").read_text())
         check_registration(checks, fin, document)
-        links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024], "https://example.org/x")
+        links = fin.pmtiles_links(stac.StoreLayout(store), [2023, 2024])
         check_coverage(checks, fin, document, written, links)
         check_skip_thumbnail(checks, fin, store)
 

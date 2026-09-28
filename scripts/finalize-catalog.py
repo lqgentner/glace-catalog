@@ -326,19 +326,17 @@ def check_style_coverage(document: Document, styles: Mapping[str, Path]) -> None
                 raise SystemExit(msg)
 
 
-def pmtiles_links(
-    layout: stac.StoreLayout,
-    years: Sequence[int],
-    base_url: str,
-) -> list[Document]:
+def pmtiles_links(layout: stac.StoreLayout, years: Sequence[int]) -> list[Document]:
     """Register every published web-map archive on the mosaics collection.
 
     Portolan puts PMTiles registration at collection level (``PORTO-FMT-011``),
     so a per-year archive is a link here rather than an asset of the year item.
     The ``pmtiles:layers`` array names the MapLibre style layer a client switches
     on, which is what the field is for; it is the same id the styles use.
+
+    The hrefs are relative to the collection, like its item links and the
+    style sources, so these links do not name the publication target.
     """
-    base = base_url.rstrip("/")
     links: list[Document] = []
     for year in years:
         directory = layout.mosaic_year(year)
@@ -351,7 +349,7 @@ def pmtiles_links(
             links.append(
                 {
                     "rel": PMTILES_LINK_REL,
-                    "href": f"{base}/{MOSAICS_DIR}/{year}/{archive.name}",
+                    "href": f"./{year}/{archive.name}",
                     "type": "application/vnd.pmtiles",
                     "title": vocabulary().pmtiles_link_title(archive.stem, year),
                     "pmtiles:layers": [f"glace-{layer}-{year}"],
@@ -557,7 +555,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--base-url",
         required=True,
-        help="absolute URL the published root answers at; the only absolute href in the store",
+        help="absolute URL the published root answers at, for the root self link and the indexes",
     )
     parser.add_argument(
         "--source",
@@ -606,7 +604,7 @@ def main() -> None:
         years,
         mosaic_items,
     )
-    documents["mosaics"]["links"] += pmtiles_links(layout, years, args.base_url)
+    documents["mosaics"]["links"] += pmtiles_links(layout, years)
 
     # The indexes and the thumbnails are written before the documents are staged
     # because the documents declare their size and digest, and those can only be

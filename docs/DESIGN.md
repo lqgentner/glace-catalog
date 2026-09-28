@@ -276,13 +276,19 @@ blocks the `Python-urllib` user agent, so read the catalog with `requests`,
 `httpx` or `fsspec` rather than `urllib.request`.
 
 **Links.** Structural links stay relative, so one tree of bytes is valid in the
-repository, in a preview and in production. Asset hrefs are absolute `https`
-built from `public_base`: a client reading one object in isolation has no base to
-resolve against, and the Source Cooperative file listing renders asset hrefs as
-download links that only resolve when absolute. `s3://` appears only under the
-`alternate` extension. The root `self` link is not in the tracked tree — the
-publish step writes it, because a tracked file whose correct content depends on
-the deployment target is diff noise and a merge conflict waiting to happen.
+repository, in a preview and in production. The `rel: "pmtiles"` links are
+relative for the same reason: they point into the collection's own tree, like
+its item links and the style sources, and a store copied to a local disk or a
+preview bucket then draws its own archives. Item asset hrefs are relative to the
+item, and the style assets of the mosaics collection are relative to it. The
+other collection asset hrefs and the hrefs in `items.parquet` are absolute
+`https` built from `public_base`: a client reading one object in isolation has
+no base to resolve against, and the Source Cooperative file listing renders
+asset hrefs as download links that only resolve when absolute. `s3://` appears
+only under the `alternate` extension. The root `self` link is not in the tracked
+tree — the publish step writes it, because a tracked file whose correct content
+depends on the deployment target is diff noise and a merge conflict waiting to
+happen.
 
 **Nothing generated is committed.** Switzerland is 143 items a year, the Alps
 ~2 209 across eleven years, and 24 000 generated JSON files would be paid for by
@@ -445,7 +451,7 @@ struck through — git holds them.
 | M-10 | `colormap_name` names portable matplotlib maps; the cmcrameri maps are named in `AGENTS.md` | 3 |
 | M-11 | Producer and host are both UZH, one provider entry, so the catalog is official. Source Cooperative is the storage vendor, not the host | 1 |
 | M-12 | License `CC-BY-4.0` | 1 |
-| M-13 | Structural links relative, asset hrefs absolute https + `alternate` s3, `self` written by the publish step | 4 |
+| M-13 | Structural links, `rel: "pmtiles"` links, item asset hrefs and style asset hrefs relative; the other collection asset hrefs and the `items.parquet` hrefs absolute https + `alternate` s3; `self` written by the publish step | 4 |
 | M-14 | The generated tree is published and never committed | 4 |
 | M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement; it gates the Swiss rehearsal, not only the Alps | 5 |
 | M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 1 |
