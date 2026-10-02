@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Gate on the one source of the catalog's names, prose and numbers.
+"""Checks ``metadata/`` and that the tracked ``catalog/`` matches it.
 
-Two halves. The first holds the vocabulary in ``metadata/assets.yaml`` to what
-every consumer of it assumes: it names exactly the twelve published asset keys
-and their twelve renderings, every title is distinct, every QA asset carries the
-``cloud-optimized`` role beside ``quality`` so a browser badges it, and every
-decibel layer declares its conversion in the render definition.
+The first half checks the asset vocabulary in ``metadata/assets.yaml``: it
+names exactly the twelve published asset keys and their twelve renderings,
+every title is distinct, every QA asset has the ``cloud-optimized`` role
+beside ``quality`` so STAC browsers badge it, and every decibel layer states
+its conversion in the render definition.
 
-The second is the regeneration gate. ``catalog/`` is generated output that is
-committed so that the tree is reviewable, browsable and archived with every
-release; a hand edit there is overwritten by the next render and would drift
-from the source it claims to reflect. So this renders ``metadata/`` into a
-temporary directory and compares it, byte for byte, with the tracked tree. A
-difference names the file and says which way to fix it.
+The second half checks that ``catalog/`` is up to date. ``catalog/`` is
+generated, and committed so it can be reviewed, browsed and archived with each
+release; the next render overwrites any hand edit there. This renders
+``metadata/`` into a temporary directory and compares it byte for byte with the
+tracked tree, naming each file that differs.
 
 Reads no data and needs no network.
 
@@ -33,7 +32,7 @@ CATALOG = ROOT / "catalog"
 
 problems: list[str] = []
 
-# --- the vocabulary --------------------------------------------------------
+# --- the asset vocabulary --------------------------------------------------
 vocabulary = load_vocabulary()
 
 expected_viz = tuple(f"{key}_viz" for key in ASSET_KEYS)
@@ -91,9 +90,9 @@ for key in ASSET_KEYS:
             problems.append(f"{collection}/{key}: the band is not named by its asset key")
 coh12_vv = vocabulary.display("coh12_vv")
 if coh12_vv.vmax != 0.75:
-    problems.append("coh12_vv vmax is not the remeasured 0.75")
+    problems.append("coh12_vv default vmax is not 0.75")
 
-# --- the regeneration gate -------------------------------------------------
+# --- catalog/ matches a fresh render ---------------------------------------
 stale = stale_documents(vocabulary, CATALOG)
 problems += stale
 if stale:

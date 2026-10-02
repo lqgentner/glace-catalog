@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Gate on what publication would upload, before it uploads anything.
+"""Checks what publication would upload, before it uploads anything.
 
-``tools/sync_data.py`` is the only thing between the private store and a public
-bucket, and its two decisions -- which objects move, and what they are served as
--- are both made from listings rather than from bytes. That makes them checkable
-without a network, and this is where they are checked: the change detection over
-a synthetic pair of listings, the content types, the target the publication
-file names, publication from a local store root, and the dry run, which is the
-last thing a person reads before typing ``--confirm``.
+``tools/sync_data.py`` copies the private store to the public bucket. It
+decides which objects to upload, and with which content type, from object
+listings alone, so both decisions can be checked offline. This gate checks the
+change detection over a synthetic pair of listings, the content types, the
+target named in the publication file, publication from a local store root, and
+the dry-run summary a person reads before passing ``--confirm``.
 
-Both sides of a transfer are in-memory filesystems, because the tool only ever
-asks a root for a listing, a reader and a writer. Nothing here opens a socket.
+Both sides of a transfer are in-memory filesystems, since the tool only asks a
+root for a listing, a reader and a writer. Needs no network.
 
 Run: uv run tests/test_sync_data.py
 """
@@ -32,9 +31,9 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-# glace_catalog.config resolves its locations at import, so importing the tool
-# needs the variable set. A local value keeps every path in this gate off
-# object storage; nothing here reads or writes the location.
+# glace_catalog.config resolves its locations on import, so the variable must be
+# set before the tool is imported. A local placeholder path keeps the gate on
+# local disk.
 os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
 
 from botocore.exceptions import ProfileNotFound  # noqa: E402
@@ -53,7 +52,7 @@ PUBLISHED_AT = BUILT + timedelta(hours=6)
 """When it was last synced: after the build, the way publication always is."""
 
 # One year of one collection, cut down: a document, a raster, an archive, the
-# item mirror, and the two dotfiles that are build state rather than content.
+# item index, and two dotfiles that hold build state.
 SOURCE: dict[str, int] = {
     "catalog.json": 1_024,
     "tiles/collection.json": 2_048,
@@ -65,8 +64,8 @@ SOURCE: dict[str, int] = {
     "mosaics/2024/rtc_vh_viz.pmtiles": 2_097_152,
 }
 
-# What the target already holds: the root catalog unchanged, the collection
-# document rewritten at a different size, and nothing else.
+# What the target already holds: the root catalog unchanged, and the collection
+# document at a different size.
 PUBLISHED: dict[str, int] = {
     "catalog.json": 1_024,
     "tiles/collection.json": 1_500,
@@ -76,8 +75,8 @@ PUBLISHED: dict[str, int] = {
 def memory_root(listing: Mapping[str, int], written: datetime = BUILT) -> UPath:
     """Make a fresh in-memory root holding one object of the listed size per path.
 
-    Every object is stamped ``written``, so a test says which side is newer
-    instead of depending on the order it built the roots in.
+    Every object is stamped ``written``, so each test sets explicitly which
+    side is newer.
     """
     root = UPath(f"memory://{uuid4().hex}")
     for relative, size in listing.items():
@@ -175,10 +174,10 @@ REBUILT = PUBLISHED_AT + timedelta(hours=1)
 def check_same_size_detection() -> dict[str, bool]:
     """Check what decides a same-size object: two MD5s, else which side is newer.
 
-    A single-part ETag is the MD5, so two of them settle it from the listings
-    whatever the timestamps say. Anything else falls to the rule ``aws s3
-    sync`` uses: the build writes the store before publication copies it, so a
-    source object newer than its published copy was rewritten since.
+    A single-part ETag is the object's MD5, so two of them decide from the
+    listings alone, whatever the timestamps say. Otherwise the ``aws s3 sync``
+    rule applies: the build writes the store before publication copies it, so a
+    source object newer than its published copy has been rewritten.
     """
     source = {
         "etag/equal.json": Entry(SIZE, MD5_A, REBUILT),
@@ -264,8 +263,8 @@ def check_content_types() -> dict[str, bool]:
 def check_target_config() -> dict[str, bool]:
     """Check the target the repository's own publication file opens.
 
-    Building the path opens no connection, so this can read the real file: the
-    profile only has to exist once a request is signed.
+    Building the path is offline, so this reads the real file; the profile is
+    needed only once a request is signed.
     """
     target = sync_data.read_target()
     options = target.storage_options
@@ -311,8 +310,8 @@ def check_target_config() -> dict[str, bool]:
 def check_local_root() -> dict[str, bool]:
     """Check that a store built on local disk publishes like one on the bucket.
 
-    The store root comes from the real configuration here, not from
-    :class:`TwoRoots`, so the resolution of a plain path is what is tested.
+    The store root comes from the real configuration here, so this tests how a
+    plain local path is resolved.
     """
     checks: dict[str, bool] = {}
     target_root = memory_root({})
@@ -422,11 +421,11 @@ def check_failure_is_reported() -> dict[str, bool]:
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED)
     plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
-    # The raster is not on the source at all, which is what a rejected read
-    # looks like from the tool's side.
+    # Delete the raster from the source; to the tool this looks like a rejected
+    # read.
     (source_root / "tiles/2024/32TMS24/coh12_vv.tif").unlink()
-    # The tool reports the failure on stderr as it happens; held here so the
-    # gate's own output stays a list of what it checked.
+    # Capture the tool's stderr report, so the gate's own output stays a list of
+    # checks.
     reported = StringIO()
     with redirect_stderr(reported):
         failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
@@ -444,9 +443,10 @@ def check_failure_is_reported() -> dict[str, bool]:
 class TwoPhaseWriter(BytesIO):
     """A write handle with s3fs's lifecycle: close uploads, commit publishes.
 
-    ``memory://`` commits at open and closes as a no-op, so it cannot show
-    whether the tool commits by hand and discards on failure. This records the
-    order of the calls and only stores the bytes on ``commit``.
+    ``memory://`` commits as soon as a file is opened. This writer behaves like
+    s3fs instead: it records the order of the calls and stores the bytes only
+    on ``commit``, which shows whether the tool commits explicitly and discards
+    on failure.
     """
 
     def __init__(self, store: dict[str, bytes], path: str, **kwargs: Any) -> None:
@@ -523,8 +523,9 @@ class BrokenReader(BytesIO):
 def check_commit_is_explicit() -> dict[str, bool]:
     """Check that a transfer commits after closing and a failed one only discards.
 
-    An fsspec file closed by a ``with`` block commits whatever it holds even on
-    an exception, which would publish a truncated COG under the right name.
+    An fsspec file closed by a ``with`` block commits whatever it holds, even
+    after an exception. The tool commits explicitly, so a failed transfer
+    leaves no truncated COG under the published name.
     """
     small = {"tiles/collection.json": 2_048, "tiles/2024/32TMS24/coh12_vv.tif": 3 * 8 << 20}
     source_root = memory_root(small)
@@ -575,11 +576,11 @@ def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> UPath:
 
 
 def check_setup_failures_are_messages() -> dict[str, bool]:
-    """Check that a missing profile is one line and exit 1, not a traceback.
+    """Check that a missing profile gives a one-line message and exit code 1.
 
-    Every failure between the configuration and the plan -- an absent profile,
-    a rejected credential, an unreachable endpoint -- reaches a person who has
-    to fix a credential file, so none of them may arrive as a stack trace.
+    Failures between reading the configuration and planning (a missing profile,
+    a rejected credential, an unreachable endpoint) usually mean a credential
+    file needs fixing, so each is reported as a short message.
     """
     checks: dict[str, bool] = {}
     original = sync_data.read_target
@@ -644,13 +645,11 @@ def check_summary() -> dict[str, bool]:
 
 
 def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
-    """Check the P-17 case: a collection document re-stamped at an identical length.
+    """Check that the dry run catches a document rewritten at the same size.
 
-    On 2026-09-09 ``tiles/collection.json`` changed its digests and kept its
-    size, and a size-only plan called it unchanged. The dry run over a store
-    published whole and then rebuilt in that one document has to say
-    ``changed``, on the strength of the rewrite alone: the in-memory roots
-    list no ETags, so this is the timestamp rule the ETags fall back to.
+    A collection document can change its checksums and keep its length. The
+    in-memory roots list no ETags, so this exercises the timestamp rule: the
+    source copy was rewritten after publication and must count as ``changed``.
     """
     source_root = memory_root(SOURCE)
     target_root = memory_root(SOURCE, PUBLISHED_AT)

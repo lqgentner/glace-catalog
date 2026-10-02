@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Version gate: one release string, in every place that has to carry it.
 
-A release is one version string (R-16). ``DATASET_VERSION`` in
-``src/glace_catalog/stac/items.py`` is the source of truth; the STAC
-``version`` field of both tracked ``collection.json`` and the ``version`` of
-``CITATION.cff`` restate it, because a STAC client, a Zenodo record and the git
-tag are each read by someone who never sees the other two. Restated values
-drift, so this gate reads all four and fails naming each place and what it
-holds.
+``DATASET_VERSION`` in ``src/glace_catalog/stac/items.py`` is the source of
+truth. The ``version`` field of both tracked ``collection.json`` files and of
+``CITATION.cff`` repeat it, because STAC clients and the Zenodo record each
+read only their own copy. This gate reads all four and, on a mismatch, lists
+each place and its value.
 
-The string itself must look like a release: ``MAJOR.MINOR`` with an optional
-patch. That rules out the values a hand edit produces -- ``1``, ``v1.0``,
-``1.0-rc1`` -- any of which would make the tag ``v{version}`` wrong.
+The string must be ``MAJOR.MINOR`` with an optional patch, so that the release
+tag ``v{version}`` is well formed.
 
 Run: uv run tests/test_version.py
 """
@@ -37,9 +34,8 @@ COLLECTIONS = ("catalog/mosaics/collection.json", "catalog/tiles/collection.json
 def tracked_collections() -> list[Path]:
     """Check that git tracks exactly the two collection documents, and return them.
 
-    Named rather than globbed: a discovered set shrinks silently. An ignore
-    rule or a rename that hides one collection would leave a gate that passes
-    over three places while a fourth carries a stale version.
+    The list is fixed, so an ignore rule or a rename that hides a collection
+    fails the gate.
     """
     result = subprocess.run(
         ["git", "ls-files", "-z", "catalog"],
@@ -87,9 +83,8 @@ places.append(("CITATION.cff version", citation_version(citation)))
 
 problems: list[str] = []
 
-# repr, not the values themselves: a YAML list or mapping under `version:`
-# is unhashable, and it has to fail with this gate's message rather than a
-# TypeError from set construction.
+# Compare reprs, so that a YAML list or mapping under `version:` (unhashable)
+# fails with this gate's message.
 if len({repr(value) for _, value in places}) != 1:
     problems.append("the release version differs between the places that carry it")
 

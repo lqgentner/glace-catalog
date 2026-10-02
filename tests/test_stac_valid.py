@@ -6,58 +6,55 @@
 # THIRD_PARTY_NOTICES.md; the deviations are marked where they occur.
 """STAC validity, via stac-check.
 
-Validates every STAC object under the published directory against the official
-STAC 1.1.0 schemas. This answers a different question from rashid: stac-check
-asks whether the JSON is valid STAC, rashid asks whether the catalog conforms
-to Portolan. A catalog can pass one and fail the other, so both run.
+Validates every STAC object in the catalog against the official STAC 1.1.0
+schemas. stac-check asks whether the JSON is valid STAC; rashid asks whether
+the catalog conforms to Portolan. A catalog can pass one and fail the other, so
+both run.
 
-Three notes on how this is wired:
+How it runs:
 
-- Per-file, with recursive=False. stac-validator's recursive mode trips over
-  relative links in a directory tree, and per-file gives a usable error anyway.
-- Best-practice notes print as warnings and never fail the build. Some of them
-  contradict Portolan on purpose: stac-check recommends a rel:'self' link,
-  which Portolan forbids, because a static catalog that hardcodes its own
-  location cannot be mirrored or moved. rashid is the gate; this is advisory.
-- One stac-check failure is exempted, and the exemption expires by itself. See
-  below and docs/conformance.md.
+- One file at a time, with recursive=False. This handles relative links in a
+  directory tree and gives a clear error for each file.
+- Best-practice notes are printed as warnings only. Some contradict Portolan by
+  design: stac-check recommends a rel:'self' link, which Portolan forbids so
+  that a static catalog can be mirrored or moved. rashid is the gate; this
+  check is advisory.
+- One known stac-check crash is exempted until it is fixed upstream. See below
+  and docs/conformance.md.
 
-## The exempted failure
+## The exempted crash
 
-stac-validator hardcodes the JSON Schema 2020-12 dialect and ignores the
-$schema a schema declares. The Portolan profile schema declares draft-07 and
-uses the draft-07 tuple form of `items` in `valid_bbox`. Under 2020-12 that
-keyword takes a single schema, so the library hands a list to code expecting an
-object and raises:
+stac-validator always validates with the JSON Schema 2020-12 dialect, whatever
+`$schema` a schema declares. The Portolan profile schema is draft-07 and uses
+the draft-07 list form of `items` in `valid_bbox`. Read as 2020-12, that list
+reaches code that expects a single schema, which raises:
 
     'list' object has no attribute 'get'
     [Schema: https://schemas.portolan-sdi.org/portolan/vX.Y.Z/schema.json].
     Error in Extensions.
 
-The schema is correct draft-07 and rashid validates it cleanly, so nothing on
-the Portolan side changes. Tracked upstream at
-https://github.com/stac-utils/stac-check/issues/159.
+The schema is valid draft-07, and rashid validates it cleanly. Tracked upstream
+at https://github.com/stac-utils/stac-check/issues/159.
 
-The exemption is narrow: that exact message, and only when the failing schema
-is a Portolan profile schema. Every other stac-check error still fails.
+The exemption covers exactly that message, and only when the failing schema is
+a Portolan profile schema. Every other stac-check error fails the gate.
 
-## Why it expires
+## When it expires
 
-An exemption that outlives its bug is indistinguishable from a catalog that
-never had the problem. So this gate also fails when the crash STOPS happening
-on an object the bug can reach — stac-check has been fixed, and the exemption
-has to go.
+The gate also fails once the crash stops on every object that can trigger it.
+That means stac-check is fixed, and the exemption should be removed.
 
-"Reachable" is exact: stac-validator extension-validates collections and items
-only (validate.py, `stac_upper == "ITEM" or stac_upper == "COLLECTION"`).
-Catalogs get the core schema alone and never crash. A catalog with no
-collections yet has nothing reachable, so the expiry check stays quiet.
+Only collections and items can trigger it, because stac-validator applies
+extension schemas to those types alone (validate.py,
+`stac_upper == "ITEM" or stac_upper == "COLLECTION"`). Catalogs are checked
+against the core schema only. Until a collection or item declares the profile,
+the expiry check stays quiet.
 
-CI installs stac-check unpinned on purpose. That is what makes this work: the
-next stac-check release flips this gate without anyone watching for it.
+CI installs the newest stac-check, so the first fixed release makes this gate
+fail and prompts the cleanup.
 
-Fails when stac-check is absent. A skip reports a green run for objects
-that no validator read. The failure message gives the install command.
+Fails when stac-check is missing, so a passing run always means the objects
+were checked. The failure message gives the install command.
 
 Run: uv run tests/test_stac_valid.py
 """
@@ -77,18 +74,14 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-# No version floor, and no pin. The conformance gate takes a rashid floor
-# because it asserts named rules. This gate asserts no stac-check rule. It
-# depends on the opposite property. The exemption below expires when a new
-# stac-check stops emitting the crash, so CI must take each new release. A pin
-# or a floor with an upper bound holds the exemption open after the fix ships.
+# stac-check is unpinned so that CI always takes the newest release: the
+# exemption below expires as soon as a release fixes the crash.
 try:
     from stac_check.lint import Linter
 except ImportError:
     fail("stac-check is not installed, so this gate checks nothing")
 
-# Local deviation from upstream: tools/publish.py is deleted (R-8), so the
-# tracked catalog directory is named here instead of read from publish_dir.
+# Local deviation from upstream: the catalog directory is fixed here.
 BASE = ROOT / "catalog"
 
 STAC_TYPES = {"Catalog", "Collection", "Feature"}
@@ -100,8 +93,7 @@ UPSTREAM_ISSUE = "https://github.com/stac-utils/stac-check/issues/159"
 
 DIALECT_CRASH = "'list' object has no attribute 'get'"
 
-# Any profile version. A vX.Y.Z bump must not silently turn the exemption into
-# a hard failure that reads as "upstream is fixed".
+# Matches any profile version, so the exemption survives a profile version bump.
 PROFILE_SCHEMA = re.compile(
     r"https://schemas\.portolan-sdi\.org/portolan/v\d+\.\d+\.\d+/schema\.json"
 )
@@ -163,7 +155,7 @@ if exempted:
         f"exempt {len(exempted)} object(s) carried the exemption for {UPSTREAM_ISSUE}"
     )
 
-# The crash stopped on objects it can reach: stac-check is fixed.
+# Objects that can trigger the crash validated cleanly: stac-check is fixed.
 expired = bool(reachable) and not exempted
 if expired:
     print(

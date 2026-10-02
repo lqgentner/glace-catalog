@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Gate on the run-manifest contract with ``deep-glacier-mapping``.
+"""Checks the run-manifest contract with ``deep-glacier-mapping``.
 
-The composite driver there writes ``manifest.parquet``; the publisher here reads
-it. The two repositories share no import (M-30), so the contract is the file,
-and this gate is where a change on either side has to show up: it writes a
-manifest in **exactly the producer's column layout** and checks that everything
-the publisher needs survives the round trip -- including the digest and the
-band statistics, which are the two values that cannot be recovered from a
-header read at publication. A header read is checked too, since the publisher
-reads the mosaics it writes itself the same way.
+The composite run in that repository writes ``manifest.parquet``, and the
+publisher here reads it. The file is the only contract between the two
+repositories, so a change on either side must show up here. This gate writes a
+manifest in exactly the producer's column layout and checks that everything the
+publisher needs survives the round trip, including the checksum and the band
+statistics, which the publisher takes from the manifest alone. It also checks
+the header reader, which the publisher uses for the mosaics it writes itself.
 
 The column list below is copied verbatim from
-``glacier_mapping/manifest.py::COLUMNS``. Keep it that way.
+``glacier_mapping/manifest.py::COLUMNS``; keep the two identical.
 
 Reads no data and needs no network.
 
@@ -79,9 +78,9 @@ def producer_manifest() -> pd.DataFrame:
         "composite_end": "2024-09-12",
         "spatial_resolution": 10.0,
         "byte_order": "little-endian",
-        # Dataset tags follow the fixed columns, one column each, uncurated.
-        # No PASS_DIRECTION: an LRW composite does not carry it, so the real
-        # manifest has no such column, and the publisher must not index one.
+        # Dataset tags follow the fixed columns, one column per tag, as written.
+        # These are the tags of an LRW composite; PASS_DIRECTION belongs to
+        # pass composites only.
         "PROCESSING_SOFTWARE": "s1bursts 0.4.0",
         "COMPOSITING_METHOD": "LRW",
     }
@@ -111,7 +110,7 @@ def producer_manifest() -> pd.DataFrame:
             "asset_key": "coh12_vv_qa_num",
             "qa": "NUM",
             "size": 99,
-            "sha256": None,  # a resumed run's file, written by nobody this run
+            "sha256": None,  # a file carried over from an earlier run
             "valid_percent": None,
             "band_name": "observations",
             "band_unit": "",
@@ -167,9 +166,8 @@ def header_checks(tmp: Path) -> dict[str, bool]:
 def refuses_partial_statistics() -> bool:
     """Check a manifest missing one ``stat_*`` value is refused, by column name.
 
-    Four of five is a producer bug, and the publisher is where it has to
-    surface: a band that reached ``bands[].statistics`` with a hole in it would
-    fail the Portolan gate long after the run that wrote it.
+    Four of five values means a producer bug. The publisher reports it at once,
+    by column, close to the run that caused it.
     """
     frame = producer_manifest()
     frame.loc[0, "stat_mean"] = None
@@ -183,11 +181,12 @@ def refuses_partial_statistics() -> bool:
 def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
     """Check the mosaic tag collector tolerates a provenance tag the run never wrote.
 
-    ``PROVENANCE_TAGS`` is the union over every product; the first real run
-    died on ``PASS_DIRECTION``, which only pass composites carry.
+    ``PROVENANCE_TAGS`` covers every product, while a manifest holds only its
+    own product's tags: ``PASS_DIRECTION``, for example, appears only for pass
+    composites.
     """
-    # The script resolves its store root at import; a local value keeps this
-    # gate off object storage, and nothing here reads or writes it.
+    # The script resolves its store root on import; point it at a local
+    # placeholder path.
     os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
     spec = importlib.util.spec_from_file_location(
         "publish_year",

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Gate on the web-map build: encode, warp once, tile.
+"""Checks the web-map build: encode, warp once, tile.
 
-``webmap.build_layers`` is the whole display path — the lookup-table VRT over
-the chain, the single warp of it into a local RGBA raster, the tiler over that
-raster, the archive's manifest entry — and its inputs in production are on an
-object store, so nothing in CI has run it. What can go wrong is silent: an
-intermediate that quietly carries overviews, an alpha band the tiler does not
-see, a value encoded at the wrong end of the range, nodata that comes out opaque.
+``webmap.build_layers`` runs the whole display path: a lookup-table VRT that
+turns values into 8-bit codes, one warp of it into a local RGBA raster, the
+tiler over that raster, and the archive's manifest entry. In production its
+inputs live on object storage, so this gate is where CI runs it. Its failures
+are silent: an intermediate raster with overviews, an alpha band the tiler
+misses, a value encoded at the wrong end of the range, nodata that comes out
+opaque.
 
-So this builds one year of a chain from a synthetic float32 mosaic on the
-scope's own display grid — a linear ramp across the transport range with a NaN
-quadrant — and runs the build over it, two layers at once, exactly as
-``publish-year`` does but for a local source. The archive is read back and its
-max-zoom codes compared to the ramp encoded by hand; the intermediate is
-inspected on the way through.
+The test writes a synthetic float32 mosaic on the display grid (a linear ramp
+across the transport range, with one NaN tile) and builds two layers from it at
+once, as ``publish-year`` does with a local source. It reads the archive back,
+compares the max-zoom codes with the ramp encoded by hand, and inspects the
+intermediate raster along the way.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
@@ -48,7 +48,7 @@ TILES_ACROSS = 2
 VMIN, VMAX = 0.0, 1.0
 ENCODING = ValueEncoding(VMIN, VMAX)
 MAX_CODE_ERROR = 3
-"""Codes a smooth ramp may move through lossy WebP at the published quality."""
+"""Largest code change lossy WebP may cause on a smooth ramp at the published quality."""
 
 
 def write_mosaic(path: Path) -> None:
