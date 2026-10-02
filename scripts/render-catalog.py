@@ -23,8 +23,17 @@ logger = logging.getLogger(Path(__file__).stem)
 def main() -> None:
     """Render the tracked documents, or report which are stale."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=ROOT / "catalog")
-    parser.add_argument("--check", action="store_true", help="compare rather than write")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=ROOT / "catalog",
+        help="output directory (default: catalog/)",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="only report stale documents, and exit 1 if any",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 

@@ -1,35 +1,31 @@
-r"""Publish one year of GLACE composites into a store: the whole per-year pipeline.
+r"""Publish one year of GLACE composites into the store.
 
-Five steps, each taking its inputs as explicit paths from the one before, in
-process — no globbing, no filename parsing, no ordering hazard:
+The year is built in five steps, run in this order:
 
 ``copy``
-    Verify the run manifest against a listing of the source, refuse anything the
-    catalogue cannot describe, and copy the composites in **server-side**, so no
-    byte is downloaded and the compression the run chose survives exactly.
+    Check the run manifest against the source archive, accept only the
+    composites the catalog publishes, and copy them server-side, unchanged.
 ``vrt``
-    Build the VRT chain: per-zone 10 m mosaic, warp onto the canonical grid,
-    mosaic the zones onto the scope's fixed extent, then the decibel readings.
+    Build temporary VRTs that mosaic the tiles onto the scope's grid, in linear
+    values and in decibels.
 ``mosaics``
-    Write twelve LERC_ZSTD mosaic COGs from the chain's linear step.
+    Write the twelve annual mosaic COGs.
 ``pmtiles``
-    Encode twelve web-map archives from the chain.
+    Write the twelve web-map archives.
 ``items``
-    Write the year's tile items, its mosaic item and its geoparquet index.
+    Write the year's tile items, its mosaic item and its GeoParquet index.
 
-Each step records an **input fingerprint** rather than a "done" flag, so a rerun
-after the grid, the bounds or the source moved rebuilds instead of leaving a
-stale product in place. ``--force-from`` overrides.
+Each step records a fingerprint of its inputs. A rerun skips a step whose
+inputs are unchanged and rebuilds one whose inputs changed; ``--force-from``
+rebuilds regardless.
 
-The collections and the root catalog are not written here: they are the one thing
-that spans years, so ``finalize-catalog.py`` owns them. That is what makes adding
-a year later leave every existing year untouched.
+The collections and the root catalog span all years, so
+``finalize-catalog.py`` writes them. Adding a year therefore leaves the other
+years untouched.
 
 Usage:
-    uv run --env-file .env scripts/publish-year.py 2024 \\
-        --src  s3://s1-bursts/data/alps-total/2024/s1-comp-ch \\
-        --scope ch \\
-        --steps copy,vrt,mosaics,pmtiles,items
+    uv run --env-file .env scripts/publish-year.py 2023 \\
+        --src s3://s1-bursts/data/alps-total/2023/s1-comp --scope alps
 """
 
 from __future__ import annotations
@@ -65,25 +61,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(Path(__file__).stem)
 
 CATALOGUE_SCHEMA_VERSION = 2
-"""Bumped when the documents change shape, so ``items`` reruns against a new one.
-
-2: titles, descriptions and band names from the vocabulary (R-18).
-3: value-encoded web-map archives, whose assets carry a band.
-"""
+"""Version of the item documents' layout. Bump it to make the ``items`` step rerun."""
 
 
 def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[stac.CompositeFile]]:
     """Read the run manifest, check it against the archive, and refuse a bad one.
 
-    This is where the preconditions surface, before a byte moves: the manifest
-    must match a listing of what is actually there, no two files may resolve to
-    one published name, and every raster must be linear and fully tagged.
+    All checks run before anything is copied. The manifest must match a listing
+    of the archive, each file must map to its own published name, and every
+    raster must hold linear values and carry the required tags.
 
     Raises
     ------
     SystemExit
         If the manifest is absent, disagrees with the archive, or describes
-        composites the catalogue cannot publish.
+        composites the catalog cannot publish.
     """
     manifest_path = src / MANIFEST_NAME
     if not manifest_path.exists():
@@ -103,9 +95,9 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
         raise SystemExit(msg)
 
     files = stac.manifest_composites(frame, src)
-    # The catalog publishes the twelve LRW composites and nothing else: the
-    # vocabulary names no pass composite, so one would fail at the items step,
-    # after the copy. Refuse it before any byte moves.
+    # Only the twelve composites described in metadata/assets.yaml are published.
+    # Any other (a per-pass composite, say) would fail at the items step, after
+    # the copy, so refuse it now.
     unpublishable = sorted({file.asset_key for file in files if file.asset_key not in ASSET_KEYS})
     if unpublishable:
         msg = (
@@ -147,10 +139,9 @@ def step_copy(
 ) -> None:
     """Copy every composite into the store, byte for byte.
 
-    The run's manifest and configuration stay beside the source archive: the
-    manifest is the publisher's cache, and every value a reader needs from either
-    is on the items — tags, ``file:size``, ``file:checksum`` — or in the pipeline
-    repository's committed configuration.
+    The run's manifest and configuration stay with the source archive. What a
+    reader needs from them is on the items as tags, ``file:size`` and
+    ``file:checksum``.
     """
     layout.tile_year(args.year).mkdir(parents=True, exist_ok=True)
     listing = list_object_sizes(src)
@@ -163,12 +154,10 @@ def published_files(
     layout: stac.StoreLayout,
     year: int,
 ) -> list[stac.CompositeFile]:
-    """Readdress the composites at their published paths in the store.
+    """Point the composites at their copies in the store.
 
-    Everything downstream of ``copy`` reads the store rather than the staging
-    tree, because the staging year is meant to be deleted once the copy is
-    verified — and a mosaic that could only be rebuilt from a deleted directory
-    would not be reproducible at all.
+    The steps after ``copy`` read from the store, so the products can be
+    rebuilt after the source archive is deleted.
     """
     return [
         replace(file, path=layout.tile(year, file.tile) / file.published_name) for file in files
@@ -184,16 +173,14 @@ def step_vrt(
     grid: Grid | None = None,
     name: str = "vrt",
 ) -> mosaics.YearVrts:
-    """Build one of the year's VRT chains in the local cache.
+    """Build one of the year's two VRT chains in the local cache.
 
-    There are two, and they do not share a step: the mosaics are warped onto the
-    scope's equal-area analysis grid, the web-map archives onto its
-    WebMercatorQuad display grid, and **both start from the UTM composites**
-    (M-24, M-25). Warping one out of the other would resample twice and put a
-    non-equal-area grid back in the analysis path.
+    The mosaics use the scope's equal-area analysis grid and the web maps its
+    Web Mercator display grid. Both chains start from the UTM composites, so
+    each product is resampled once.
 
-    Always rebuilt: the VRTs are local and ephemeral, so a remote "done" can be
-    true while the cache is empty, and they take seconds.
+    The VRTs are always rebuilt: they are local, temporary and take seconds,
+    and the cache may have been emptied since the last run.
     """
     vrt_dir = args.cache / "glace-store" / str(args.year) / name
     chain = mosaics.build_year_vrts(
@@ -209,8 +196,8 @@ def step_vrt(
 def composite_window(frame: pd.DataFrame) -> tuple[date, date]:
     """Read the year's compositing window, first and last day inclusive, from the manifest.
 
-    Every row carries the same pair; a second pair is a stale file and refuses
-    the year, see :func:`glace_catalog.stac.composite_window`.
+    Every row must carry the same window; see
+    :func:`glace_catalog.stac.composite_window`.
     """
     return stac.composite_window(
         zip(frame["composite_start"], frame["composite_end"], strict=True)
@@ -218,17 +205,13 @@ def composite_window(frame: pd.DataFrame) -> tuple[date, date]:
 
 
 def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
-    """Provenance tags a mosaic carries over from the tiles it was warped from.
+    """Provenance tags a mosaic takes from its source tiles.
 
-    Only the tags every contributing tile agrees on: a mosaic should say what it
-    is made of, and a value that differed between tiles is not something the
-    mosaic can assert.
+    A tag is kept only when every contributing tile has the same value.
     """
     rows = frame.loc[frame["asset_key"] == asset_key]
     tags: dict[str, str] = {}
-    # PROVENANCE_TAGS is the union over every product: a pass composite's
-    # PASS_DIRECTION is not a column of an LRW manifest, and a coherence tag is
-    # not one of a backscatter-only run. Absent is fine; disagreement is not.
+    # PROVENANCE_TAGS covers every product; use the ones this manifest has.
     for column in stac.PROVENANCE_TAGS:
         if column not in rows:
             continue
@@ -238,15 +221,13 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
     start, end = composite_window(rows)
     tags["COMPOSITE_START_DATE"] = start.isoformat()
     tags["COMPOSITE_END_DATE"] = end.isoformat()
-    # The span of contributing acquisitions differs per tile; the mosaic's is
-    # their union, as the item builder derives it for a tile's two polarizations.
+    # Acquisition dates differ per tile; the mosaic spans the earliest to the latest.
     for tag, pick in (("FIRST_ACQUISITION_DATE", min), ("LAST_ACQUISITION_DATE", max)):
         if tag in rows and rows[tag].notna().any():
             tags[tag] = str(pick(rows[tag].dropna()))
     tags["MGRS_TILE"] = "N/A -- mosaic of many tiles"
     if asset_key.endswith("_qa_num"):
-        # The mosaic is a mean of counts, not a count: say so, because it is no
-        # longer the same quantity as its source.
+        # Resampling turns the per-tile counts into a mean, so describe it as one.
         tags["LAYER_DESCRIPTION"] = (
             "Mean number of contributing observations per output pixel, averaged "
             "from the 10 m per-tile counts."
@@ -279,11 +260,8 @@ def step_mosaics(
 def clear_stale_archives(staged: Path) -> int:
     """Delete the archives a previous run left in the staging directory.
 
-    Everything under ``staged`` is uploaded into the year's item directory, so
-    an archive from an earlier build -- under a name the tiler no longer writes
-    -- would be published beside the new ones as if it were current. The
-    2026-09-09 migration did exactly that: the old ``{stem}.pmtiles`` rode
-    along with the new ``{stem}_viz.pmtiles`` and had to be deleted by hand.
+    Everything under ``staged`` is uploaded, so clearing it first means only
+    this run's archives are published.
     """
     stale = sorted(path for path in staged.iterdir() if path.suffix == ".pmtiles")
     for path in stale:
@@ -312,12 +290,11 @@ def step_pmtiles(
         layers=args.layers,
         workers=args.tiler_workers,
         concurrent_layers=args.concurrent_layers,
-        # Beside the staged archives, not inside them: everything under
-        # `staged` is uploaded, and a warp interrupted half-way must not be.
+        # Outside `staged`, which is uploaded whole.
         scratch=args.cache / "glace-store" / str(args.year) / "rgba",
     )
-    # Into the year's item directory, beside the COGs: the archives are assets of
-    # that item, and `upload_tree` merges rather than replaces.
+    # The archives are assets of the year's mosaic item, so they go beside its
+    # COGs. `upload_tree` adds and overwrites files and leaves the rest.
     stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return layers
 
@@ -328,8 +305,7 @@ def load_glacier_fractions(layout: stac.StoreLayout) -> dict[str, tuple[float, f
     Raises
     ------
     SystemExit
-        If the table is absent. A silently absent fraction is worse than a
-        stopped build: it would publish a tile the sampler cannot weight.
+        If the table is absent. Every tile item carries its glacier fraction.
     """
     path = layout.glacier_fractions
     if not path.exists():
@@ -359,11 +335,10 @@ def step_items(
     state: stac.BuildState,
     build_fingerprint: str,
 ) -> None:
-    """Write the year's tile items, its mosaic item and its geoparquet index.
+    """Write the year's tile items, its mosaic item and its GeoParquet index.
 
-    The mosaic item is written **last and from the build state**, which is how it
-    comes to list exactly the products that were actually written. Reading it back
-    is how consumers find the layers; never how the publisher does.
+    The mosaic item's assets come from the build state, so it lists exactly the
+    mosaics and archives that earlier steps wrote.
     """
     raster_info = stac.manifest_raster_info(frame)
     percents = stac.manifest_valid_percents(frame)
@@ -422,8 +397,7 @@ def step_items(
             year=args.year,
             year_prose=render_year_prose(vocabulary(), args.year),
         )
-        # Root-relative hrefs, so the year's slice survives a bucket move
-        # untouched; finalize-catalog rebases them onto the published URL.
+        # Hrefs relative to the store root; finalize-catalog makes them absolute.
         stac.export_geoparquet(
             [_rooted(item, args.year) for item in tile_items],
             staged_tiles / YEAR_INDEX_NAME,
@@ -446,11 +420,10 @@ def mosaic_assets(
     state: stac.BuildState,
     frame: pd.DataFrame,
 ) -> dict[str, stac.MosaicAsset]:
-    """Assemble the mosaic item's assets from what the ``mosaics`` step recorded writing.
+    """Build the mosaic item's COG assets from what the ``mosaics`` step recorded.
 
-    Title, description and roles are the collection's ``item_assets`` entry for
-    the same key, from the vocabulary; the band, the digest and the resolution
-    are what the step measured.
+    Title, description and roles come from ``metadata/assets.yaml``; size,
+    checksum, statistics and resolution come from the build state.
     """
     written = state.details.get("mosaics", {})
     assets: dict[str, stac.MosaicAsset] = {}
@@ -460,8 +433,7 @@ def mosaic_assets(
         unit = frame.loc[frame["asset_key"] == asset_key, "band_unit"]
         if not asset_key.endswith("_qa_num") and len(unit) and str(unit.iloc[0]):
             band["unit"] = str(unit.iloc[0])
-        # The five statistics the writer embedded in the COG, republished as the
-        # raster extension's `bands[].statistics` rather than measured again.
+        # The statistics the writer embedded in the COG.
         statistics = detail.get("statistics")
         if statistics:
             band["statistics"] = statistics
@@ -479,12 +451,12 @@ def mosaic_assets(
 
 
 def _require_current_encoding(key: str, detail: Mapping[str, Any]) -> None:
-    """Refuse to describe an archive encoded over another range than the vocabulary's.
+    """Refuse an archive encoded with a different scale and offset than the metadata.
 
-    The asset's band declares the vocabulary's scale and offset; the build
-    state records the ones the tiler actually used. They agree unless a state
-    file outlived a change to a transport range in ``metadata/assets.yaml``, in
-    which case the archive is stale and its band would decode it wrongly.
+    The asset declares the scale and offset from ``metadata/assets.yaml``; the
+    build state records the ones the tiler used. If they differ, the range in
+    the metadata changed after the archive was built, and clients would decode
+    it wrongly.
 
     Raises
     ------
@@ -503,14 +475,12 @@ def _require_current_encoding(key: str, detail: Mapping[str, Any]) -> None:
 
 
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
-    """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
+    """Build the mosaic item's web-map assets from what the ``pmtiles`` step recorded.
 
-    One asset per archive, with the ``visual`` role and never ``data``: the codes
-    are a lossy 8-bit quantisation of the mosaic, backscatter in decibels, and an
-    analysis pipeline should read the COGs. Title, description and band come
-    from the vocabulary, the same entry the collection's ``item_assets`` carries,
-    with the zoom range the step actually tiled; the archive's own header carries
-    bounds and zoom range too, and the asset adds the grid and the digest.
+    One asset per archive, with the ``visual`` role: the archives hold lossy
+    8-bit values for display, and analysis reads the COGs. Title,
+    description and band come from ``metadata/assets.yaml``; zoom range, size
+    and checksum come from the build state.
     """
     written = state.details.get("pmtiles", {})
     assets: dict[str, stac.MosaicAsset] = {}
@@ -561,16 +531,15 @@ def parse_args() -> argparse.Namespace:
         "--max-workers",
         type=int,
         default=16,
-        help="threads for the S3 copy; I/O-bound, so more than cores is fine",
+        help="threads for the copy; network-bound, so more than the core count is fine",
     )
     parser.add_argument(
         "--tiler-workers",
         type=int,
         default=None,
         help=(
-            "worker processes for the web-map tiler; defaults to one per core. Each "
-            "runs with a bounded GDAL cache and costs well under a gigabyte -- unlike "
-            "--max-workers, it is not a thread count"
+            "processes for the web-map tiler (default: one per core); each uses "
+            "well under 1 GB of memory"
         ),
     )
     parser.add_argument(
@@ -578,10 +547,9 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=webmap.DEFAULT_CONCURRENT_LAYERS,
         help=(
-            "web-map layers warped at once before tiling. Each holds one RGBA raster of "
-            "the whole scope in the cache while it runs (about 100 MB for ch, 1.1 GB for "
-            "the Alps), so this is what disk and memory scale with; raise it towards 12 "
-            "where the machine has room, lower it first when it is killed for memory"
+            "web-map layers warped at the same time. Each needs a scratch raster of "
+            "the whole scope (about 100 MB for ch, 1.1 GB for alps); lower this "
+            "first if the build runs out of memory"
         ),
     )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
@@ -613,8 +581,7 @@ def main() -> None:
     prints = {
         "copy": copy_print,
         "vrt": copy_print,
-        # The band names are written into the file headers, so a renamed band
-        # is a rebuilt mosaic.
+        # Band names are written into the COGs, so renaming one rebuilds them.
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
@@ -623,10 +590,9 @@ def main() -> None:
             args.layers,
             [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
-        # The transport ranges and the tile quality decide the bytes, so a
-        # change to either rebuilds every archive; the default ramps do not.
-        # The tiler's identity is an input too, so archives of one year never
-        # keep an older tiler's pixels beside another year's.
+        # The encoding ranges, tile format, quality and tiler version decide the
+        # archive bytes, so changing any of them rebuilds the archives. Colour
+        # ramps belong to the styles.
         "pmtiles": stac.fingerprint(
             copy_print,
             scope.display_grid,
