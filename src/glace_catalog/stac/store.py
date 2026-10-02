@@ -162,7 +162,7 @@ class StoreLayout:
     Parameters
     ----------
     root
-        Store root, e.g. ``s3://s1-bursts/data/glace-ch`` or ``/mnt/glace/ch``.
+        Store root, e.g. ``s3://path/to/store`` or ``/path/to/store``.
     """
 
     root: Path | UPath
