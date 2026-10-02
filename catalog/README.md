@@ -40,10 +40,10 @@ To explore the data visually, open the [GLACE Viewer](https://lqgentner.github.i
 
 ## Get started
 
-All files are publicly readable on Source Cooperative, with no API key required,
-over HTTPS (`https://data.source.coop/giuz/glace-alps/`) or S3 (`s3://eu-central-1.opendata.source.coop/giuz/glace-alps/`). Each collection
-provides a searchable item index, `items.parquet`, in STAC-GeoParquet format,
-so you can find data without fetching each item's JSON individually.
+All files are public on Source Cooperative and can be read anonymously over
+HTTPS (`https://data.source.coop/giuz/glace-alps/`) or S3 (`s3://eu-central-1.opendata.source.coop/giuz/glace-alps/`). Each collection
+provides a searchable item index, `items.parquet`, in STAC-GeoParquet format:
+one file to search across all items.
 
 This example uses [rustac](https://stac-utils.github.io/rustac-py/) to find tiles
 for an area and year, then `rasterio`
@@ -68,8 +68,7 @@ with rasterio.open(url) as src:
 print(coherence.shape, coherence.mean())
 ```
 
-This reads the whole matching tile; the search bounding box selects items,
-it does not clip their rasters.
+The bounding box selects whole tiles, so this reads the full first tile.
 
 For more workflows, see [building a data cube](tiles/README.md#build-a-data-cube),
 [opening tiles in QGIS](tiles/README.md#open-the-tiles-in-qgis), and
@@ -84,19 +83,18 @@ for filenames, data types and nodata values.
 
 | Quantity | Stored values | Interpretation and display |
 | --- | --- | --- |
-| Coherence (`coh12_*`) | Dimensionless, linear | Read directly; no decibel conversion |
+| Coherence (`coh12_*`) | Dimensionless, linear | Display as stored |
 | Backscatter (`rtc_*`) | Linear power | Use `10*log10(x)` to display in decibels |
 | Observation count (`*_qa_num`) | Integer on tiles; mean count on mosaics | Number of contributing observations |
 | Composite quality map (`*_qa_cqm`) | Linear ratio | Describes how well the pixel was resolved; use `10*log10(x)` for decibel display |
 
-The coherence and backscatter rows refer to the measurements; the QA suffixes
-identify their accompanying quality layers.
+Use the **COGs for analysis**. The `_viz.pmtiles` archives are for web maps:
+they hold lossy 8-bit value codes over a fixed range per layer, which the map
+colors in the browser. In the archives, backscatter and composite quality maps
+are in decibels and coherence is linear.
 
-Use **COGs for analysis**. The `_viz.pmtiles` archives contain lossy 8-bit
-value codes over a fixed range per layer, which a web map colors on the
-client. Backscatter and composite quality maps are encoded in decibels;
-coherence remains linear. These archives are for visualization only. Every analysis raster carries its description and
-processing record in its GeoTIFF tags.
+Every analysis raster carries its description and processing record in its
+GeoTIFF tags.
 
 ## Composite processing
 
@@ -117,7 +115,7 @@ See the [production pipeline](https://github.com/lqgentner/glace-production) for
 
 A dataset citation will be added with the preprint. Until then, cite the
 specific [metadata repository release](https://github.com/lqgentner/glace-catalog/releases)
-you used. Catalog URLs are not persistent citation identifiers.
+you used; catalog URLs can change.
 
 ## Feedback and contributions
 

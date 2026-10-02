@@ -62,8 +62,8 @@ equal-area grid across years.
 `glace:glacier_fraction` uses one RGI7 version and is computed once per scope.
 The lookup table is the tiles collection's `glacier-fractions` asset.
 
-Default display ranges are the same for every year. The collection's `renders` block uses
-portable matplotlib colormap names. The MapLibre styles draw the designed
-cmcrameri ramps by default: `{{ cmap("coh12_vv") }}` for coherence, `{{ cmap("rtc_vv") }}`
-for backscatter and `{{ cmap("coh12_vv_qa_num") }}` for QA layers.
-The [GLACE Viewer]({{ catalog.links.related.href }}) uses these styles and PMTiles.
+Default display ranges are the same for every year. The collections'
+`renders` blocks name portable matplotlib colormaps. The MapLibre styles draw
+the intended cmcrameri ramps: `{{ cmap("coh12_vv") }}` for coherence,
+`{{ cmap("rtc_vv") }}` for backscatter and `{{ cmap("coh12_vv_qa_num") }}` for the QA layers.
+The [GLACE Viewer]({{ catalog.links.related.href }}) draws the PMTiles with these styles.

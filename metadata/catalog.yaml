@@ -1,34 +1,32 @@
-# The identity and prose of the published GLACE catalog.
+# Title, description and other prose of the published GLACE catalog.
 #
-# `scripts/render-catalog.py` renders `catalog/` from this file, `assets.yaml`
-# and the templates beside them: the root catalog, both collections, the style
-# and every README and AGENTS.md. Edit here, never there; `tests/test_render.py`
-# fails when the tracked tree and a fresh render differ.
+# `scripts/render-catalog.py` writes everything in `catalog/` from this file,
+# `assets.yaml` and `templates/`. Edit these sources, then re-render;
+# `tests/test_render.py` checks that `catalog/` matches them.
 #
-# Prose fields are Jinja2 templates over: region, first_year, last_year,
-# n_assets (twelve), n_viz (twelve), max_zoom, analysis_resolution, and
-# `year` where a field describes one year. Ids and grids come from
-# `src/glace_catalog/scopes.py` for the scope named here; the markdown
-# templates under templates/ see a wider context, listed in documents.py.
+# Prose fields may use these Jinja2 variables: region, first_year, last_year,
+# n_assets, n_viz, max_zoom, analysis_resolution, and `year` in fields that
+# describe one year. Collection ids and grids come from
+# `src/glace_catalog/scopes.py`, for the scope named below.
 
 scope: alps
 region: the Alpine Convention perimeter
-# Years the tracked tree claims. `finalize-catalog` replaces the temporal
-# extent with the measured compositing windows at publication; these bound it
-# in the tracked tree and name the series in the prose.
+# The years the catalog covers, used in the prose and as the temporal extent
+# of the tracked collections. Publication sets the exact extent from the
+# compositing windows.
 years:
   first: 2015
   last: 2025
 
 title: GLACE Alps
 subtitle: Sentinel-1 Glacier Coherence and Backscatter
-# The subtitle under the wordmark and heading at the top of both READMEs.
+# Shown under the title at the top of the READMEs.
 tagline: >-
   Sentinel-1 interferometric coherence and backscatter composites of the
   European Alps
 
-# Shown once, in the root README and AGENTS.md when set; empty for the final
-# Alpine catalog.
+# A release-status note for the root README and AGENTS.md, shown when
+# non-empty.
 preliminary_notice: ""
 
 description: >-
@@ -46,9 +44,9 @@ description: >-
   (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
   one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every
   cloud-optimized GeoTIFF is LERC-compressed and carries its processing
-  record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator
-  are provided for web maps, such as the
-  [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
+  record in its own tags. For web maps, such as the
+  [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles
+  in Web Mercator hold 8-bit value-encoded WebP tiles.
 
 license: CC-BY-4.0
 
@@ -104,10 +102,11 @@ collections:
       10 m grid spacing, one item per square and year. Each item carries
       {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
       backscatter in VV and VH, and for each of the four a
-      contributing-observations count and a composite quality map. Stored values are linear; the decibel display
-      conversion (`10*log10(x)`) is declared in the renders. Query the tiles
-      with the item mirror `items.parquet`.
-    # One year sub-catalog, rendered with `year`.
+      contributing-observations count and a composite quality map. Stored
+      values are linear; the renders declare the decibel conversion
+      (`10*log10(x)`) for display. Search the tiles with the item index
+      `items.parquet`.
+    # Description of each year sub-catalog.
     year_description: >-
       The MGRS squares composited in {{ year }}, one item each, every item
       carrying that square's {{ n_assets }} single-band composites.
@@ -115,27 +114,27 @@ collections:
     title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
-    # The style asset. Rendered with `year` for a published per-year copy and
-    # without one for the tracked template.
+    # Description of the style assets: with `year` for each published year's
+    # style, without it for the tracked template.
     style_description: >-
       {% if year is defined %}Every published web-map layer of {{ year }}, the
       first visible and the rest hidden.{% else %}The template every published
       year's style is written from, one copy per year as styles/{year}.json.
       Every web-map layer of one year, the first visible and the rest
       hidden.{% endif %} Each archive is a raster-dem source whose custom
-      encoding decodes its values, drawn by a color-relief layer over a default
-      color ramp a client may replace.
+      encoding decodes its values, drawn by a color-relief layer with a default
+      color ramp that a client can change.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.
-      The grid is equal-area to support area statistics. Every year shares the
-      same extent, so multitemporal stacks need no alignment step.
+      The grid is equal-area, for area statistics, and every year shares the
+      same extent, so years stack directly.
       {{ n_assets | capitalize }} single-band
       analysis rasters per year, in linear units, each a Cloud-Optimized
-      GeoTIFF with internal overviews. Drawing is served separately by
-      {{ n_viz }} PMTiles archives per year, tiled on the WebMercatorQuad grid
-      at zoom {{ max_zoom }}.
-    # One mosaic item, rendered with `year`.
+      GeoTIFF with internal overviews. For web maps, each year also has
+      {{ n_viz }} PMTiles archives on the WebMercatorQuad grid up to zoom
+      {{ max_zoom }}.
+    # Description of each annual mosaic item.
     item_description: >-
       Annual mosaics of the GLACE composites for {{ year }}, on a fixed
       equal-area grid (ETRS89-LAEA, {{ analysis_resolution }} m) every year of

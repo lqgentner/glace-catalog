@@ -2,7 +2,7 @@
 
 Each item contains one year of data for a 10 km MGRS square:
 twelve single-band COGs at 10 m in the square's UTM zone.
-Coverage is the Alpine Convention perimeter; squares outside the scope have no item.
+Items cover the MGRS squares of the Alpine Convention perimeter.
 
 ## Search tiles
 
@@ -53,9 +53,9 @@ source of truth.
 All tile items in a year share `start_datetime` and `end_datetime`, the
 compositing window selected for that year's lowest-snow period. Actual
 acquisition dates vary by tile and product. Read `glace:coh_first_acquisition`,
-`glace:coh_last_acquisition` and the corresponding `rtc` properties. Coherence
-ends about twelve days earlier because both acquisitions must fall within
-the window.
+`glace:coh_last_acquisition` and the corresponding `rtc` properties. The last
+coherence date is about twelve days before the last backscatter date, because
+both images of a coherence pair must fall within the window.
 
 ## Reading and comparing
 

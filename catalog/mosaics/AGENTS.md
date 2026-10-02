@@ -36,18 +36,17 @@ layer. Decode a code with the asset band's `raster:scale` and `raster:offset`:
 coherence remains linear. The tiles are lossy and values outside the range are
 clipped, so read the COGs for measurements.
 
-Archives are assets of their year's item with the `visual` role; the
-collection does not link them. The key is `{stem}_viz`, and the href is
-relative to the item. Each year has a MapLibre style at
+Archives are listed as `visual` assets of their year's item, under the key
+`{stem}_viz` with an href relative to the item. Each year has a MapLibre style at
 `styles/{year}.json`, registered as a `style-{year}` collection asset. It
 declares each archive `{stem}_viz.pmtiles` as a `raster-dem` source with a
 custom encoding and draws it as the `color-relief` layer `glace-{stem}-{year}`.
 The latest style also has the `default` role.
 
 Transport ranges are fixed across years, so years compare like with like.
-The styles draw a default ramp over a default range; change either in the
-client without new tiles. `renders` uses portable colormap names and declares
-the decibel conversions for COG display.
+The styles draw a default ramp over a default range; a client can change
+either without re-tiling. `renders` names portable colormaps and declares the
+decibel conversions for displaying the COGs.
 
 | Asset key | Title | Transport range | Default range | Default ramp |
 | --- | --- | --- | --- | --- |
