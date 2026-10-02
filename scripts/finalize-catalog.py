@@ -205,13 +205,13 @@ def style_asset(stem: str, year: int) -> tuple[str, str]:
 def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict[str, Path]:
     """Write one published MapLibre style per year, from the tracked template.
 
-    The styles are tracked source — their colours, opacity and legend blocks are
-    reviewed, and under M-27 they are what the *build* reads to bake an archive —
-    but the year is the one part that follows from the run rather than from a
-    design decision, so it is the one part rewritten here. The stretch is per
-    product and does not vary by year, which is why one reviewed template can
-    describe every published year; writing a copy per year is what gives every
-    published archive a layer some published style actually draws.
+    The styles are tracked source, rendered from ``metadata/assets.yaml`` and
+    reviewed, but the year is the one part that follows from the run rather
+    than from a design decision, so it is the one part rewritten here. The
+    encoding and the default ramp are per product and do not vary by year,
+    which is why one reviewed template can describe every published year;
+    writing a copy per year is what gives every published archive a layer some
+    published style actually draws.
 
     Returns
     -------
@@ -299,7 +299,7 @@ def check_style_coverage(
     A client finds an archive as a ``visual`` asset of the year item and draws
     it through the year's style, under the layer id ``glace-{key}-{year}``.
     Before one style was written per year, 42 of 56 archives had no layer in
-    any published style, and the only symptom was a legend that never appeared.
+    any published style, and nothing failed.
 
     Raises
     ------

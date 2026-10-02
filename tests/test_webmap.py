@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Gate on the web-map build: colour-map, warp once, tile.
+"""Gate on the web-map build: encode, warp once, tile.
 
 ``webmap.build_layers`` is the whole display path — the lookup-table VRT over
 the chain, the single warp of it into a local RGBA raster, the tiler over that
 raster, the archive's manifest entry — and its inputs in production are on an
 object store, so nothing in CI has run it. What can go wrong is silent: an
 intermediate that quietly carries overviews, an alpha band the tiler does not
-see, a value mapped to the wrong end of the ramp, nodata that comes out opaque.
+see, a value encoded at the wrong end of the range, nodata that comes out opaque.
 
 So this builds one year of a chain from a synthetic float32 mosaic on the
-scope's own display grid — a linear ramp across ``vmin``-``vmax`` with a NaN
+scope's own display grid — a linear ramp across the transport range with a NaN
 quadrant — and runs the build over it, two layers at once, exactly as
 ``publish-year`` does but for a local source. The archive is read back and its
-max-zoom pixels compared to the ramp evaluated by hand; the intermediate is
+max-zoom codes compared to the ramp encoded by hand; the intermediate is
 inspected on the way through.
 
 Writes only into a temporary directory, reads no data and needs no network.
@@ -33,24 +33,22 @@ from pmtiles.reader import MmapSource, Reader
 import rasterio
 from rasterio.enums import ColorInterp
 
+from glace_catalog.encoding import ValueEncoding
 from glace_catalog.mosaics import YearVrts
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, zoom_resolution
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import LayerStyle
 from glace_catalog.tiler import tile_bounds
-from glace_catalog.webmap import (
-    build_layers,
-    build_luts,
-    color_lookup_table,
-    rgba_raster,
-)
+from glace_catalog.webmap import build_layers, rgba_raster
 
 ORIGIN_X, ORIGIN_Y = 4276, 2884
 """Upper-left z13 tile of the synthetic mosaic, just south of Interlaken."""
 
 TILES_ACROSS = 2
 VMIN, VMAX = 0.0, 1.0
-CMAP = "cmc.batlow"
+ENCODING = ValueEncoding(VMIN, VMAX)
+MAX_CODE_ERROR = 3
+"""Codes a smooth ramp may move through lossy WebP at the published quality."""
 
 
 def write_mosaic(path: Path) -> None:
@@ -90,7 +88,7 @@ def read_tile(archive: Path, x: int, y: int) -> np.ndarray | None:
 
 def check_intermediate(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     """Check the warped-once raster: RGBA, one tile per block, alpha declared, no overviews."""
-    out = rgba_raster(mosaic, work / "rgba.tif", luts=build_luts(CMAP, VMIN, VMAX))
+    out = rgba_raster(mosaic, work / "rgba.tif", luts=ENCODING.luts())
     with rasterio.open(out) as src:
         checks["intermediate is four uint8 bands"] = src.count == 4 and src.dtypes[0] == "uint8"
         checks["intermediate blocks are one tile"] = src.block_shapes[0] == (TILE_PX, TILE_PX)
@@ -104,15 +102,20 @@ def check_intermediate(checks: dict[str, bool], mosaic: Path, work: Path) -> Non
             (alpha[TILE_PX:, TILE_PX:] == 0).all() and (alpha[:TILE_PX, :] == 255).all()
         )
         checks["the LUT VRT is written beside the raster"] = out.with_suffix(".vrt").exists()
+        side = TILES_ACROSS * TILE_PX
+        expected = ENCODING.encode(np.linspace(VMIN, VMAX, side))
+        checks["the intermediate holds the codes, grey"] = all(
+            np.abs(src.read(band)[0].astype(int) - expected.astype(int)).max() <= 1
+            for band in (1, 2, 3)
+        )
 
 
 def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     """Check the build over a two-layer chain, warped concurrently into one shared pool."""
-    style = LayerStyle(cmap=CMAP, vmin=VMIN, vmax=VMAX, units="", measured=True)
+    style = LayerStyle(cmap="cmc.batlow", vmin=0.1, vmax=0.9, encoding=ENCODING)
     chain = YearVrts(
         linear={"coh12_vv": mosaic, "coh12_vh": mosaic},
         decibel={},
-        rgb={},
         sources_at=mosaic,
     )
     built = build_layers(
@@ -122,9 +125,7 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
         start_date="2024-06-01",
         end_date="2024-09-30",
         styles={"coh12_vv": style, "coh12_vh": style},
-        rgb_styles={},
         min_zoom=11,
-        tile_format="PNG",
         workers=2,
         concurrent_layers=2,
         scratch=work / "scratch",
@@ -140,10 +141,10 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
 
     info = built[1]
     archive = work / "pmtiles" / info.url
-    checks["the manifest entry names the archive and its range"] = (
+    checks["the manifest entry names the archive and its encoding"] = (
         info.url == "coh12_vv_viz.pmtiles"
         and info.size_bytes == archive.stat().st_size
-        and (info.vmin, info.vmax, info.cmap) == (VMIN, VMAX, CMAP)
+        and (info.scale, info.offset) == (ENCODING.scale, ENCODING.offset)
         and info.min_zoom == 11
         and info.max_zoom == MOSAIC_ZOOM
     )
@@ -156,14 +157,22 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     )
 
     # The upper-left tile holds the first half of the ramp: its pixel at column
-    # c is the LUT entry for value c / (side - 1), and it is fully opaque.
+    # c is the code of value c / (side - 1), grey, and it is fully opaque.
     tile = read_tile(archive, ORIGIN_X, ORIGIN_Y)
-    lut = color_lookup_table(CMAP)
     side = TILES_ACROSS * TILE_PX
-    expected = lut[np.round(np.arange(TILE_PX) / (side - 1) * 255).astype(int)]
-    checks["max-zoom pixels are the ramp through the LUT"] = tile is not None and bool(
-        np.abs(tile[0, :, :3].astype(int) - expected.astype(int)).max() <= 1
+    expected = ENCODING.encode(np.arange(TILE_PX) / (side - 1))
+    checks["max-zoom pixels are the encoded ramp"] = tile is not None and bool(
+        all(
+            np.abs(tile[0, :, band].astype(int) - expected.astype(int)).max() <= MAX_CODE_ERROR
+            for band in range(3)
+        )
         and (tile[..., 3] == 255).all()
+    )
+    with archive.open("rb") as handle:
+        header_metadata = Reader(MmapSource(handle)).metadata()
+    checks["the archive metadata declares its decoding"] = (
+        header_metadata.get("encoding") == "custom"
+        and header_metadata.get("baseShift") == ENCODING.maplibre()["baseShift"]
     )
     checks["the NaN tile is not in the archive"] = (
         read_tile(archive, ORIGIN_X + 1, ORIGIN_Y + 1) is None

@@ -70,7 +70,7 @@ than a finding whose cause is written down.
 *"A PMTiles file … MUST be registered through a collection-level
 `rel: "pmtiles"` link."* The rule reads as written for a vector collection,
 which has one archive. This catalog uses PMTiles the way it uses COGs: one archive per
-product and year, fourteen a year, 154 across the Alpine years. Linked from the
+product and year, twelve a year, 132 across the Alpine years. Linked from the
 collection they were a flat list that long on the collection page, and the
 viewer was their only reader.
 

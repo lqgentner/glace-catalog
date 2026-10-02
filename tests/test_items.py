@@ -28,7 +28,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from glace_catalog.metadata import vocabulary
 from glace_catalog.scopes import get_scope
@@ -157,46 +157,29 @@ def _publisher() -> ModuleType:
 
 
 def _pmtiles_state() -> BuildState:
-    """Build a state holding one archive, as the ``pmtiles`` step records it."""
+    """Build a state holding two archives, as the ``pmtiles`` step records them."""
     state = BuildState(path=Path("/nowhere/.build-state.json"))
-    state.details["pmtiles"] = {
-        "coh12_vv_viz": {
-            "url": "coh12_vv_viz.pmtiles",
+    archives: dict[str, dict[str, Any]] = {}
+    for key, polarization in (("coh12_vv", "VV"), ("rtc_vv", "VV")):
+        encoding = vocabulary().display(key).encoding
+        archives[f"{key}_viz"] = {
+            "url": f"{key}_viz.pmtiles",
             "size_bytes": 10,
             "checksum": "1220" + "ab" * 32,
-            "cmap": "cmc.lipari",
-            "vmin": 0.1,
-            "vmax": 0.75,
+            "scale": encoding.scale,
+            "offset": encoding.offset,
             "units": "",
             "min_zoom": 5,
             "max_zoom": 12,
             "bounds": [5.9, 45.8, 10.5, 47.8],
-            "product": "COH12",
-            "polarization": "VV",
+            "product": key.split("_")[0].upper(),
+            "polarization": polarization,
             "year": 2024,
-            "id": "coh12_vv_2024",
+            "id": f"{key}_2024",
             "start_date": "2024-07-09",
             "end_date": "2024-10-07",
-        },
-        "coh12_rgb_viz": {
-            "url": "coh12_rgb_viz.pmtiles",
-            "size_bytes": 12,
-            "checksum": "1220" + "cd" * 32,
-            "cmap": "",
-            "vmin": 0.1,
-            "vmax": 0.75,
-            "units": "",
-            "min_zoom": 5,
-            "max_zoom": 12,
-            "bounds": [5.9, 45.8, 10.5, 47.8],
-            "product": "COH12",
-            "polarization": "RGB",
-            "year": 2024,
-            "id": "coh12_rgb_2024",
-            "start_date": "2024-07-09",
-            "end_date": "2024-10-07",
-        },
-    }
+        }
+    state.details["pmtiles"] = archives
     return state
 
 
@@ -289,7 +272,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         viz_filename("rtc_vh_qa_cqm") == "rtc_vh_qa_cqm_viz.pmtiles"
     )
     checks["the data stem is recoverable from the rendering key"] = (
-        data_key("coh12_rgb_viz") == "coh12_rgb"
+        data_key("rtc_vh_qa_cqm_viz") == "rtc_vh_qa_cqm"
     )
     try:
         data_key("coh12_vv")
@@ -302,8 +285,8 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     )
     checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
     checks["visual_assets keys by rendering key"] = list(built) == [
-        "coh12_rgb_viz",
         "coh12_vv_viz",
+        "rtc_vv_viz",
     ]
     viz = rendered.assets["coh12_vv_viz"]
     checks["a rendering is an item asset with the visual role"] = viz.roles == ["visual"]
@@ -316,6 +299,15 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
     checks["a rendering says what it is"] = 'read the COGs with the "data" role' in (
         viz.description or ""
+    )
+    band = viz.extra_fields.get("bands", [{}])[0]
+    checks["a rendering's band decodes its codes"] = (
+        band.get("data_type") == "uint8"
+        and band.get("nodata") == 0
+        and band.get("raster:scale") == vocabulary().display("coh12_vv").encoding.scale
+    )
+    checks["a decibel rendering's band carries its unit"] = (
+        rendered.assets["rtc_vv_viz"].extra_fields["bands"][0].get("unit") == "dB"
     )
     checks["a tile band is named by its asset key"] = (
         item.assets["coh12_vv"].extra_fields["bands"][0]["name"] == "coh12_vv"
@@ -337,15 +329,15 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         viz.description or ""
     )
     checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
-    # A state file that outlived a stretch change describes an archive that was
-    # baked with other numbers; the description must not state the new ones.
+    # A state file that outlived a transport range change describes an archive
+    # encoded over other numbers; its band must not declare the new ones.
     stale = _pmtiles_state()
-    stale.details["pmtiles"]["coh12_vv_viz"]["vmax"] = 0.8
+    stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
     try:
         _publisher().visual_assets(stale)
-        checks["an archive baked with a stale stretch is refused"] = False
+        checks["an archive encoded over a stale range is refused"] = False
     except SystemExit:
-        checks["an archive baked with a stale stretch is refused"] = True
+        checks["an archive encoded over a stale range is refused"] = True
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

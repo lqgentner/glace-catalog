@@ -22,10 +22,11 @@ afterwards was read from that overview and upsampled. Upstream fixed that in
 1.2.2 (protomaps/PMTiles#670); :func:`render_tile` chooses the level per call,
 as the fixed version does.
 
-The tile bytes are the ones rio-pmtiles produces from the same source: the
-reprojection call and the image creation options are kept as they were. Two
-rules differ, both on purpose and both documented where they apply: the tile
-image declares no nodata, and a tile is empty when its own footprint is.
+The reprojection call and the image creation options are rio-pmtiles'. Three
+rules differ, all on purpose and documented where they apply: the tile image
+declares no nodata, a tile is empty when its own footprint is, and alpha is
+binary with the colour bands zeroed beneath it, because the bands carry value
+codes (:mod:`glace_catalog.encoding`) rather than colours.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ import multiprocessing
 import os
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from pmtiles.tile import Compression, TileType, tileid_to_zxy, zxy_to_tileid
 from pmtiles.writer import Writer
 import rasterio
@@ -110,7 +112,7 @@ class TileSpec:
     max_zoom: int
     tile_size: int = TILE_PX
     image_format: str = "WEBP"
-    quality: int = 80
+    quality: int = 90
     resampling: Resampling = Resampling.average
     exclude_empty: bool = True
 
@@ -213,6 +215,13 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
     Runs in a worker process. The source under the tile's footprint is read
     first to decide whether it holds any valid pixel, then reprojected onto
     the tile's own 3857 grid with ``spec.resampling``.
+
+    The bands are value codes, code 0 nodata. Code 0 is written wherever the
+    warped alpha is 0, and alpha is binary: a browser premultiplies alpha on
+    decode, which would corrupt the codes under a partial one. The alpha band
+    stays, because WebP stores it losslessly, and keeps the encoder's ringing
+    at a data edge out of the nodata pixels, which a browser decodes as black,
+    that is, code 0.
     """
     zoom, x, y = tileid_to_zxy(tile_id)
     level = _overview_level(_open(path, None).overviews(1), zoom, spec.max_zoom)
@@ -238,16 +247,25 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
     }
     if spec.image_format in LOSSY_FORMATS:
         profile["QUALITY"] = spec.quality
+    bands = np.zeros((4, spec.tile_size, spec.tile_size), dtype="uint8")
+    reproject(
+        rasterio.band(src, [1, 2, 3, 4]),
+        bands,
+        src_transform=src.transform,
+        src_crs=src.crs,
+        dst_transform=profile["transform"],
+        dst_crs=WEB_MERCATOR,
+        src_alpha=4,
+        dst_alpha=4,
+        num_threads=1,
+        resampling=spec.resampling,
+    )
+    valid = bands[3] > 0
+    bands[:3, ~valid] = 0
+    bands[3] = np.where(valid, 255, 0)
     with MemoryFile() as memfile:
         with memfile.open(**profile) as tile:
-            reproject(
-                rasterio.band(src, [1, 2, 3]),
-                rasterio.band(tile, [1, 2, 3]),
-                src_alpha=4,
-                dst_alpha=4,
-                num_threads=1,
-                resampling=spec.resampling,
-            )
+            tile.write(bands)
         return tile_id, memfile.read()
 
 
@@ -313,6 +331,7 @@ def write_archive(
     name: str,
     attribution: str = "",
     description: str = "",
+    extra_metadata: dict[str, Any] | None = None,
     pool: ProcessPoolExecutor | None = None,
 ) -> int:
     """Tile an RGBA raster into a PMTiles archive.
@@ -330,6 +349,8 @@ def write_archive(
         Tile rendering.
     name, attribution, description
         Archive metadata, as a viewer displays it.
+    extra_metadata
+        Further keys of the archive's metadata, such as its value encoding.
     pool
         Worker pool the tiles are rendered in. Defaults to a fresh
         :func:`spawn_pool` for the duration of the call; pass one to share it
@@ -402,6 +423,7 @@ def write_archive(
             "writer": WRITER,
             "attribution": attribution or None,
             "tileSize": spec.tile_size,
+            **(extra_metadata or {}),
         }
         writer.finalize(header, metadata)
     return written

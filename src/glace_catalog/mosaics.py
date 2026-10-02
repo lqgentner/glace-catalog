@@ -21,17 +21,16 @@ The chain, per year, per band ``B``, per UTM zone ``Z``::
     2  {B}_{Z}_webm13.vrt     (1) warped onto the target grid, average
     3  {B}_webm13.vrt         (2) for every zone, on the canonical extent
     4  {B}_webm13_db.vrt      (3) in decibels; RTC and QA-CQM only
-    5  {P}_rgb_webm13.vrt     R=VV, G=VH, B=VV-VH (RTC) or VV/VH (COH12)
 
 (The ``webm13`` token is historical: the same filenames are used for whichever
 grid the chain was asked for, and the two chains are kept in separate cache
 directories rather than distinguished by name.)
 
-(3) feeds the mosaic COGs, (3) or (4) the single-band web-map tiles, and (5) the
-false-colour ones. The VRTs are **local and ephemeral**: they hold absolute
-``/vsis3/`` sources, they are not published, and they take seconds to rebuild —
-so the reproducibility record is the manifest, the config snapshot and the
-products, not 1 700 XML files in a public listing.
+(3) feeds the mosaic COGs, (3) or (4) the web-map tiles. The VRTs are **local
+and ephemeral**: they hold absolute ``/vsis3/`` sources, they are not
+published, and they take seconds to rebuild — so the reproducibility record is
+the manifest, the config snapshot and the products, not 1 700 XML files in a
+public listing.
 
 On the **display** grid the target is WebMercatorQuad at z13, so a COG's
 internal overview levels land exactly on z12, z11, …: the file *is* a tile
@@ -54,7 +53,7 @@ import defusedxml.ElementTree as DefusedET
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
 from freezebase.raster import get_utm_zone_string, rasterio_open
 from freezebase.s3 import s3_env
-from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_rgb_vrt, create_warped_vrt
+from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_warped_vrt
 import numpy as np
 from rasterio.enums import Resampling
 import rasterio.shutil
@@ -170,8 +169,8 @@ def zone_bounds(tiles: Sequence[str], grid: Grid) -> tuple[float, float, float, 
 
     Computed once per (year, zone) and shared by **every band**, not per band.
     Where one product's tile set differs from another's — an RTC-only tile, say —
-    a per-band extent would give the two warps different grids, and the
-    false-colour VRT that has to read both would be impossible to build.
+    a per-band extent would give the two warps different grids, and a reader
+    comparing the two pixel by pixel would have to resample one of them.
     """
     left = bottom = math.inf
     right = top = -math.inf
@@ -202,8 +201,6 @@ class YearVrts:
         product is written from.
     decibel
         Step (4) per asset key, for the bands that have a decibel reading.
-    rgb
-        Step (5) per product, e.g. ``{"rtc": …, "coh12": …}``.
     sources_at
         One of the tile paths the chain reads. The VRTs are local but their
         sources are not, so nothing can read them without the object store's
@@ -214,7 +211,6 @@ class YearVrts:
 
     linear: dict[str, Path | UPath]
     decibel: dict[str, Path]
-    rgb: dict[str, Path]
     sources_at: Path | UPath | None = None
 
 
@@ -225,7 +221,6 @@ def build_year_vrts(
     *,
     grid: Grid | None = None,
     decibel: bool = True,
-    rgb: bool = True,
 ) -> YearVrts:
     """Build the whole VRT chain for one year's composites.
 
@@ -245,8 +240,6 @@ def build_year_vrts(
         Local directory the chain is written into. Ephemeral.
     decibel
         Also build step (4), the decibel VRTs.
-    rgb
-        Also build step (5), the false-colour VRTs.
 
     Returns
     -------
@@ -301,28 +294,9 @@ def build_year_vrts(
             create_decibel_vrt(linear[asset_key], db_vrt)
             decibels[asset_key] = db_vrt
 
-    rgbs: dict[str, Path] = {}
-    if rgb:
-        for product in ("coh12", "rtc"):
-            # RTC's blue band is a difference of decibels, coherence's a ratio
-            # of linear values; both reduce to "how much brighter is VV".
-            source = decibels if product == "rtc" else linear
-            vv, vh = f"{product}_vv", f"{product}_vh"
-            if vv not in source or vh not in source:
-                continue
-            rgb_vrt = vrt_dir / f"{product}_rgb_webm{MOSAIC_ZOOM}.vrt"
-            create_rgb_vrt(
-                source[vv],
-                source[vh],
-                rgb_vrt,
-                decibel_scale=product == "rtc",
-            )
-            rgbs[product] = rgb_vrt
-
     return YearVrts(
         linear=linear,
         decibel=decibels,
-        rgb=rgbs,
         sources_at=files[0].path if files else None,
     )
 
@@ -332,15 +306,13 @@ def build_cog_chain(
     vrt_dir: Path,
     *,
     decibel: bool = True,
-    rgb: bool = True,
 ) -> YearVrts:
     """Build a chain over the written mosaic COGs rather than over the tiles.
 
     Once the mosaics exist, they *are* the canonical-grid step of the chain —
     already warped, already on the target grid, and carrying their own overviews.
     Deriving the web-map layers from them instead of from the tile chain means a
-    reader opens one file rather than 143 (or 286, for a false-colour layer that
-    reads two polarizations), and a low zoom level reads a decimated overview
+    reader opens one file rather than 143, and a low zoom level reads a decimated overview
     instead of warping full-resolution data it will throw away.
 
     That is what makes the tiling affordable: the tile chain holds a whole
@@ -352,8 +324,8 @@ def build_cog_chain(
         Written mosaic COG per asset key.
     vrt_dir
         Local directory the derived VRTs are written into.
-    decibel, rgb
-        Also derive the decibel and false-colour readings.
+    decibel
+        Also derive the decibel readings.
 
     Returns
     -------
@@ -372,21 +344,9 @@ def build_cog_chain(
             create_decibel_vrt(cogs[asset_key], db_vrt)
             decibels[asset_key] = db_vrt
 
-    rgbs: dict[str, Path] = {}
-    if rgb:
-        for product in ("coh12", "rtc"):
-            source: Mapping[str, Path | UPath] = decibels if product == "rtc" else cogs
-            vv, vh = f"{product}_vv", f"{product}_vh"
-            if vv not in source or vh not in source:
-                continue
-            rgb_vrt = vrt_dir / f"{product}_rgb_cog.vrt"
-            create_rgb_vrt(source[vv], source[vh], rgb_vrt, decibel_scale=product == "rtc")
-            rgbs[product] = rgb_vrt
-
     return YearVrts(
         linear=linear,
         decibel=decibels,
-        rgb=rgbs,
         sources_at=next(iter(cogs.values())) if cogs else None,
     )
 

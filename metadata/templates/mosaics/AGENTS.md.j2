@@ -29,26 +29,30 @@ counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata
 
 ## Web maps
 
-`{stem}_viz.pmtiles` archives contain 8-bit imagery under fixed display ranges.
-Backscatter and quality maps use decibels; coherence remains linear. Do not
-use these pixels as measurements.
+`{stem}_viz.pmtiles` archives contain value-encoded WebP tiles: an 8-bit code
+in all three channels, code 0 nodata, linear over a fixed transport range per
+layer. Decode a code with the asset band's `raster:scale` and `raster:offset`:
+`value = code * scale + offset`. Backscatter and quality maps hold decibels;
+coherence remains linear. The tiles are lossy and values outside the range are
+clipped, so read the COGs for measurements.
 
 Archives are assets of their year's item with the `visual` role; the
 collection does not link them. The key is `{stem}_viz`, and the href is
 relative to the item. Each year has a MapLibre style at
-`styles/{year}.json`, registered as a `style-{year}` collection asset. It draws
-the archive `{stem}_viz.pmtiles` as the layer `glace-{stem}-{year}`. The latest
-style also has the `default` role.
+`styles/{year}.json`, registered as a `style-{year}` collection asset. It
+declares each archive `{stem}_viz.pmtiles` as a `raster-dem` source with a
+custom encoding and draws it as the `color-relief` layer `glace-{stem}-{year}`.
+The latest style also has the `default` role.
 
-Display ranges use the 2nd–98th percentiles measured on the published display
-mosaics over {{ first_year }}–{{ last_year }} and stay fixed across years.
-Styles contain the designed color ramps; `renders` uses portable colormap
-names and declares the decibel conversions for COG display.
+Transport ranges are fixed across years, so years compare like with like.
+The styles draw a default ramp over a default range; change either in the
+client without new tiles. `renders` uses portable colormap names and declares
+the decibel conversions for COG display.
 
-| Asset key | Title | Display range | Color ramp |
-| --- | --- | --- | --- |
+| Asset key | Title | Transport range | Default range | Default ramp |
+| --- | --- | --- | --- | --- |
 {% for row in mosaic_assets %}
-| `{{ row.key }}` | {{ row.title }} | {{ row.stretch }} | `{{ row.cmap }}` |
+| `{{ row.key }}` | {{ row.title }} | {{ row.transport }} | {{ row.stretch }} | `{{ row.cmap }}` |
 {% endfor %}
 
 ## Compare with tiles

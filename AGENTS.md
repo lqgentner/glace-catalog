@@ -55,8 +55,12 @@ Preserve these rules:
   relative. The other collection asset hrefs and the hrefs in `items.parquet`
   are absolute HTTPS; `s3://` hrefs appear only in the `alternate` extension.
 - Tracked documents have no `self` link. Publication adds it from `public_base`.
-- Analysis COGs store linear values. PMTiles contain 8-bit display imagery;
-  backscatter and QA-CQM displays use decibels.
+- Analysis COGs store linear values. PMTiles store 8-bit value codes, not
+  colours: each layer is encoded over a fixed transport range from
+  `metadata/assets.yaml`, backscatter and QA-CQM in decibels. The style decodes
+  them (`raster-dem`, custom encoding) and colours them (`color-relief`) over a
+  default ramp. Changing a ramp or stretch re-renders documents; changing a
+  transport range means re-tiling every year.
 - `{stem}_viz.pmtiles` belongs in its year's item directory, as an item asset
   with the `visual` role. The collection carries no `rel: "pmtiles"` links, a
   recorded deviation from `PORTO-FMT-011` (`docs/conformance.md`). Annual
@@ -117,7 +121,7 @@ uv run --env-file .env scripts/publish-year.py 2023 \
 | `copy` | Validates the manifest and supported assets, then copies composites server-side without re-encoding. |
 | `vrt` | Builds temporary regional VRTs for the next two steps. |
 | `mosaics` | Writes twelve annual analysis mosaics. |
-| `pmtiles` | Writes fourteen web-map archives. |
+| `pmtiles` | Writes twelve value-encoded web-map archives. |
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when

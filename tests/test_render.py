@@ -3,7 +3,7 @@
 
 Two halves. The first holds the vocabulary in ``metadata/assets.yaml`` to what
 every consumer of it assumes: it names exactly the twelve published asset keys
-and the fourteen renderings, every title is distinct, every QA asset carries the
+and their twelve renderings, every title is distinct, every QA asset carries the
 ``cloud-optimized`` role beside ``quality`` so a browser badges it, and every
 decibel layer declares its conversion in the render definition.
 
@@ -27,7 +27,6 @@ import sys
 from glace_catalog.documents import stale_documents
 from glace_catalog.metadata import VIZ_KEYS, load_vocabulary
 from glace_catalog.stac.naming import ASSET_KEYS
-from glace_catalog.styles import LayerStyle, RgbStyle
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "catalog"
@@ -37,7 +36,7 @@ problems: list[str] = []
 # --- the vocabulary --------------------------------------------------------
 vocabulary = load_vocabulary()
 
-expected_viz = (*[f"{key}_viz" for key in ASSET_KEYS], "coh12_rgb_viz", "rtc_rgb_viz")
+expected_viz = tuple(f"{key}_viz" for key in ASSET_KEYS)
 if sorted(VIZ_KEYS) != sorted(expected_viz):
     problems.append(f"VIZ_KEYS is {sorted(VIZ_KEYS)}, expected {sorted(expected_viz)}")
 
@@ -68,19 +67,12 @@ for key in ASSET_KEYS:
             problems.append(f"{collection}/{key}: British spelling in the description")
     render = vocabulary.render(key, "tiles")
     display = vocabulary.display(key)
-    if not isinstance(display, LayerStyle):
-        problems.append(f"{key}: display is not a single-band style")
-        continue
     if render["rescale"] != [[display.vmin, display.vmax]]:
         problems.append(f"{key}: render rescale {render['rescale']} != display range")
     if display.decibel and render.get("expression") != f"10*log10({key}_b1)":
         problems.append(f"{key}: decibel layer without its expression in the render")
     if not display.decibel and "expression" in render:
         problems.append(f"{key}: linear layer carries an expression")
-
-for key in ("coh12_rgb", "rtc_rgb"):
-    if not isinstance(vocabulary.display(key), RgbStyle):
-        problems.append(f"{key}: display is not a false-color style")
 
 if vocabulary.asset_title("coh12_vv") != "Coherence VV":
     problems.append(f"coh12_vv titled {vocabulary.asset_title('coh12_vv')!r}")
@@ -98,7 +90,7 @@ for key in ASSET_KEYS:
         if vocabulary.item_asset(key, collection)["bands"][0]["name"] != key:
             problems.append(f"{collection}/{key}: the band is not named by its asset key")
 coh12_vv = vocabulary.display("coh12_vv")
-if not isinstance(coh12_vv, LayerStyle) or coh12_vv.vmax != 0.75:
+if coh12_vv.vmax != 0.75:
     problems.append("coh12_vv vmax is not the remeasured 0.75")
 
 # --- the regeneration gate -------------------------------------------------

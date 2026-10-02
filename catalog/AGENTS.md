@@ -7,7 +7,7 @@ catalog.json
 ├── tiles/collection.json      one item per (MGRS square, year), 12 COGs each
 │   ├── items.parquet          searchable index for all years
 │   └── {year}/catalog.json → {tile}/item.json
-└── mosaics/collection.json    one item per year, 12 COGs + 14 PMTiles
+└── mosaics/collection.json    one item per year, 12 COGs + 12 PMTiles
     ├── items.parquet
     ├── styles/{year}.json     MapLibre styles
     └── {year}/item.json
@@ -44,8 +44,8 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 - Nodata is NaN for float32 rasters and 0 for uint16 counts.
 - Asset keys are filenames without `.tif`. Dates are in item properties and
   GeoTIFF tags.
-- Read COGs for measurements. `{stem}_viz.pmtiles` contains rendered 8-bit
-  imagery for web maps, stored beside the COGs as `visual` assets.
+- Read COGs for measurements. `{stem}_viz.pmtiles` contains lossy 8-bit value
+  codes for web maps, stored beside the COGs as `visual` assets.
 
 ## Compare years and collections
 
@@ -56,8 +56,8 @@ equal-area grid across years.
 `glace:glacier_fraction` uses one RGI7 version and is computed once per scope.
 The lookup table is the tiles collection's `glacier-fractions` asset.
 
-Display ranges are fixed across years. The collection's `renders` block uses
-portable matplotlib colormap names. The MapLibre styles contain the designed
-cmcrameri ramps: `cmc.lipari` for coherence, `cmc.grayC`
+Default display ranges are the same for every year. The collection's `renders` block uses
+portable matplotlib colormap names. The MapLibre styles draw the designed
+cmcrameri ramps by default: `cmc.lipari` for coherence, `cmc.grayC`
 for backscatter and `cmc.glasgow` for QA layers.
 The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) uses these styles and PMTiles.

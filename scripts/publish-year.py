@@ -9,12 +9,11 @@ process — no globbing, no filename parsing, no ordering hazard:
     byte is downloaded and the compression the run chose survives exactly.
 ``vrt``
     Build the VRT chain: per-zone 10 m mosaic, warp onto the canonical grid,
-    mosaic the zones onto the scope's fixed extent, then the decibel and
-    false-colour readings.
+    mosaic the zones onto the scope's fixed extent, then the decibel readings.
 ``mosaics``
     Write twelve LERC_ZSTD mosaic COGs from the chain's linear step.
 ``pmtiles``
-    Render fourteen web-map archives from the chain.
+    Encode twelve web-map archives from the chain.
 ``items``
     Write the year's tile items, its mosaic item and its geoparquet index.
 
@@ -54,7 +53,6 @@ from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.naming import ASSET_KEYS, published_name
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
-from glace_catalog.styles import RgbStyle
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -70,6 +68,7 @@ CATALOGUE_SCHEMA_VERSION = 2
 """Bumped when the documents change shape, so ``items`` reruns against a new one.
 
 2: titles, descriptions and band names from the vocabulary (R-18).
+3: value-encoded web-map archives, whose assets carry a band.
 """
 
 
@@ -203,12 +202,7 @@ def step_vrt(
         vrt_dir,
         grid=grid,
     )
-    logger.info(
-        "vrt: %d linear, %d decibel, %d false-colour",
-        len(chain.linear),
-        len(chain.decibel),
-        len(chain.rgb),
-    )
+    logger.info("vrt: %d linear, %d decibel", len(chain.linear), len(chain.decibel))
     return chain
 
 
@@ -312,7 +306,6 @@ def step_pmtiles(
     layers = webmap.build_layers(
         chain,
         staged,
-        style_path=args.style,
         year=args.year,
         start_date=window[0].isoformat(),
         end_date=window[1].isoformat(),
@@ -485,29 +478,26 @@ def mosaic_assets(
     return assets
 
 
-def _require_baked_stretch(key: str, detail: Mapping[str, Any]) -> None:
-    """Refuse to describe an archive with a stretch other than the one it baked.
+def _require_current_encoding(key: str, detail: Mapping[str, Any]) -> None:
+    """Refuse to describe an archive encoded over another range than the vocabulary's.
 
-    The description states the vocabulary's range; the build state records the
-    range the tiler actually used. They agree unless a state file outlived a
-    change to ``metadata/assets.yaml``, in which case the archive is stale and
-    describing it with the new numbers would be a lie.
+    The asset's band declares the vocabulary's scale and offset; the build
+    state records the ones the tiler actually used. They agree unless a state
+    file outlived a change to a transport range in ``metadata/assets.yaml``, in
+    which case the archive is stale and its band would decode it wrongly.
 
     Raises
     ------
     SystemExit
-        Naming the archive and both ranges.
+        Naming the archive and both encodings.
     """
-    style = vocabulary().display(stac.data_key(key))
-    baked = (float(detail["vmin"]), float(detail["vmax"]))
-    if isinstance(style, RgbStyle):
-        expected = (style.ranges[0][0], style.ranges[0][1])
-    else:
-        expected = (float(style.vmin or 0), float(style.vmax or 0))
-    if baked != expected:
+    encoding = vocabulary().display(stac.data_key(key)).encoding
+    built = (float(detail["scale"]), float(detail["offset"]))
+    expected = (encoding.scale, encoding.offset)
+    if built != expected:
         msg = (
-            f"{key}: the archive was baked with {baked} but metadata/assets.yaml now says "
-            f"{expected}; rebuild it with --force-from pmtiles"
+            f"{key}: the archive was encoded with scale and offset {built} but "
+            f"metadata/assets.yaml now says {expected}; rebuild it with --force-from pmtiles"
         )
         raise SystemExit(msg)
 
@@ -515,9 +505,9 @@ def _require_baked_stretch(key: str, detail: Mapping[str, Any]) -> None:
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     """Assemble the year item's renderings from what the ``pmtiles`` step recorded.
 
-    One asset per archive, with the ``visual`` role and never ``data``: the pixels
-    are an 8-bit stretch of the mosaic, backscatter in decibels, and an analysis
-    pipeline that read one would be reading a picture. Title and description come
+    One asset per archive, with the ``visual`` role and never ``data``: the codes
+    are a lossy 8-bit quantisation of the mosaic, backscatter in decibels, and an
+    analysis pipeline should read the COGs. Title, description and band come
     from the vocabulary, the same entry the collection's ``item_assets`` carries,
     with the zoom range the step actually tiled; the archive's own header carries
     bounds and zoom range too, and the asset adds the grid and the digest.
@@ -525,7 +515,7 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     written = state.details.get("pmtiles", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for key, detail in sorted(written.items()):
-        _require_baked_stretch(key, detail)
+        _require_current_encoding(key, detail)
         entry = vocabulary().viz_asset(
             key,
             min_zoom=int(detail["min_zoom"]),
@@ -539,7 +529,7 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
             media_type=entry["type"],
             size=detail.get("size_bytes"),
             checksum=detail.get("checksum"),
-            extra={"proj:code": "EPSG:3857"},
+            extra={"proj:code": "EPSG:3857", "bands": entry["bands"]},
         )
     return assets
 
@@ -590,17 +580,11 @@ def parse_args() -> argparse.Namespace:
         help=(
             "web-map layers warped at once before tiling. Each holds one RGBA raster of "
             "the whole scope in the cache while it runs (about 100 MB for ch, 1.1 GB for "
-            "the Alps), so this is what disk and memory scale with; raise it towards 14 "
+            "the Alps), so this is what disk and memory scale with; raise it towards 12 "
             "where the machine has room, lower it first when it is killed for memory"
         ),
     )
     parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
-    parser.add_argument(
-        "--style",
-        type=Path,
-        default=Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/default.json",
-        help="MapLibre style holding the published stretches and ramps (M-27)",
-    )
     return parser.parse_args()
 
 
@@ -639,16 +623,16 @@ def main() -> None:
             args.layers,
             [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
-        # The committed style is the source of the stretches and ramps (M-27),
-        # so its bytes are what a rebuild has to notice: edit a range and every
-        # archive that baked the old one is stale.
-        # The tiler's own identity is an input too: its output changed when it
-        # moved in-tree (R-12), and archives of one year must not silently keep
-        # an older tiler's pixels beside another year's.
+        # The transport ranges and the tile quality decide the bytes, so a
+        # change to either rebuilds every archive; the default ramps do not.
+        # The tiler's identity is an input too, so archives of one year never
+        # keep an older tiler's pixels beside another year's.
         "pmtiles": stac.fingerprint(
             copy_print,
             scope.display_grid,
-            args.style.read_bytes().decode() if args.style.exists() else None,
+            [repr(vocabulary().display(key).encoding) for key in ASSET_KEYS],
+            webmap.TILE_FORMAT,
+            webmap.WEBP_QUALITY,
             args.layers,
             tiler.WRITER,
         ),
@@ -704,9 +688,8 @@ def main() -> None:
                         "bounds": layer.bounds,
                         "min_zoom": layer.min_zoom,
                         "max_zoom": layer.max_zoom,
-                        "cmap": layer.cmap,
-                        "vmin": layer.vmin,
-                        "vmax": layer.vmax,
+                        "scale": layer.scale,
+                        "offset": layer.offset,
                         "units": layer.units,
                         "product": layer.product,
                         "polarization": layer.polarization,

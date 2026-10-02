@@ -23,6 +23,7 @@ TESTS = [
     "test_version.py",
     "test_grids.py",
     "test_styles.py",
+    "test_encoding.py",
     "test_manifest_contract.py",
     "test_items.py",
     "test_mosaic_stats.py",

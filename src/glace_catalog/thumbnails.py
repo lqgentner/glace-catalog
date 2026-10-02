@@ -31,8 +31,9 @@ from PIL import Image
 from rasterio.enums import Resampling
 from xyzservices.providers import providers
 
+from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.naming import published_name
-from glace_catalog.styles import DEFAULT_STYLE_PATH, load_styles, resolve_cmap
+from glace_catalog.styles import resolve_cmap
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -208,8 +209,7 @@ def render_from_cog(
     if data.count() == 0:
         msg = f"{source} has no valid coherence"
         raise ValueError(msg)
-    styles, _ = load_styles(DEFAULT_STYLE_PATH)
-    style = styles[THUMBNAIL_LAYER]
+    style = vocabulary().display(THUMBNAIL_LAYER)
 
     figure = Figure(
         figsize=(FIGURE_WIDTH_IN, FIGURE_WIDTH_IN * height / width),

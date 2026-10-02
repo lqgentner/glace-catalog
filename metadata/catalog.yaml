@@ -6,7 +6,7 @@
 # fails when the tracked tree and a fresh render differ.
 #
 # Prose fields are Jinja2 templates over: region, first_year, last_year,
-# n_assets (twelve), n_viz (fourteen), max_zoom, analysis_resolution, and
+# n_assets (twelve), n_viz (twelve), max_zoom, analysis_resolution, and
 # `year` where a field describes one year. Ids and grids come from
 # `src/glace_catalog/scopes.py` for the scope named here; the markdown
 # templates under templates/ see a wider context, listed in documents.py.
@@ -122,8 +122,9 @@ collections:
       first visible and the rest hidden.{% else %}The template every published
       year's style is written from, one copy per year as styles/{year}.json.
       Every web-map layer of one year, the first visible and the rest
-      hidden.{% endif %} Each layer's metadata.portolan:legend carries the color
-      ramp and value range baked into its archive.
+      hidden.{% endif %} Each archive is a raster-dem source whose custom
+      encoding decodes its values, drawn by a color-relief layer over a default
+      color ramp a client may replace.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.

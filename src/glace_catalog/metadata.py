@@ -1,10 +1,10 @@
 """The catalog's vocabulary: every name, description and display number, from one source.
 
-``metadata/assets.yaml`` names the twelve published assets and their fourteen
-renderings once; ``metadata/catalog.yaml`` holds the catalog's identity and
+``metadata/assets.yaml`` names the twelve published assets and their twelve
+web-map archives once; ``metadata/catalog.yaml`` holds the catalog's identity and
 prose. This module reads both and answers every naming question the repository
 has, so that a collection's ``item_assets``, an item's assets, a ``renders``
-entry, a style legend and a README table all say the same thing about the same
+entry, a style ramp and a README table all say the same thing about the same
 file because they were all asked here.
 
 Before this module, the asset titles were written in eight places that did not
@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import jinja2
 import yaml
 
+from glace_catalog.encoding import ValueEncoding
 from glace_catalog.scopes import (
     ANALYSIS_RESOLUTION,
     COMPOSITE_RESOLUTION,
@@ -32,7 +33,7 @@ from glace_catalog.scopes import (
     get_scope,
 )
 from glace_catalog.stac.naming import ASSET_KEYS, VIZ_SUFFIX, data_key, viz_key
-from glace_catalog.styles import LEGEND_STOPS, LayerStyle, RgbStyle, ramp_colors
+from glace_catalog.styles import LayerStyle
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -47,11 +48,8 @@ in a checkout, where the build and the render run."""
 COG_MEDIA_TYPE = "image/tiff; application=geotiff; profile=cloud-optimized"
 PMTILES_MEDIA_TYPE = "application/vnd.pmtiles"
 
-RGB_KEYS: tuple[str, ...] = ("coh12_rgb", "rtc_rgb")
-"""The two false-color layers, which exist only as renderings."""
-
-VIZ_KEYS: tuple[str, ...] = tuple(viz_key(key) for key in (*ASSET_KEYS, *RGB_KEYS))
-"""The fourteen web-map archives a mosaic year publishes, by asset key."""
+VIZ_KEYS: tuple[str, ...] = tuple(viz_key(key) for key in ASSET_KEYS)
+"""The twelve web-map archives a mosaic year publishes, by asset key."""
 
 TITLE_SEPARATOR = " – "
 """An en dash between the parts of a title: ``Coherence VV – Contributing Observations``."""
@@ -68,7 +66,7 @@ class AssetRef:
     product
         ``coh12`` or ``rtc``.
     polarization
-        ``vv`` or ``vh``; ``None`` for a false-color layer.
+        ``vv`` or ``vh``.
     qa
         ``num`` or ``cqm``; ``None`` for a measurement.
     viz
@@ -77,7 +75,7 @@ class AssetRef:
 
     key: str
     product: str
-    polarization: str | None
+    polarization: str
     qa: str | None
     viz: bool
 
@@ -85,11 +83,6 @@ class AssetRef:
     def source(self) -> str:
         """The raster key a rendering pictures, or the key itself."""
         return data_key(self.key) if self.viz else self.key
-
-    @property
-    def rgb(self) -> bool:
-        """Whether this is a false-color layer."""
-        return self.polarization is None
 
 
 def parse_key(key: str) -> AssetRef:
@@ -104,18 +97,14 @@ def parse_key(key: str) -> AssetRef:
     stem = data_key(key) if viz else key
     parts = stem.split("_")
     product = parts[0]
-    if product in ("coh12", "rtc") and len(parts) >= 2:  # noqa: PLR2004
-        if parts[1] == "rgb" and len(parts) == 2:  # noqa: PLR2004
-            return AssetRef(key, product, None, None, viz)
-        if parts[1] in ("vv", "vh"):
-            if len(parts) == 2:  # noqa: PLR2004
-                return AssetRef(key, product, parts[1], None, viz)
-            if len(parts) == 4 and parts[2] == "qa" and parts[3] in ("num", "cqm"):  # noqa: PLR2004
-                return AssetRef(key, product, parts[1], parts[3], viz)
+    if product in ("coh12", "rtc") and len(parts) >= 2 and parts[1] in ("vv", "vh"):  # noqa: PLR2004
+        if len(parts) == 2:  # noqa: PLR2004
+            return AssetRef(key, product, parts[1], None, viz)
+        if len(parts) == 4 and parts[2] == "qa" and parts[3] in ("num", "cqm"):  # noqa: PLR2004
+            return AssetRef(key, product, parts[1], parts[3], viz)
     msg = (
         f"{key!r} is not an asset the vocabulary names; metadata/assets.yaml defines "
-        f"the twelve LRW keys {', '.join(ASSET_KEYS)}, their _viz renderings and "
-        f"{', '.join(RGB_KEYS)}"
+        f"the twelve LRW keys {', '.join(ASSET_KEYS)} and their _viz renderings"
     )
     raise KeyError(msg)
 
@@ -248,6 +237,11 @@ def _pair(values: Sequence[Any]) -> tuple[float, float]:
     return float(low), float(high)
 
 
+def _range_text(low: float, high: float, units: str) -> str:
+    unit = f" {units}" if units else ""
+    return f"{_format_number(low)} to {_format_number(high)}{unit}"
+
+
 class Vocabulary:
     """Every name, description and display number of the catalog.
 
@@ -274,14 +268,8 @@ class Vocabulary:
             raise KeyError(ref.key)
         return self._assets["qa"][ref.qa]
 
-    @staticmethod
-    def _pol(ref: AssetRef) -> str:
-        if ref.polarization is None:
-            raise KeyError(ref.key)
-        return ref.polarization
-
     def _pol_word(self, ref: AssetRef) -> str:
-        return str(self._assets["polarizations"][self._pol(ref)])
+        return str(self._assets["polarizations"][ref.polarization])
 
     # -- titles --------------------------------------------------------------
 
@@ -289,17 +277,13 @@ class Vocabulary:
         """Human title of one asset key.
 
         ``Coherence VV``, ``Backscatter VH – Contributing Observations``,
-        ``Coherence VV – Composite Quality Map – PMTiles``,
-        ``Coherence False Color – PMTiles``.
+        ``Coherence VV – Composite Quality Map – PMTiles``.
         """
         ref = parse_key(key)
         product = self._product(ref)
-        if ref.rgb:
-            parts = [str(product["false_color"]["title"])]
-        else:
-            parts = [f"{product['name']} {self._pol(ref).upper()}"]
-            if ref.qa is not None:
-                parts.append(str(self._qa(ref)["name"]))
+        parts = [f"{product['name']} {ref.polarization.upper()}"]
+        if ref.qa is not None:
+            parts.append(str(self._qa(ref)["name"]))
         if ref.viz:
             parts.append("PMTiles")
         return TITLE_SEPARATOR.join(parts)
@@ -314,49 +298,26 @@ class Vocabulary:
 
     # -- display -------------------------------------------------------------
 
-    def display(self, key: str) -> LayerStyle | RgbStyle:
-        """Return the ramp and range a layer is drawn with, and a rendering bakes."""
+    def display(self, key: str) -> LayerStyle:
+        """Return a layer's transport range and the ramp and stretch it is drawn with."""
         ref = parse_key(key)
         product = self._product(ref)
-        if ref.rgb:
-            false_color = product["false_color"]
-            red = _pair(product["stretch"]["vv"])
-            green = _pair(product["stretch"]["vh"])
-            blue = _pair(false_color["blue"])
-            unit = "dB" if product["decibel"] else ""
-            return RgbStyle(
-                ranges=(red, green, blue),
-                units=unit,
-                decibel=bool(product["decibel"]),
-                measured=True,
-                bands=tuple(str(band) for band in false_color["channels"]),
-            )
         if ref.qa is None:
-            low, high = (float(v) for v in product["stretch"][self._pol(ref)])
-            cmap, decibel = str(product["cmap"]), bool(product["decibel"])
+            source = product
+            ranges = {name: product[name][ref.polarization] for name in ("stretch", "transport")}
         else:
-            qa = self._qa(ref)
-            cmap, decibel = str(qa["cmap"]), bool(qa["decibel"])
-            low, high = (float(v) for v in (product["cqm"] if ref.qa == "cqm" else qa["range"]))
-        unit = "dB" if decibel else ""
-        stops = tuple(
-            {
-                "value": round(low + (high - low) * index / (LEGEND_STOPS - 1), 6),
-                "color": color,
-                "label": _format_number(low if index == 0 else high)
-                if index in (0, LEGEND_STOPS - 1)
-                else "",
-            }
-            for index, color in enumerate(ramp_colors(cmap))
-        )
+            source = self._qa(ref)
+            # A count shares its ranges across products; a quality map's are per product.
+            ranges = product["cqm"] if ref.qa == "cqm" else source
+        decibel = bool(source["decibel"])
+        low, high = _pair(ranges["stretch"])
         return LayerStyle(
-            cmap=cmap,
+            cmap=str(source["cmap"]),
             vmin=low,
             vmax=high,
-            units=unit,
+            encoding=ValueEncoding(*_pair(ranges["transport"])),
+            units="dB" if decibel else "",
             decibel=decibel,
-            measured=True,
-            stops=stops,
         )
 
     def expression(self, key: str, band: str = "b1") -> str:
@@ -373,50 +334,20 @@ class Vocabulary:
         source = self._product(ref) if ref.qa is None else self._qa(ref)
         return str(source["portable_cmap"])
 
-    def legend(self, key: str) -> dict[str, Any]:
-        """Build the ``portolan:legend`` block of one style layer."""
-        style = self.display(key)
-        if isinstance(style, RgbStyle):
-            return {
-                "title": self.asset_title(key),
-                "type": "channels",
-                "unit": style.units,
-                "decibel": style.decibel,
-                "measured": style.measured,
-                "channels": [
-                    {"band": band, "vmin": low, "vmax": high}
-                    for band, (low, high) in zip(style.bands, style.ranges, strict=True)
-                ],
-            }
-        return {
-            "title": self.asset_title(key),
-            "type": "ramp",
-            "cmap": style.cmap,
-            "vmin": style.vmin,
-            "vmax": style.vmax,
-            "unit": style.units,
-            "decibel": style.decibel,
-            "measured": style.measured,
-            "stops": list(style.stops),
-        }
-
     def stretch_text(self, key: str) -> str:
-        """Format the stretch as prose: ``0.1 to 0.75``, ``-16.5 to -4 dB``, or three ranges."""
+        """Format the default stretch as prose: ``0.1 to 0.75`` or ``-16.5 to -4 dB``."""
         style = self.display(key)
-        unit = f" {style.units}" if style.units else ""
-        if isinstance(style, RgbStyle):
-            ranges = "; ".join(
-                f"{_format_number(low)} to {_format_number(high)}" for low, high in style.ranges
-            )
-            return f"{ranges}{unit}"
-        return f"{_format_number(style.vmin or 0)} to {_format_number(style.vmax or 0)}{unit}"
+        return _range_text(style.vmin, style.vmax, style.units)
+
+    def transport_text(self, key: str) -> str:
+        """Format the transport range as prose: ``0 to 1`` or ``-25 to 5 dB``."""
+        style = self.display(key)
+        return _range_text(style.encoding.lo, style.encoding.hi, style.units)
 
     def render(self, key: str, collection: Collection) -> dict[str, Any]:
         """Build the ``renders`` entry of one raster, for a titiler-compatible client."""
         ref = parse_key(key)
         style = self.display(key)
-        if not isinstance(style, LayerStyle):
-            raise KeyError(key)
         entry: dict[str, Any] = {"title": self.asset_title(key), "assets": [key]}
         if style.decibel:
             entry["expression"] = self.expression(key, band=f"{key}_b1")
@@ -488,7 +419,7 @@ class Vocabulary:
             template,
             long=str(product["long"]),
             product=str(product["name"]),
-            POL=self._pol(ref).upper(),
+            POL=ref.polarization.upper(),
             pol_word=self._pol_word(ref),
             value=str(product["value"]),
         )
@@ -513,37 +444,27 @@ class Vocabulary:
         min_zoom: int = VIZ_MIN_ZOOM,
         max_zoom: int = MOSAIC_ZOOM,
     ) -> dict[str, Any]:
-        """Build the ``item_assets`` entry of one rendering: type, title, description, role."""
+        """Build the ``item_assets`` entry of one rendering: type, title, description, role, band.
+
+        The one band is the decoded value: ``raster:scale`` and ``raster:offset``
+        turn a code back into the unit the style draws, decibels for backscatter
+        and the quality maps.
+        """
         ref = parse_key(key)
         style = self.display(ref.source)
-        if ref.rgb:
-            product = ref.product
-            read_instead = f"{product}_vv.tif and {product}_vh.tif"
-            template = str(self._assets["descriptions"]["viz_rgb"])
-            description = self.prose(
-                template,
-                channels=", ".join(style.bands) if isinstance(style, RgbStyle) else "",
-                stretch=self.stretch_text(ref.source),
-                min_zoom=min_zoom,
-                max_zoom=max_zoom,
-                read_instead=read_instead,
-            )
-        else:
-            template = str(self._assets["descriptions"]["viz"])
-            description = self.prose(
-                template,
-                source_title=self.asset_title(ref.source),
-                stretch=self.stretch_text(ref.source),
-                cmap=style.cmap if isinstance(style, LayerStyle) else "",
-                min_zoom=min_zoom,
-                max_zoom=max_zoom,
-                read_instead=f"{ref.source}.tif",
-            )
+        description = self.prose(
+            str(self._assets["descriptions"]["viz"]),
+            source_title=self.asset_title(ref.source),
+            transport=self.transport_text(ref.source),
+            min_zoom=min_zoom,
+            max_zoom=max_zoom,
+        )
         return {
             "type": PMTILES_MEDIA_TYPE,
             "title": self.asset_title(key),
             "description": description,
             "roles": ["visual"],
+            "bands": [style.encoding.stac_band(style.units)],
         }
 
     def sar_product_type(self, key: str) -> str:
@@ -567,7 +488,8 @@ class Vocabulary:
                     "data_type": band["data_type"],
                     "nodata": "NaN" if band["nodata"] == "nan" else band["nodata"],
                     "stretch": self.stretch_text(key),
-                    "cmap": style.cmap if isinstance(style, LayerStyle) else "",
+                    "transport": self.transport_text(key),
+                    "cmap": style.cmap,
                     "decibel": style.decibel,
                 },
             )
@@ -580,6 +502,7 @@ class Vocabulary:
                 "key": key,
                 "title": self.asset_title(key),
                 "stretch": self.stretch_text(data_key(key)),
+                "transport": self.transport_text(data_key(key)),
             }
             for key in VIZ_KEYS
         ]

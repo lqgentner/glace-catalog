@@ -36,7 +36,7 @@ Ordered by what blocks what. Everything not listed here is done.
   the most likely thing to force a design change. The web-map step now warps
   each layer once into a local raster and tiles from that (R-12), which the
   Swiss measurement puts at 5.5 min a year against 40 min before; the Alpine
-  projection is 1.4-1.6 h a year, and fourteen concurrent intermediates are
+  projection is 1.4-1.6 h a year, and twelve concurrent intermediates are
   15 GB of scratch (`--concurrent-layers` bounds it). On 2026-09-11 the step
   was found to run a 60 GB machine to 57 GB because every tiler worker had
   GDAL's default cache of 5 % of RAM; bounded to 256 MB per worker it peaks

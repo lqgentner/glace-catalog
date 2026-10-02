@@ -92,10 +92,10 @@ for filenames, data types and nodata values.
 The coherence and backscatter rows refer to the measurements; the QA suffixes
 identify their accompanying quality layers.
 
-Use **COGs for analysis**. The `_viz.pmtiles` archives contain rendered,
-8-bit imagery under fixed display stretches. Backscatter and composite quality
-maps are displayed in decibels; coherence remains linear. These archives are
-for visualization only. Every analysis raster carries its description and
+Use **COGs for analysis**. The `_viz.pmtiles` archives contain lossy 8-bit
+value codes over a fixed range per layer, which a web map colors on the
+client. Backscatter and composite quality maps are encoded in decibels;
+coherence remains linear. These archives are for visualization only. Every analysis raster carries its description and
 processing record in its GeoTIFF tags.
 
 ## Composite processing

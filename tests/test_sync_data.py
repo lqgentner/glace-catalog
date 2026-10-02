@@ -62,7 +62,7 @@ SOURCE: dict[str, int] = {
     "tiles/2024/.items.parquet": 4_096,
     "tiles/2024/32TMS24/item.json": 3_072,
     "tiles/2024/32TMS24/coh12_vv.tif": 1_048_576,
-    "mosaics/2024/coh12_rgb_viz.pmtiles": 2_097_152,
+    "mosaics/2024/rtc_vh_viz.pmtiles": 2_097_152,
 }
 
 # What the target already holds: the root catalog unchanged, the collection
@@ -140,7 +140,7 @@ def check_change_detection() -> dict[str, bool]:
     return {
         "an object the target lacks is new": plan.new
         == (
-            "mosaics/2024/coh12_rgb_viz.pmtiles",
+            "mosaics/2024/rtc_vh_viz.pmtiles",
             "tiles/2024/32TMS24/coh12_vv.tif",
             "tiles/2024/32TMS24/item.json",
             "tiles/items.parquet",
@@ -241,7 +241,7 @@ def check_content_types() -> dict[str, bool]:
         "tiles/2024/32TMS24/coh12_vv.tif": (
             "image/tiff; application=geotiff; profile=cloud-optimized"
         ),
-        "mosaics/2024/coh12_rgb_viz.pmtiles": "application/vnd.pmtiles",
+        "mosaics/2024/rtc_vh_viz.pmtiles": "application/vnd.pmtiles",
         "mosaics/thumbnail.webp": "image/webp",
         "_assets/glace-wordmark.svg": "image/svg+xml",
         "tiles/2024/config.yaml": "application/yaml",

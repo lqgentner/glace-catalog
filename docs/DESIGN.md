@@ -89,12 +89,12 @@ directory, as `{stem}_viz.pmtiles`. Each is an asset of that item with the
 year's footprint and window already on the item. The collection carries no
 `rel: "pmtiles"` links, although `PORTO-FMT-011` asks for them: the rule has one
 vector archive per collection in mind, and these archives are used like the
-COGs, fourteen a year, which would be 154 links on one page for the Alps
+COGs, twelve a year, which would be 132 links on one page for the Alps
 (M-36, [`conformance.md`](conformance.md)). A client enumerates the archives
 from the year items and draws them through the year's style, under the layer id
 `glace-{stem}-{year}`. What needed disambiguating was never the CRS but the
-units and role — `coh12_vv.tif` is linear float32 and `coh12_vv_viz.pmtiles` is a
-pre-stretched 8-bit rendering, the backscatter ones in decibels — and the `_viz`
+units and role — `coh12_vv.tif` is linear float32 and `coh12_vv_viz.pmtiles` holds
+lossy 8-bit value codes, the backscatter ones in decibels — and the `_viz`
 suffix says which is the measurement and which is the picture, in the one listing
 where the pairing is visible. Registering 14 archives per year as *collection*
 assets was the alternative: 56 cards on one page for Switzerland, about 150 for
@@ -133,9 +133,27 @@ range reads into fixed blocks. The gap is the *dtype*, not the container: an
 8-bit WebP COG at the same quality costs 1.37x at z11 and a float LERC one 4.00x,
 and no LERC bound closes it. A single-band uint8 display COG is rejected on the
 same Swiss numbers, 95 % of the LERC baseline for coherence and 49 % for
-backscatter. The one real cost of PMTiles stands — the stretch is baked into
-8-bit tiles, so changing a palette means re-tiling — which is why the analysis
-COGs keep `renders`, where the ramp and range stay client-side.
+backscatter.
+
+**The archives carry values, not colours.** Each tile holds an 8-bit code in
+all three channels, linear over a fixed *transport range* per layer, code 0
+nodata, with a binary alpha band; WebP quality 90. The year style declares the
+decoding as a MapLibre `raster-dem` source with `"encoding": "custom"` and
+draws it with a `color-relief` layer over a default ramp and stretch, so a
+client can recolour, restretch and read values without new tiles. The item
+asset declares the same decoding as a STAC band with `raster:scale` and
+`raster:offset`. Two MapLibre GL JS details fix the factors: `color-relief`
+packs its stops by treating the three factors as positional digits, so none
+may be zero, and decoding is a dot product, so one step is split 65536 : 256 : 1
+over a grey pixel. MapLibre subtracts `baseShift`, although the specification
+says it is added. Lossless tiles were twice the size of the colour-mapped
+archives for speckled SAR; lossy grey tiles at quality 90 were smaller, with
+no more value error than the colour mapping carried. The transport ranges
+are fixed across years and sit in `metadata/assets.yaml`; changing one means
+re-tiling every year, changing a default ramp does not. False-colour archives
+are not published: `color-relief` colours one value, and a client can compose
+the polarizations itself. MapLibre Native does not yet decode custom
+encodings.
 
 **Two grids, neither derived from the other.** The annual analysis mosaics are
 written on **ETRS89-LAEA (EPSG:3035) at 40 m**, because WebMercator is not
@@ -145,7 +163,7 @@ correction the catalog does not declare. The web-map archives are tiled on
 WebMercatorQuad at z13. Both are resampled straight from the 10 m UTM composites,
 so LAEA never enters the display path and the tiler never pays a second warp.
 
-**Each layer is warped once, then tiled locally.** The colour-mapped RGBA VRT
+**Each layer is warped once, then tiled locally.** The encoded RGBA VRT
 over the display chain is copied to a local, overview-free GeoTIFF before
 tiling, and the tiler reads that. Tiling straight from the VRT was measured at
 174 s per Swiss layer against 10 s from the local copy (2026-09-08 tiling
@@ -155,8 +173,10 @@ itself is in-tree (`glace_catalog.tiler`, adapted from rio-pmtiles under its MIT
 license, see `THIRD_PARTY_NOTICES.md`): running rio-pmtiles as a subprocess
 meant one worker pool, one environment and one `rio` executable per archive,
 where one pool now serves every layer of a year; and two output rules differ on
-purpose, the tile image declares no nodata (so pure white is not clamped to
-254) and a tile is empty when its own footprint is, not a one-pixel margin. The
+purpose, the tile image declares no nodata (so code 255 is not clamped to
+254) and a tile is empty when its own footprint is, not a one-pixel margin; a
+third rule came with the encoding, binary alpha with the codes zeroed beneath
+it. The
 overview leak that first prompted the move (rio-pmtiles 1.2.1 carried the level
 chosen for a coarse tile into every finer tile the same worker rendered, so a
 source with overviews came out blurred at max zoom) was fixed upstream in 1.2.2
@@ -168,37 +188,31 @@ of one tile.
 
 **The style is rendered from the vocabulary and committed.**
 `mosaics/styles/default.json` holds every published layer of one year; its
-ramps, ranges and legend stops come from `metadata/assets.yaml`, where each
-number sits beside the reasoning for it, and `scripts/render-catalog.py` writes
-the file (R-18). The design decisions are reviewed in the source; the rendered
-file is what the build reads and what a client downloads. `finalize-catalog`
+encodings, ramps and stretches come from `metadata/assets.yaml`, and
+`scripts/render-catalog.py` writes the file (R-18). The design decisions are
+reviewed in the source; the rendered file is what a client downloads. `finalize-catalog`
 writes one published copy per year from that template:
 `styles/{year}.json`, registered as `style-{year}`, the newest of them also
 carrying the `default` role as Portolan requires of the one a client should load.
 One style per year is what gives every archive a layer that draws it — with a
 single published style, 42 of the 56 Swiss archives had none — and
-the stretch is per product and fixed across years, so the copies differ only in
-the year they name. Each layer's legend sits under `metadata.portolan:legend`, and
-**the build reads those numbers rather than holding a copy**: the ranges, ramps
-and units exist once, in `metadata/assets.yaml`, and reach the style, the
-`renders` blocks, the item descriptions and the prose tables through one
-vocabulary.
+the encoding and the default ramp are per product and fixed across years, so
+the copies differ only in the year they name. The ranges, ramps and units
+exist once, in `metadata/assets.yaml`, and reach the build, the style, the
+`renders` blocks, the item assets and the prose tables through one vocabulary.
 
 ### How standard is any of this
 
 | layer | status |
 | --- | --- |
 | MapLibre GL Style Spec v8, the file format | **De-facto standard, and mandated.** Implemented by MapLibre GL JS and Native, deck.gl, QGIS, ArcGIS, tileserver-gl, Martin, Felt. Portolan pins it by name and media type and `PTL-VIZ-005` enforces it |
-| `"type": "raster"` sources | **Standard.** Core to style-spec v8, as old as the format |
+| `"type": "raster-dem"` sources with `"encoding": "custom"`, `color-relief` layers | **Standard.** Style-spec v8; custom encoding since MapLibre GL JS 3.4; both verified in GL JS 6.9. MapLibre Native does not decode custom encodings yet |
 | the `pmtiles://` URL scheme | **Ecosystem convention, in no specification.** A client must call `addProtocol("pmtiles", …)` first. FTW writes it the same way |
-| `metadata.portolan:legend` | **Not in the Portolan specification at all.** FTW's convention, copied. MapLibre's `metadata` is free-form and ignored by renderers, so the file stays valid, but nothing reads this block except code written for it |
 | raster PMTiles styling as a whole | **Unspecified, and we are first.** Open under [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41); every style file in FTW and portolan-nl is a vector source |
 
 So the container is standard and required of us; the raster application is
 territory the specification has not covered, and this may have to change when #41
-lands. One reviewed style template is a bounded cost. Keep the legend block aligned with FTW's
-shape (`value`, `color`, `label` per stop, plus `unit`), so that if one of the two
-conventions is standardized it is one convention and not two.
+lands. One reviewed style template is a bounded cost.
 
 **The `renders` block.** Both collections declare `render` **v2.0.0**, the
 version the Portolan profile registry pins, in which an item's `renders` moves
@@ -460,22 +474,23 @@ struck through — git holds them.
 | M-17 | No ETag in the manifest; `sha256` alone, multihash-encoded | 5 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and pyrefly and covered by upstream's pyflakes pass instead | 6 |
 | M-19 | **PMTiles are the web-map product**, registered as `visual` item assets (M-34), with MapLibre styles as `style` assets. Measured 4x cheaper on the wire than COG; verified 0 rashid errors | 3 |
-| M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer | 3 |
+| M-20 | The false-colour RGBA WEBP COGs are dropped — PMTiles serve that view better and they have no other consumer. Since M-37 no false-colour archive is published either | 3 |
 | M-21 | The style template is committed; `finalize-catalog` only repoints its year, once per published year (M-35). Since R-18 the template is rendered from `metadata/assets.yaml`, where the colour and legend decisions are reviewed | 3 |
 | M-23 | **No CRS, year or scope in any filename.** The path and `proj:code` carry them; the asset key stays the filename stem. A rendering carries `_viz`, which says what the file is rather than where it sits (M-34) | 2 |
 | M-24 | **The annual analysis mosaic is on ETRS89-LAEA at 40 m.** WebMercator is not equal-area, so any area statistic on it needs an undeclared correction | 3 |
-| M-25 | **PMTiles serve every display layer**, single-band and false colour; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
+| M-25 | **PMTiles serve every display layer**; no WebMercator COGs. Display and analysis each resample straight from the UTM composites | 3 |
 | M-26 | **`layers.json` is retired.** Every field has a standard home: the PMTiles v3 header, the item, and the MapLibre style's `metadata` | 3 |
-| M-27 | **The display constants live once, in `metadata/assets.yaml`, and the build reads them through the rendered style.** No stretch, ramp or range is copied into Python; the regeneration gate holds the style to the source | 3 |
+| M-27 | **The display constants live once, in `metadata/assets.yaml`.** The build reads the transport ranges through the vocabulary; the style, `renders` and prose carry the default ramps and stretches. No range or ramp is copied into Python | 3 |
 | M-28 | QA ramps are **sequential**, `cmc.glasgow` for both QA-NUM and QA-CQM: dark red for few or poor, bright blue for many or good. CQM is a quality indicator where higher is better, not a ratio around 1.0, and its range is the measured one-sided one (−3 to 10 dB COH12, −4 to 8 dB RTC), since 0 dB has no physical meaning in the composites | 3 |
-| M-29 | **One credit line, read from the style**: `University of Zurich, Contains modified Copernicus Sentinel data {year}`, declared on each style source and read by the build into every archive's header | 3 |
+| M-29 | **One credit line**: `University of Zurich, Contains modified Copernicus Sentinel data {year}`, one constant written on each style source and into every archive's header | 3 |
 | M-30 | **No imports between `glace-catalog` and `deep-glacier-mapping`, in either direction.** What they share is on-disk contracts: the glacier-fraction parquet, the label masks, and MGRS tile geometry, which both take from `freezebase` | 4 |
 | M-31 | **The run manifest is driver work, not writer work.** `s1bursts` owns what is a property of the bytes; arranging rows in this catalog's vocabulary belongs to the composite driver | 4 |
 | M-32 | **The run manifest and configuration are not published.** Both live beside the source archive; the items carry every value a reader needs | 2 |
 | M-33 | **One time range per year**, from the committed compositing window; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 2 |
 | M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders. The archives are no longer collection-level products, and the suffix keeps the stems apart | 2, 3 |
-| M-35 | **One published style per year**, `styles/{year}.json` written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy fourteen legend blocks per year and let them drift; one file for every year would be 154 sources with one visible | 3 |
-| M-36 | **The collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, fourteen a year, and the rule has one vector archive per collection in mind; 154 links on one collection page serve nobody. The year items list the archives and the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
+| M-35 | **One published style per year**, `styles/{year}.json` written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy twelve layers per year and let them drift; one file for every year would be 132 sources with one visible | 3 |
+| M-36 | **The collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 132 links on one collection page serve nobody. The year items list the archives and the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
+| M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | R-1 | `src/glace_catalog/__init__.py` exists — a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` replaces mypy, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link: `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |

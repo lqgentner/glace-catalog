@@ -31,7 +31,6 @@ import yaml
 from glace_catalog.metadata import (
     METADATA_DIR,
     PMTILES_MEDIA_TYPE,
-    RGB_KEYS,
     TITLE_SEPARATOR,
     Vocabulary,
     load_vocabulary,
@@ -41,7 +40,7 @@ from glace_catalog.stac.items import DATASET_VERSION
 from glace_catalog.stac.naming import ASSET_KEYS, viz_filename
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR
 from glace_catalog.stac.store import ASSETS_DIR
-from glace_catalog.styles import LayerStyle
+from glace_catalog.styles import ATTRIBUTION, ramp_colors
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -66,21 +65,17 @@ PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
 
 STYLE_MEDIA_TYPE = "application/vnd.mapbox.style+json"
 STYLE_TEMPLATE_NAME = "default"
-ATTRIBUTION = "University of Zurich, Contains modified Copernicus Sentinel data {year}"
-"""The credit line every archive header and style source carries (M-29)."""
 
 STYLE_LAYER_ORDER: tuple[str, ...] = (
-    "coh12_rgb",
     "coh12_vv",
     "coh12_vh",
-    "rtc_rgb",
     "rtc_vv",
     "rtc_vh",
     *[key for key in ASSET_KEYS if key.endswith("_qa_num")],
     *[key for key in ASSET_KEYS if key.endswith("_qa_cqm")],
 )
-"""Layers of the style, first one visible: false color first, then the
-measurements, then the QA layers grouped by metric."""
+"""Layers of the style, first one visible: the measurements, then the QA layers
+grouped by metric."""
 
 MARKDOWN_TEMPLATES: tuple[str, ...] = (
     "README.md",
@@ -261,7 +256,7 @@ def collection_document(
     ]
     item_assets: Document = {key: vocabulary.item_asset(key, collection) for key in ASSET_KEYS}
     if collection == MOSAICS_DIR:
-        for key in (*ASSET_KEYS, *RGB_KEYS):
+        for key in ASSET_KEYS:
             item_assets[f"{key}_viz"] = vocabulary.viz_asset(f"{key}_viz")
     return {
         "type": "Collection",
@@ -311,6 +306,11 @@ def collection_document(
 def style_document(vocabulary: Vocabulary, year: int) -> Document:
     """Build the MapLibre style template, written for one year.
 
+    Each archive is a ``raster-dem`` source whose custom encoding decodes its
+    codes back to values, drawn by a ``color-relief`` layer over the layer's
+    default ramp and stretch (:mod:`glace_catalog.encoding`). Nothing in the
+    archive depends on that ramp, so a client may replace it.
+
     ``finalize-catalog`` re-years the copy it publishes per year, so the
     template names the last year the tracked tree claims and every year-bearing
     string takes the shape its regular expressions expect: ``/{year}/`` in each
@@ -320,23 +320,34 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
     sources: Document = {}
     layers: list[Document] = []
     for index, key in enumerate(STYLE_LAYER_ORDER):
+        style = vocabulary.display(key)
         sources[f"src-{key}"] = {
-            "type": "raster",
+            "type": "raster-dem",
             "url": f"pmtiles://../{year}/{viz_filename(key)}",
             "tileSize": TILE_PX,
             "minzoom": VIZ_MIN_ZOOM,
             "maxzoom": MOSAIC_ZOOM,
             "attribution": ATTRIBUTION.format(year=year),
+            **style.encoding.maplibre(),
         }
         layer: Document = {
             "id": f"glace-{key}-{year}",
-            "type": "raster",
+            "type": "color-relief",
             "source": f"src-{key}",
         }
         if index > 0:
             layer["layout"] = {"visibility": "none"}
-        layer["paint"] = {"raster-opacity": 1, "raster-resampling": "linear"}
-        layer["metadata"] = {"portolan:legend": vocabulary.legend(key)}
+        layer["paint"] = {
+            "color-relief-opacity": 1,
+            # Interpolating codes across a nodata edge would draw values that
+            # are not there.
+            "resampling": "nearest",
+            "color-relief-color": style.encoding.ramp(
+                ramp_colors(style.cmap),
+                style.vmin,
+                style.vmax,
+            ),
+        }
         layers.append(layer)
     return {
         "version": 8,
@@ -345,9 +356,9 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
             "description": (
                 "Every published web-map layer of one year. The first is visible and the "
                 "rest ship hidden, so a client switches by visibility rather than by loading "
-                "another style. Each layer's metadata.portolan:legend carries the ramp and "
-                "range baked into its archive; stops are derived from cmap over vmin-vmax, "
-                "never authored. Rendered from metadata/assets.yaml."
+                "another style. Each archive holds value codes, decoded by its raster-dem "
+                "source's custom encoding and drawn by a color-relief layer over a default "
+                "ramp a client may replace. Rendered from metadata/assets.yaml."
             ),
         },
         "sources": sources,
@@ -396,18 +407,13 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
 
 
 def _cmap(vocabulary: Vocabulary, key: str) -> str:
-    """Name the designed colormap of one single-band layer."""
-    style = vocabulary.display(key)
-    if not isinstance(style, LayerStyle):
-        raise KeyError(key)
-    return style.cmap
+    """Name the designed colormap of one layer."""
+    return vocabulary.display(key).cmap
 
 
 def _rescale(vocabulary: Vocabulary, key: str) -> str:
     """Format the ``rescale`` query parameter of one layer, ``vmin,vmax``."""
     style = vocabulary.display(key)
-    if not isinstance(style, LayerStyle):
-        raise KeyError(key)
     return f"{style.vmin:g},{style.vmax:g}"
 
 

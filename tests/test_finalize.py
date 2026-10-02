@@ -8,7 +8,7 @@ Three things only this script does, and each one can go wrong quietly:
 - the style registrations on the collection, one per year with the latest the
   default;
 - the coverage check between the store's archives and the styles, which is what
-  makes an archive no style draws a failed run rather than a dead legend.
+  makes an archive no style draws a failed run rather than a layer nobody can see.
 
 Runs the script's own functions against a temporary store of empty files. Reads
 no data, writes nothing outside the temporary directory and needs no network.

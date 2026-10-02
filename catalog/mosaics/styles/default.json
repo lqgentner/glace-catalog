@@ -2,1526 +2,870 @@
   "version": 8,
   "name": "GLACE – Sentinel-1 composites (2025)",
   "metadata": {
-    "description": "Every published web-map layer of one year. The first is visible and the rest ship hidden, so a client switches by visibility rather than by loading another style. Each layer's metadata.portolan:legend carries the ramp and range baked into its archive; stops are derived from cmap over vmin-vmax, never authored. Rendered from metadata/assets.yaml."
+    "description": "Every published web-map layer of one year. The first is visible and the rest ship hidden, so a client switches by visibility rather than by loading another style. Each archive holds value codes, decoded by its raster-dem source's custom encoding and drawn by a color-relief layer over a default ramp a client may replace. Rendered from metadata/assets.yaml."
   },
   "sources": {
-    "src-coh12_rgb": {
-      "type": "raster",
-      "url": "pmtiles://../2025/coh12_rgb_viz.pmtiles",
-      "tileSize": 256,
-      "minzoom": 5,
-      "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
-    },
     "src-coh12_vv": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.003921629170755188,
+      "greenFactor": 1.5318863948262453e-05,
+      "blueFactor": 5.983931229790021e-08,
+      "baseShift": 0.003937007874015748
     },
     "src-coh12_vh": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
-    },
-    "src-rtc_rgb": {
-      "type": "raster",
-      "url": "pmtiles://../2025/rtc_rgb_viz.pmtiles",
-      "tileSize": 256,
-      "minzoom": 5,
-      "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.003921629170755188,
+      "greenFactor": 1.5318863948262453e-05,
+      "blueFactor": 5.983931229790021e-08,
+      "baseShift": 0.003937007874015748
     },
     "src-rtc_vv": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.11764887512265564,
+      "greenFactor": 0.0004595659184478736,
+      "blueFactor": 1.7951793689370062e-06,
+      "baseShift": 25.118110236220474
     },
     "src-rtc_vh": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.11764887512265564,
+      "greenFactor": 0.0004595659184478736,
+      "blueFactor": 1.7951793689370062e-06,
+      "baseShift": 31.118110236220474
     },
     "src-coh12_vv_qa_num": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.9921721802010625,
+      "greenFactor": 0.0038756725789104002,
+      "blueFactor": 1.5139346011368751e-05,
+      "baseShift": 0.9960629921259843
     },
     "src-coh12_vh_qa_num": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.9921721802010625,
+      "greenFactor": 0.0038756725789104002,
+      "blueFactor": 1.5139346011368751e-05,
+      "baseShift": 0.9960629921259843
     },
     "src-rtc_vv_qa_num": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.9921721802010625,
+      "greenFactor": 0.0038756725789104002,
+      "blueFactor": 1.5139346011368751e-05,
+      "baseShift": 0.9960629921259843
     },
     "src-rtc_vh_qa_num": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.9921721802010625,
+      "greenFactor": 0.0038756725789104002,
+      "blueFactor": 1.5139346011368751e-05,
+      "baseShift": 0.9960629921259843
     },
     "src-coh12_vv_qa_cqm": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.12549213346416602,
+      "greenFactor": 0.0004902036463443985,
+      "blueFactor": 1.9148579935328067e-06,
+      "baseShift": 13.125984251968504
     },
     "src-coh12_vh_qa_cqm": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/coh12_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.12549213346416602,
+      "greenFactor": 0.0004902036463443985,
+      "blueFactor": 1.9148579935328067e-06,
+      "baseShift": 13.125984251968504
     },
     "src-rtc_vv_qa_cqm": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.0980407292688797,
+      "greenFactor": 0.00038297159870656134,
+      "blueFactor": 1.4959828074475052e-06,
+      "baseShift": 13.098425196850394
     },
     "src-rtc_vh_qa_cqm": {
-      "type": "raster",
+      "type": "raster-dem",
       "url": "pmtiles://../2025/rtc_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025"
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "encoding": "custom",
+      "redFactor": 0.0980407292688797,
+      "greenFactor": 0.00038297159870656134,
+      "blueFactor": 1.4959828074475052e-06,
+      "baseShift": 13.098425196850394
     }
   },
   "layers": [
     {
-      "id": "glace-coh12_rgb-2025",
-      "type": "raster",
-      "source": "src-coh12_rgb",
-      "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence False Color",
-          "type": "channels",
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "channels": [
-            {
-              "band": "VV",
-              "vmin": 0.1,
-              "vmax": 0.75
-            },
-            {
-              "band": "VH",
-              "vmin": 0.1,
-              "vmax": 0.55
-            },
-            {
-              "band": "VV / VH",
-              "vmin": 0.8,
-              "vmax": 2.6
-            }
-          ]
-        }
-      }
-    },
-    {
       "id": "glace-coh12_vv-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vv",
-      "layout": {
-        "visibility": "none"
-      },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VV",
-          "type": "ramp",
-          "cmap": "cmc.lipari",
-          "vmin": 0.1,
-          "vmax": 0.75,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.1,
-              "color": "#031326",
-              "label": "0.1"
-            },
-            {
-              "value": 0.140625,
-              "color": "#092844",
-              "label": ""
-            },
-            {
-              "value": 0.18125,
-              "color": "#183e61",
-              "label": ""
-            },
-            {
-              "value": 0.221875,
-              "color": "#365176",
-              "label": ""
-            },
-            {
-              "value": 0.2625,
-              "color": "#525b7a",
-              "label": ""
-            },
-            {
-              "value": 0.303125,
-              "color": "#655e77",
-              "label": ""
-            },
-            {
-              "value": 0.34375,
-              "color": "#785f72",
-              "label": ""
-            },
-            {
-              "value": 0.384375,
-              "color": "#8d616d",
-              "label": ""
-            },
-            {
-              "value": 0.425,
-              "color": "#a56267",
-              "label": ""
-            },
-            {
-              "value": 0.465625,
-              "color": "#bf6561",
-              "label": ""
-            },
-            {
-              "value": 0.50625,
-              "color": "#da6f5e",
-              "label": ""
-            },
-            {
-              "value": 0.546875,
-              "color": "#e98466",
-              "label": ""
-            },
-            {
-              "value": 0.5875,
-              "color": "#e99b74",
-              "label": ""
-            },
-            {
-              "value": 0.628125,
-              "color": "#e5af84",
-              "label": ""
-            },
-            {
-              "value": 0.66875,
-              "color": "#e7c49a",
-              "label": ""
-            },
-            {
-              "value": 0.709375,
-              "color": "#f1ddb9",
-              "label": ""
-            },
-            {
-              "value": 0.75,
-              "color": "#fdf5da",
-              "label": "0.75"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.001968503937007874,
+          "rgba(0, 0, 0, 0)",
+          -0.0019291338582677164,
+          "#031326",
+          0.1,
+          "#031326",
+          0.140625,
+          "#092844",
+          0.18125,
+          "#183e61",
+          0.221875,
+          "#365176",
+          0.2625,
+          "#525b7a",
+          0.303125,
+          "#655e77",
+          0.34375,
+          "#785f72",
+          0.384375,
+          "#8d616d",
+          0.425,
+          "#a56267",
+          0.465625,
+          "#bf6561",
+          0.50625,
+          "#da6f5e",
+          0.546875,
+          "#e98466",
+          0.5875,
+          "#e99b74",
+          0.628125,
+          "#e5af84",
+          0.66875,
+          "#e7c49a",
+          0.709375,
+          "#f1ddb9",
+          0.75,
+          "#fdf5da"
+        ]
       }
     },
     {
       "id": "glace-coh12_vh-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vh",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VH",
-          "type": "ramp",
-          "cmap": "cmc.lipari",
-          "vmin": 0.1,
-          "vmax": 0.55,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.1,
-              "color": "#031326",
-              "label": "0.1"
-            },
-            {
-              "value": 0.128125,
-              "color": "#092844",
-              "label": ""
-            },
-            {
-              "value": 0.15625,
-              "color": "#183e61",
-              "label": ""
-            },
-            {
-              "value": 0.184375,
-              "color": "#365176",
-              "label": ""
-            },
-            {
-              "value": 0.2125,
-              "color": "#525b7a",
-              "label": ""
-            },
-            {
-              "value": 0.240625,
-              "color": "#655e77",
-              "label": ""
-            },
-            {
-              "value": 0.26875,
-              "color": "#785f72",
-              "label": ""
-            },
-            {
-              "value": 0.296875,
-              "color": "#8d616d",
-              "label": ""
-            },
-            {
-              "value": 0.325,
-              "color": "#a56267",
-              "label": ""
-            },
-            {
-              "value": 0.353125,
-              "color": "#bf6561",
-              "label": ""
-            },
-            {
-              "value": 0.38125,
-              "color": "#da6f5e",
-              "label": ""
-            },
-            {
-              "value": 0.409375,
-              "color": "#e98466",
-              "label": ""
-            },
-            {
-              "value": 0.4375,
-              "color": "#e99b74",
-              "label": ""
-            },
-            {
-              "value": 0.465625,
-              "color": "#e5af84",
-              "label": ""
-            },
-            {
-              "value": 0.49375,
-              "color": "#e7c49a",
-              "label": ""
-            },
-            {
-              "value": 0.521875,
-              "color": "#f1ddb9",
-              "label": ""
-            },
-            {
-              "value": 0.55,
-              "color": "#fdf5da",
-              "label": "0.55"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "glace-rtc_rgb-2025",
-      "type": "raster",
-      "source": "src-rtc_rgb",
-      "layout": {
-        "visibility": "none"
-      },
-      "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter False Color",
-          "type": "channels",
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "channels": [
-            {
-              "band": "VV",
-              "vmin": -16.5,
-              "vmax": -4.0
-            },
-            {
-              "band": "VH",
-              "vmin": -23.5,
-              "vmax": -11.0
-            },
-            {
-              "band": "VV − VH",
-              "vmin": 3.5,
-              "vmax": 10.5
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.001968503937007874,
+          "rgba(0, 0, 0, 0)",
+          -0.0019291338582677164,
+          "#031326",
+          0.1,
+          "#031326",
+          0.128125,
+          "#092844",
+          0.15625,
+          "#183e61",
+          0.184375,
+          "#365176",
+          0.2125,
+          "#525b7a",
+          0.240625,
+          "#655e77",
+          0.26875,
+          "#785f72",
+          0.296875,
+          "#8d616d",
+          0.325,
+          "#a56267",
+          0.353125,
+          "#bf6561",
+          0.38125,
+          "#da6f5e",
+          0.409375,
+          "#e98466",
+          0.4375,
+          "#e99b74",
+          0.465625,
+          "#e5af84",
+          0.49375,
+          "#e7c49a",
+          0.521875,
+          "#f1ddb9",
+          0.55,
+          "#fdf5da"
+        ]
       }
     },
     {
       "id": "glace-rtc_vv-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vv",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VV",
-          "type": "ramp",
-          "cmap": "cmc.grayC",
-          "vmin": -16.5,
-          "vmax": -4.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -16.5,
-              "color": "#000000",
-              "label": "-16.5"
-            },
-            {
-              "value": -15.71875,
-              "color": "#171717",
-              "label": ""
-            },
-            {
-              "value": -14.9375,
-              "color": "#262626",
-              "label": ""
-            },
-            {
-              "value": -14.15625,
-              "color": "#353535",
-              "label": ""
-            },
-            {
-              "value": -13.375,
-              "color": "#444444",
-              "label": ""
-            },
-            {
-              "value": -12.59375,
-              "color": "#515151",
-              "label": ""
-            },
-            {
-              "value": -11.8125,
-              "color": "#5f5f5f",
-              "label": ""
-            },
-            {
-              "value": -11.03125,
-              "color": "#6b6b6b",
-              "label": ""
-            },
-            {
-              "value": -10.25,
-              "color": "#777777",
-              "label": ""
-            },
-            {
-              "value": -9.46875,
-              "color": "#848484",
-              "label": ""
-            },
-            {
-              "value": -8.6875,
-              "color": "#919191",
-              "label": ""
-            },
-            {
-              "value": -7.90625,
-              "color": "#a0a0a0",
-              "label": ""
-            },
-            {
-              "value": -7.125,
-              "color": "#b0b0b0",
-              "label": ""
-            },
-            {
-              "value": -6.34375,
-              "color": "#c1c1c1",
-              "label": ""
-            },
-            {
-              "value": -5.5625,
-              "color": "#d5d5d5",
-              "label": ""
-            },
-            {
-              "value": -4.78125,
-              "color": "#eaeaea",
-              "label": ""
-            },
-            {
-              "value": -4.0,
-              "color": "#ffffff",
-              "label": "-4"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -25.059055118110237,
+          "rgba(0, 0, 0, 0)",
+          -25.057874015748034,
+          "#000000",
+          -16.5,
+          "#000000",
+          -15.71875,
+          "#171717",
+          -14.9375,
+          "#262626",
+          -14.15625,
+          "#353535",
+          -13.375,
+          "#444444",
+          -12.59375,
+          "#515151",
+          -11.8125,
+          "#5f5f5f",
+          -11.03125,
+          "#6b6b6b",
+          -10.25,
+          "#777777",
+          -9.46875,
+          "#848484",
+          -8.6875,
+          "#919191",
+          -7.90625,
+          "#a0a0a0",
+          -7.125,
+          "#b0b0b0",
+          -6.34375,
+          "#c1c1c1",
+          -5.5625,
+          "#d5d5d5",
+          -4.78125,
+          "#eaeaea",
+          -4.0,
+          "#ffffff"
+        ]
       }
     },
     {
       "id": "glace-rtc_vh-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vh",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VH",
-          "type": "ramp",
-          "cmap": "cmc.grayC",
-          "vmin": -23.5,
-          "vmax": -11.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -23.5,
-              "color": "#000000",
-              "label": "-23.5"
-            },
-            {
-              "value": -22.71875,
-              "color": "#171717",
-              "label": ""
-            },
-            {
-              "value": -21.9375,
-              "color": "#262626",
-              "label": ""
-            },
-            {
-              "value": -21.15625,
-              "color": "#353535",
-              "label": ""
-            },
-            {
-              "value": -20.375,
-              "color": "#444444",
-              "label": ""
-            },
-            {
-              "value": -19.59375,
-              "color": "#515151",
-              "label": ""
-            },
-            {
-              "value": -18.8125,
-              "color": "#5f5f5f",
-              "label": ""
-            },
-            {
-              "value": -18.03125,
-              "color": "#6b6b6b",
-              "label": ""
-            },
-            {
-              "value": -17.25,
-              "color": "#777777",
-              "label": ""
-            },
-            {
-              "value": -16.46875,
-              "color": "#848484",
-              "label": ""
-            },
-            {
-              "value": -15.6875,
-              "color": "#919191",
-              "label": ""
-            },
-            {
-              "value": -14.90625,
-              "color": "#a0a0a0",
-              "label": ""
-            },
-            {
-              "value": -14.125,
-              "color": "#b0b0b0",
-              "label": ""
-            },
-            {
-              "value": -13.34375,
-              "color": "#c1c1c1",
-              "label": ""
-            },
-            {
-              "value": -12.5625,
-              "color": "#d5d5d5",
-              "label": ""
-            },
-            {
-              "value": -11.78125,
-              "color": "#eaeaea",
-              "label": ""
-            },
-            {
-              "value": -11.0,
-              "color": "#ffffff",
-              "label": "-11"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -31.059055118110237,
+          "rgba(0, 0, 0, 0)",
+          -31.057874015748034,
+          "#000000",
+          -23.5,
+          "#000000",
+          -22.71875,
+          "#171717",
+          -21.9375,
+          "#262626",
+          -21.15625,
+          "#353535",
+          -20.375,
+          "#444444",
+          -19.59375,
+          "#515151",
+          -18.8125,
+          "#5f5f5f",
+          -18.03125,
+          "#6b6b6b",
+          -17.25,
+          "#777777",
+          -16.46875,
+          "#848484",
+          -15.6875,
+          "#919191",
+          -14.90625,
+          "#a0a0a0",
+          -14.125,
+          "#b0b0b0",
+          -13.34375,
+          "#c1c1c1",
+          -12.5625,
+          "#d5d5d5",
+          -11.78125,
+          "#eaeaea",
+          -11.0,
+          "#ffffff"
+        ]
       }
     },
     {
       "id": "glace-coh12_vv_qa_num-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vv_qa_num",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VV – Contributing Observations",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": 0.0,
-          "vmax": 90.0,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.0,
-              "color": "#361338",
-              "label": "0"
-            },
-            {
-              "value": 5.625,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": 11.25,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": 16.875,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 22.5,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 28.125,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 33.75,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 39.375,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 45.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 50.625,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 56.25,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 61.875,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 67.5,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 73.125,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 78.75,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 84.375,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 90.0,
-              "color": "#dbd3ff",
-              "label": "90"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.49803149606299213,
+          "rgba(0, 0, 0, 0)",
+          -0.4880708661417323,
+          "#361338",
+          0.0,
+          "#361338",
+          5.625,
+          "#45172c",
+          11.25,
+          "#521b20",
+          16.875,
+          "#612013",
+          22.5,
+          "#702d06",
+          28.125,
+          "#754001",
+          33.75,
+          "#745101",
+          39.375,
+          "#726210",
+          45.0,
+          "#6d702d",
+          50.625,
+          "#687d4c",
+          56.25,
+          "#638a6a",
+          61.875,
+          "#609689",
+          67.5,
+          "#6ba4a6",
+          73.125,
+          "#86b1bf",
+          78.75,
+          "#a1bcd5",
+          84.375,
+          "#bcc7e9",
+          90.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-coh12_vh_qa_num-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vh_qa_num",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VH – Contributing Observations",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": 0.0,
-          "vmax": 90.0,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.0,
-              "color": "#361338",
-              "label": "0"
-            },
-            {
-              "value": 5.625,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": 11.25,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": 16.875,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 22.5,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 28.125,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 33.75,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 39.375,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 45.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 50.625,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 56.25,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 61.875,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 67.5,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 73.125,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 78.75,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 84.375,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 90.0,
-              "color": "#dbd3ff",
-              "label": "90"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.49803149606299213,
+          "rgba(0, 0, 0, 0)",
+          -0.4880708661417323,
+          "#361338",
+          0.0,
+          "#361338",
+          5.625,
+          "#45172c",
+          11.25,
+          "#521b20",
+          16.875,
+          "#612013",
+          22.5,
+          "#702d06",
+          28.125,
+          "#754001",
+          33.75,
+          "#745101",
+          39.375,
+          "#726210",
+          45.0,
+          "#6d702d",
+          50.625,
+          "#687d4c",
+          56.25,
+          "#638a6a",
+          61.875,
+          "#609689",
+          67.5,
+          "#6ba4a6",
+          73.125,
+          "#86b1bf",
+          78.75,
+          "#a1bcd5",
+          84.375,
+          "#bcc7e9",
+          90.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-rtc_vv_qa_num-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vv_qa_num",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VV – Contributing Observations",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": 0.0,
-          "vmax": 90.0,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.0,
-              "color": "#361338",
-              "label": "0"
-            },
-            {
-              "value": 5.625,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": 11.25,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": 16.875,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 22.5,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 28.125,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 33.75,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 39.375,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 45.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 50.625,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 56.25,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 61.875,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 67.5,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 73.125,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 78.75,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 84.375,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 90.0,
-              "color": "#dbd3ff",
-              "label": "90"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.49803149606299213,
+          "rgba(0, 0, 0, 0)",
+          -0.4880708661417323,
+          "#361338",
+          0.0,
+          "#361338",
+          5.625,
+          "#45172c",
+          11.25,
+          "#521b20",
+          16.875,
+          "#612013",
+          22.5,
+          "#702d06",
+          28.125,
+          "#754001",
+          33.75,
+          "#745101",
+          39.375,
+          "#726210",
+          45.0,
+          "#6d702d",
+          50.625,
+          "#687d4c",
+          56.25,
+          "#638a6a",
+          61.875,
+          "#609689",
+          67.5,
+          "#6ba4a6",
+          73.125,
+          "#86b1bf",
+          78.75,
+          "#a1bcd5",
+          84.375,
+          "#bcc7e9",
+          90.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-rtc_vh_qa_num-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vh_qa_num",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VH – Contributing Observations",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": 0.0,
-          "vmax": 90.0,
-          "unit": "",
-          "decibel": false,
-          "measured": true,
-          "stops": [
-            {
-              "value": 0.0,
-              "color": "#361338",
-              "label": "0"
-            },
-            {
-              "value": 5.625,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": 11.25,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": 16.875,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 22.5,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 28.125,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 33.75,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 39.375,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 45.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 50.625,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 56.25,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 61.875,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 67.5,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 73.125,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 78.75,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 84.375,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 90.0,
-              "color": "#dbd3ff",
-              "label": "90"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.49803149606299213,
+          "rgba(0, 0, 0, 0)",
+          -0.4880708661417323,
+          "#361338",
+          0.0,
+          "#361338",
+          5.625,
+          "#45172c",
+          11.25,
+          "#521b20",
+          16.875,
+          "#612013",
+          22.5,
+          "#702d06",
+          28.125,
+          "#754001",
+          33.75,
+          "#745101",
+          39.375,
+          "#726210",
+          45.0,
+          "#6d702d",
+          50.625,
+          "#687d4c",
+          56.25,
+          "#638a6a",
+          61.875,
+          "#609689",
+          67.5,
+          "#6ba4a6",
+          73.125,
+          "#86b1bf",
+          78.75,
+          "#a1bcd5",
+          84.375,
+          "#bcc7e9",
+          90.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-coh12_vv_qa_cqm-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vv_qa_cqm",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VV – Composite Quality Map",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": -3.0,
-          "vmax": 10.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -3.0,
-              "color": "#361338",
-              "label": "-3"
-            },
-            {
-              "value": -2.1875,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": -1.375,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": -0.5625,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 0.25,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 1.0625,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 1.875,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 2.6875,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 3.5,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 4.3125,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 5.125,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 5.9375,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 6.75,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 7.5625,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 8.375,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 9.1875,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 10.0,
-              "color": "#dbd3ff",
-              "label": "10"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -13.062992125984252,
+          "rgba(0, 0, 0, 0)",
+          -13.061732283464567,
+          "#361338",
+          -3.0,
+          "#361338",
+          -2.1875,
+          "#45172c",
+          -1.375,
+          "#521b20",
+          -0.5625,
+          "#612013",
+          0.25,
+          "#702d06",
+          1.0625,
+          "#754001",
+          1.875,
+          "#745101",
+          2.6875,
+          "#726210",
+          3.5,
+          "#6d702d",
+          4.3125,
+          "#687d4c",
+          5.125,
+          "#638a6a",
+          5.9375,
+          "#609689",
+          6.75,
+          "#6ba4a6",
+          7.5625,
+          "#86b1bf",
+          8.375,
+          "#a1bcd5",
+          9.1875,
+          "#bcc7e9",
+          10.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-coh12_vh_qa_cqm-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-coh12_vh_qa_cqm",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Coherence VH – Composite Quality Map",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": -3.0,
-          "vmax": 10.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -3.0,
-              "color": "#361338",
-              "label": "-3"
-            },
-            {
-              "value": -2.1875,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": -1.375,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": -0.5625,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": 0.25,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": 1.0625,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 1.875,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 2.6875,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 3.5,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 4.3125,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 5.125,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 5.9375,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 6.75,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 7.5625,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 8.375,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 9.1875,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 10.0,
-              "color": "#dbd3ff",
-              "label": "10"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -13.062992125984252,
+          "rgba(0, 0, 0, 0)",
+          -13.061732283464567,
+          "#361338",
+          -3.0,
+          "#361338",
+          -2.1875,
+          "#45172c",
+          -1.375,
+          "#521b20",
+          -0.5625,
+          "#612013",
+          0.25,
+          "#702d06",
+          1.0625,
+          "#754001",
+          1.875,
+          "#745101",
+          2.6875,
+          "#726210",
+          3.5,
+          "#6d702d",
+          4.3125,
+          "#687d4c",
+          5.125,
+          "#638a6a",
+          5.9375,
+          "#609689",
+          6.75,
+          "#6ba4a6",
+          7.5625,
+          "#86b1bf",
+          8.375,
+          "#a1bcd5",
+          9.1875,
+          "#bcc7e9",
+          10.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-rtc_vv_qa_cqm-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vv_qa_cqm",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VV – Composite Quality Map",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": -4.0,
-          "vmax": 8.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -4.0,
-              "color": "#361338",
-              "label": "-4"
-            },
-            {
-              "value": -3.25,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": -2.5,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": -1.75,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": -1.0,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": -0.25,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 0.5,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 1.25,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 2.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 2.75,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 3.5,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 4.25,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 5.0,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 5.75,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 6.5,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 7.25,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 8.0,
-              "color": "#dbd3ff",
-              "label": "8"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -13.049212598425196,
+          "rgba(0, 0, 0, 0)",
+          -13.048228346456693,
+          "#361338",
+          -4.0,
+          "#361338",
+          -3.25,
+          "#45172c",
+          -2.5,
+          "#521b20",
+          -1.75,
+          "#612013",
+          -1.0,
+          "#702d06",
+          -0.25,
+          "#754001",
+          0.5,
+          "#745101",
+          1.25,
+          "#726210",
+          2.0,
+          "#6d702d",
+          2.75,
+          "#687d4c",
+          3.5,
+          "#638a6a",
+          4.25,
+          "#609689",
+          5.0,
+          "#6ba4a6",
+          5.75,
+          "#86b1bf",
+          6.5,
+          "#a1bcd5",
+          7.25,
+          "#bcc7e9",
+          8.0,
+          "#dbd3ff"
+        ]
       }
     },
     {
       "id": "glace-rtc_vh_qa_cqm-2025",
-      "type": "raster",
+      "type": "color-relief",
       "source": "src-rtc_vh_qa_cqm",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "raster-opacity": 1,
-        "raster-resampling": "linear"
-      },
-      "metadata": {
-        "portolan:legend": {
-          "title": "Backscatter VH – Composite Quality Map",
-          "type": "ramp",
-          "cmap": "cmc.glasgow",
-          "vmin": -4.0,
-          "vmax": 8.0,
-          "unit": "dB",
-          "decibel": true,
-          "measured": true,
-          "stops": [
-            {
-              "value": -4.0,
-              "color": "#361338",
-              "label": "-4"
-            },
-            {
-              "value": -3.25,
-              "color": "#45172c",
-              "label": ""
-            },
-            {
-              "value": -2.5,
-              "color": "#521b20",
-              "label": ""
-            },
-            {
-              "value": -1.75,
-              "color": "#612013",
-              "label": ""
-            },
-            {
-              "value": -1.0,
-              "color": "#702d06",
-              "label": ""
-            },
-            {
-              "value": -0.25,
-              "color": "#754001",
-              "label": ""
-            },
-            {
-              "value": 0.5,
-              "color": "#745101",
-              "label": ""
-            },
-            {
-              "value": 1.25,
-              "color": "#726210",
-              "label": ""
-            },
-            {
-              "value": 2.0,
-              "color": "#6d702d",
-              "label": ""
-            },
-            {
-              "value": 2.75,
-              "color": "#687d4c",
-              "label": ""
-            },
-            {
-              "value": 3.5,
-              "color": "#638a6a",
-              "label": ""
-            },
-            {
-              "value": 4.25,
-              "color": "#609689",
-              "label": ""
-            },
-            {
-              "value": 5.0,
-              "color": "#6ba4a6",
-              "label": ""
-            },
-            {
-              "value": 5.75,
-              "color": "#86b1bf",
-              "label": ""
-            },
-            {
-              "value": 6.5,
-              "color": "#a1bcd5",
-              "label": ""
-            },
-            {
-              "value": 7.25,
-              "color": "#bcc7e9",
-              "label": ""
-            },
-            {
-              "value": 8.0,
-              "color": "#dbd3ff",
-              "label": "8"
-            }
-          ]
-        }
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -13.049212598425196,
+          "rgba(0, 0, 0, 0)",
+          -13.048228346456693,
+          "#361338",
+          -4.0,
+          "#361338",
+          -3.25,
+          "#45172c",
+          -2.5,
+          "#521b20",
+          -1.75,
+          "#612013",
+          -1.0,
+          "#702d06",
+          -0.25,
+          "#754001",
+          0.5,
+          "#745101",
+          1.25,
+          "#726210",
+          2.0,
+          "#6d702d",
+          2.75,
+          "#687d4c",
+          3.5,
+          "#638a6a",
+          4.25,
+          "#609689",
+          5.0,
+          "#6ba4a6",
+          5.75,
+          "#86b1bf",
+          6.5,
+          "#a1bcd5",
+          7.25,
+          "#bcc7e9",
+          8.0,
+          "#dbd3ff"
+        ]
       }
     }
   ]
