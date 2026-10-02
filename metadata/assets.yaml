@@ -1,31 +1,23 @@
-# The asset vocabulary of the GLACE catalog.
+# The twelve assets of the GLACE catalog and their web-map archives.
 #
-# This is the one place the twelve assets and their web-map archives are
-# named, described, given a transport range and a default display.
-# `glace_catalog.metadata` reads it; from it come the `item_assets` and
-# `renders` of both collections, the style's sources and colour ramps, the
-# titles on every tile and mosaic item, the `visual` assets, and the tables in
-# every README and AGENTS.md.
-# Nothing else in the repository types an asset title, a range or a stretch.
+# This file is the single source of asset names, descriptions, colour ramps
+# and value ranges. The build and `scripts/render-catalog.py` read it (through
+# `glace_catalog.metadata`) to write the collections, items, styles and the
+# asset tables in the READMEs and AGENTS.md files.
 #
-# transport: the range a web-map archive is encoded over (codes 1-255, 0 is
-#            nodata); changing it means re-tiling every year.
-# stretch:   the default range a style draws with `cmap`.
-#
-# Every rendered document is regenerated from this file by
-# `scripts/render-catalog.py`; `tests/test_render.py` fails when the tracked
-# `catalog/` and a fresh render differ.
+# stretch:   the default display range, drawn with `cmap`.
+# transport: the value range a web-map archive encodes into codes 1-255
+#            (0 is nodata). Changing it requires re-tiling every year.
 
 products:
   coh12:
     name: Coherence
     long: 12-day repeat-pass interferometric coherence
     sar_product_type: COH
-    # The one sentence on what the stored values are, appended to every data
-    # asset's description on both grids.
+    # What the stored values are; appended to each data asset's description.
     value: Dimensionless, in [0, 1].
-    # cmc.lipari is the designed ramp (perceptually uniform, Crameri); magma is
-    # the portable stand-in a client without cmcrameri can resolve (M-10).
+    # cmap is the intended Scientific colour map (cmcrameri); portable_cmap is
+    # the matplotlib equivalent named in `renders`, for generic clients.
     cmap: cmc.lipari
     portable_cmap: magma
     decibel: false
@@ -43,8 +35,8 @@ products:
     long: Radiometrically terrain-corrected gamma-nought backscatter
     sar_product_type: RTC
     value: >-
-      Linear power. The decibel conversion, 10*log10, is declared in the
-      collection's renders and not applied to the stored pixels.
+      Linear power. For display, the collection's renders declare the decibel
+      conversion, 10*log10.
     cmap: cmc.grayC
     portable_cmap: gray
     decibel: true
@@ -65,15 +57,14 @@ polarizations:
 qa:
   num:
     name: Contributing Observations
-    # One range for both products
+    # The same ranges for coherence and backscatter.
     cmap: cmc.glasgow
     portable_cmap: viridis
     stretch: [0.0, 90.0]
     transport: [0.0, 253.0]
     decibel: false
-    # The band name is the asset key on every grid; only the pixel type
-    # differs. An integer count on the 10 m tiles; warping to 40 m averages
-    # sixteen source pixels, so the mosaic band is a float mean of the counts.
+    # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen
+    # 10 m pixels, so the mosaics store a float mean count.
     band:
       tiles: {data_type: uint16, nodata: 0}
       mosaics: {data_type: float32, nodata: nan}
@@ -81,14 +72,14 @@ qa:
     name: Composite Quality Map
     cmap: cmc.glasgow
     portable_cmap: viridis
-    # The ranges are per product: `products.*.cqm`.
+    # Ranges are set per product, under `products.*.cqm`.
     decibel: true
     band:
       tiles: {data_type: float32, nodata: nan}
       mosaics: {data_type: float32, nodata: nan}
 
-# Description sentences, Jinja2 templates over: long, product (short name),
-# POL, pol_word, value, source_title, transport, min_zoom, max_zoom.
+# Asset descriptions. Jinja2 variables: long, product (short name), POL,
+# pol_word, value, source_title, transport, min_zoom, max_zoom.
 descriptions:
   data:
     tiles: >-
@@ -119,8 +110,8 @@ descriptions:
   viz: >-
     Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad
     z{{ min_zoom }}-z{{ max_zoom }}: an 8-bit code in all three channels,
-    linear over {{ transport }} and clipped outside it, code 0 nodata. The
-    band's raster:scale and raster:offset decode it, as does the year
-    style's raster-dem source, which draws it through a color-relief ramp.
-    Lossy at WebP quality 90; for analysis, read the COGs with the "data" role
-    instead.
+    linear over {{ transport }} and clipped to it, with code 0 as nodata.
+    Decode with the band's raster:scale and raster:offset; the year's style
+    decodes it as a raster-dem source and colours it with a color-relief
+    layer. Lossy (WebP quality 90): for analysis, read the COGs with the
+    "data" role.

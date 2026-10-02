@@ -23,16 +23,18 @@
 
 ## About
 
-This repository holds the metadata and the building and publishing pipeline for the **GLACE** STAC catalog
-published to [Source Cooperative](https://source.coop/giuz/glace-alps). The catalog complies with
-the [Portolan SDI](https://www.portolan-sdi.org/) spec.
+This repository holds the metadata of the **GLACE** STAC catalog on
+[Source Cooperative](https://source.coop/giuz/glace-alps), and the pipeline
+that builds and publishes it. The catalog follows the
+[Portolan SDI](https://www.portolan-sdi.org/) spec.
 
-> **The Alpine store is being built.** The metadata here describes **`glace-alps`**,
-> which is not yet published; the Swiss rehearsal `glace-ch` stays at
-> `lqgentner/glace-ch` on Source Cooperative until it is retired.
-> [`docs/STATUS.md`](docs/STATUS.md) carries what is still open.
+> **The Alpine store is being built.** The metadata here describes
+> **`glace-alps`**, ahead of its publication. The Swiss rehearsal, `glace-ch`,
+> remains at `lqgentner/glace-ch` on Source Cooperative for now.
+> [`docs/STATUS.md`](docs/STATUS.md) lists the open work.
 
-The metadata of the catalog lives on GitHub so that its change history can be reviewed, updates can be published as releases, and errors can be raised with an issue.
+Keeping the metadata on GitHub lets anyone review its history, cite a release
+and report errors as issues.
 
 ```text
 metadata/           the source: catalog.yaml, assets.yaml, the markdown templates
@@ -49,19 +51,20 @@ docs/               DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 ```bash
 uv sync --all-groups
 uv run tests/run_all.py             # run all gates
-uv run rashid check catalog/        # Verify Portolan conformance alone
+uv run rashid check catalog/        # Portolan conformance only
 ```
 
-For editing the metadata and building and publishing the store, see [AGENTS.md](AGENTS.md).
+To edit the metadata, or to build and publish the store, see [AGENTS.md](AGENTS.md).
 
 ## Citing
 
-Coming soon. Once the first release is out, the metadata will be archived on Zenodo with a corresponding DOI. Until then, please contact the author.
+Each release of the metadata will be archived on Zenodo with a DOI, starting
+with the first release. Until then, please contact the author.
 
 ## License
 
 The code is MIT, except for the vendored files listed in
-[Third Party Notices](THIRD_PARTY_NOTICES.md), which stay under their own licenses.
+[Third Party Notices](THIRD_PARTY_NOTICES.md), which keep their own licenses.
 See [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
 Copernicus Sentinel data. The collection thumbnails are drawn over
 [OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that credit

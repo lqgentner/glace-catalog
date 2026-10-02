@@ -11,7 +11,7 @@
   ],
   "id": "glace-alps-tiles",
   "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
-  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion (`10*log10(x)`) is declared in the renders. Query the tiles with the item mirror `items.parquet`.",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -360,7 +360,7 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -411,7 +411,7 @@
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"

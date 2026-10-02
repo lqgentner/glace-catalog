@@ -28,9 +28,9 @@ item and GeoTIFF tags.
 
 ## Reading the data
 
-Use `items.parquet` to search all tiles and years without fetching each item
-separately. Rustac searches this static STAC-GeoParquet index directly; no
-STAC API server is needed. Install it with `pip install rustac`.
+Use `items.parquet` to search all tiles and years in one file. Rustac
+searches this static STAC-GeoParquet index directly. Install it with
+`pip install rustac`.
 
 ```python
 import rustac
@@ -72,8 +72,8 @@ change = cube.coh12_vv.sel(time="2025") - cube.coh12_vv.sel(time="2015")
 
 ## Open the tiles in QGIS
 
-Create a virtual raster for one year and measurement. QGIS can then stream
-the COGs without downloading them in full:
+Create a virtual raster for one year and measurement. QGIS then streams only
+the parts of the COGs it displays:
 
 ```python
 from osgeo import gdal
@@ -89,8 +89,8 @@ gdal.BuildVRT(
 )
 ```
 
-Tiles from different UTM zones need one VRT per zone; the item mirror's
-`proj:code` column says which.
+Tiles from different UTM zones need one VRT per zone; the index's `proj:code`
+column gives each tile's zone.
 
 Open the resulting `.vrt` file as a raster layer in QGIS.
 

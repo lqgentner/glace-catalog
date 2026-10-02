@@ -31,29 +31,27 @@ cube = odc.stac.load(
 )
 ```
 
-Every year shares one grid, so the result is a clean time axis with no
-resampling step.
+Every year shares one grid, so the years form a time axis directly.
 
 ## PMTiles for web maps
 
-In addition to the LAEA COGs for scientific analysis, PMTiles archives are
-provided for web maps. They are tiled on WebMercatorQuad up to zoom
-{{ max_zoom }}, resampled from the MGRS tiles, and carry a `_viz` suffix to
-mark them as being for visualization only. Their pixels hold values, not
-colors: an 8-bit code, linear over a fixed range per layer, in all three
-channels of a lossy WebP tile. The backscatter and composite quality map
-archives hold decibels, unlike the analysis products, which come in linear
-units only; coherence remains linear. Each archive's asset declares the
-decoding as `raster:scale` and `raster:offset`, and the year style declares it
-as a MapLibre `raster-dem` source with a custom encoding. The style draws each
-layer as a `color-relief` over a default ramp from the
-[Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
-([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)); a client
-can change the ramp and the range without new tiles.
+Each year's item also holds PMTiles archives for web maps, beside the COGs.
+The `_viz` suffix marks them as visualization products. They are tiled on
+WebMercatorQuad up to zoom {{ max_zoom }}, resampled from the MGRS tiles.
 
-**To draw a map**, use the `{stem}_viz.pmtiles` archives in each year's item
-directory, beside the COGs they render. Load a style directly and it works in
-MapLibre GL JS; MapLibre Native does not yet decode custom encodings:
+The archive pixels hold encoded values: an 8-bit code in all three channels of
+a lossy WebP tile, linear over a fixed range per layer. Backscatter and
+composite quality maps are encoded in decibels; coherence is linear. Each
+archive's asset declares the decoding as `raster:scale` and `raster:offset`.
+
+Each year's style declares every archive as a MapLibre `raster-dem` source
+with a custom encoding and draws it as a `color-relief` layer, with a default
+ramp from the [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
+([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)). A client
+can change the ramp and the range without re-tiling.
+
+**To draw a map**, load a year's style in MapLibre GL JS, which decodes custom
+`raster-dem` encodings:
 
 ```js
 const protocol = new pmtiles.Protocol();
