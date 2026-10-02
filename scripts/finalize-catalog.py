@@ -1,19 +1,18 @@
-r"""Write the store's catalogue: its root, its two collections and its indexes.
+r"""Write the store's root catalog, collections and item indexes over every published year.
 
-Everything that spans years lives here, and nothing else does. ``publish-year``
-writes one year and never touches another; this command reads what those years
-left behind and assembles the documents over them:
+``publish-year.py`` writes one year at a time. This script reads the published
+years and writes what spans them:
 
-- the root ``catalog.json`` — the only absolute ``self`` href in the store, so
-  relocating the bucket is this one run;
-- ``tiles/collection.json`` and ``mosaics/collection.json``, each declaring its
-  own ``item_assets`` and its collection assets;
-- ``tiles/items.parquet``, the per-year indexes concatenated with their hrefs
-  rebased onto ``--base-url``, and ``mosaics/items.parquet``, built straight from
-  the mosaic items because one row per year leaves nothing to concatenate.
+- the root ``catalog.json``, with an absolute ``self`` link under ``--base-url``;
+- ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
+  year and the temporal extent; the mosaics collection also lists one MapLibre
+  style per year;
+- a thumbnail per collection, drawn from the latest year's COGs;
+- ``tiles/items.parquet``, the per-year indexes combined, and
+  ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
+  ``--base-url``.
 
-None of it describes a measurement, which is why it sits beside the items rather
-than inside them.
+It then validates the result against the STAC schemas.
 
 Usage:
     uv run --env-file .env scripts/finalize-catalog.py \\
@@ -57,11 +56,9 @@ logger = logging.getLogger(Path(__file__).stem)
 
 
 def published_years(layout: stac.StoreLayout) -> list[int]:
-    """Years the store actually holds, by the presence of their item index.
+    """Years the store holds: the ``tiles/{year}/`` directories with an item index.
 
-    The years sit under the tiles collection, which owns its subtree, and each
-    one is published with the slice of the item mirror ``publish-year`` wrote
-    beside its items.
+    ``publish-year.py`` writes that index in its ``items`` step.
     """
     if not layout.tiles.exists():
         msg = f"No {TILES_DIR}/ under {layout.root}. Run publish-year.py first."
@@ -89,12 +86,10 @@ def read_year_index(layout: stac.StoreLayout, year: int) -> pa.Table:
 
 
 def tiles_summary(tables: Sequence[pa.Table]) -> tuple[int, set[str]]:
-    """Count the tile items and collect their editions, without resolving them.
+    """Count the tile items and collect their editions from the item indexes.
 
-    A store over eleven Alpine years holds roughly 24 000 tile items. All the
-    collection documents need from them is a count for the log and the assurance
-    that they agree on one edition, so this reads the indexes rather than the
-    item documents.
+    The indexes are fast to read; an eleven-year Alpine store holds about
+    24 000 item documents.
     """
     count = 0
     versions: set[str] = set()
@@ -122,7 +117,7 @@ def _load(path: Path) -> Document:
 
 
 def _keep(links: Sequence[Document], drop: set[str]) -> list[Document]:
-    """Links other than the ones this run regenerates."""
+    """Keep the links whose ``rel`` is outside ``drop``."""
     return [link for link in links if link.get("rel") not in drop]
 
 
@@ -131,19 +126,12 @@ def patch_collections(
     years: Sequence[int],
     mosaic_items: Sequence[pystac.Item],
 ) -> dict[str, Document]:
-    """Patch the tracked collection documents with what has actually been published.
+    """Add the published years to the tracked collection documents.
 
-    **These documents are rendered from ``metadata/`` and reviewed in git, not
-    written here.** Their prose, providers, license, ``item_assets``, ``renders``
-    and style registrations come from ``scripts/render-catalog.py``; nothing
-    here touches them. What this adds is only what depends on the run: the
-    links to the years that exist and the temporal extent. The run's manifest
-    and configuration stay beside the source archive and in the pipeline
-    repository; every value a reader needs from them is on the items as tags,
-    ``file:size`` and ``file:checksum``.
-
-    That split is what keeps a publication reviewable: rendering is a
-    commit-time step with a diff, and publication never rewrites prose.
+    ``scripts/render-catalog.py`` renders these documents from ``metadata/``,
+    and they are reviewed in git. This function adds only what depends on the
+    published data: a link to each year and the temporal extent. Prose,
+    providers, license and ``item_assets`` stay as rendered.
 
     Parameters
     ----------
@@ -166,9 +154,7 @@ def patch_collections(
         *_keep(tiles["links"], {"child", "item", "self"}),
         *[stac.year_child_link(year) for year in years],
     ]
-    # Per-year run records used to be registered here as `manifest-{year}` and
-    # `config-{year}` assets. Drop any a previous finalize left in the tracked
-    # document, so a re-run converges.
+    # Run manifests and configurations stay unpublished: strip any such asset.
     tiles["assets"] = {
         key: asset
         for key, asset in tiles.get("assets", {}).items()
@@ -193,9 +179,9 @@ def patch_collections(
 def style_asset(stem: str, year: int) -> tuple[str, str]:
     """Asset key and filename of the published style of one template and year.
 
-    The template named ``default`` drops its stem, so the collection's default
-    style is ``styles/2024.json`` under ``style-2024`` rather than
-    ``styles/default-2024.json``. A second template keeps its stem.
+    Styles from the ``default`` template are named by year alone:
+    ``styles/2024.json`` under the key ``style-2024``. Other templates keep
+    their name: ``styles/{stem}-2024.json`` under ``style-{stem}-2024``.
     """
     if stem == "default":
         return f"style-{year}", f"{year}.json"
@@ -203,22 +189,18 @@ def style_asset(stem: str, year: int) -> tuple[str, str]:
 
 
 def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict[str, Path]:
-    """Write one published MapLibre style per year, from the tracked template.
+    """Write one MapLibre style per year from each tracked style template.
 
-    The styles are tracked source, rendered from ``metadata/assets.yaml`` and
-    reviewed, but the year is the one part that follows from the run rather
-    than from a design decision, so it is the one part rewritten here. The
-    encoding and the default ramp are per product and do not vary by year,
-    which is why one reviewed template can describe every published year;
-    writing a copy per year is what gives every published archive a layer some
-    published style actually draws.
+    The templates are rendered from ``metadata/assets.yaml`` and reviewed in
+    git. Encoding and colour ramp are the same every year, so each copy changes
+    only the year: in the source URLs, the attribution, the style name and the
+    layer ids. Every published year thus has a style that draws its archives.
 
     Returns
     -------
     dict[str, pathlib.Path]
         Staged path per style asset key, e.g. ``{"style-2024": …}``. The
-        collection declares its digest over these bytes, not over the tracked
-        ones, so the caller needs to know where they landed.
+        caller records each file's size and checksum.
     """
     out = staged / MOSAICS_DIR / "styles"
     out.mkdir(parents=True, exist_ok=True)
@@ -227,14 +209,11 @@ def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict
         template = json.loads(path.read_text())
         for year in years:
             style = deepcopy(template)
-            # Every source, not just one: `default.json` declares one per
-            # published layer so that a client switches by visibility rather
-            # than by loading another style.
+            # A style has one source per layer; clients switch layers by visibility.
             for source in style.get("sources", {}).values():
                 source["url"] = re.sub(r"/\d{4}/", f"/{year}/", source["url"])
                 if source.get("attribution"):
-                    # The Copernicus wording is per year, so a style describing
-                    # 2022 must not credit 2024.
+                    # The Copernicus credit names the year of the data.
                     source["attribution"] = YEAR_IN_TEXT.sub(str(year), source["attribution"])
             style["name"] = re.sub(r"\(\d{4}\)", f"({year})", style["name"])
             for layer in style.get("layers", []):
@@ -247,17 +226,13 @@ def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict
 
 
 def register_style_assets(document: Document, years: Sequence[int], latest: int) -> None:
-    """Replace the tracked style registrations with one entry per template and year.
+    """Replace each tracked style asset with one asset per year.
 
-    The tracked document registers the template it keeps beside it; what the
-    store holds is the per-year copies :func:`repoint_styles` writes. Title and
-    media type come from the tracked entry, so the reviewed naming is the
-    published naming, and the ``default`` role follows the template that carries
-    it, on the latest year only: a client that asks for one style gets the newest.
-
-    The description is the vocabulary's per-year wording rather than a copy of
-    the tracked entry's, because that one describes a *template* and each
-    published entry describes one year's style.
+    The new assets point at the per-year copies :func:`repoint_styles` writes.
+    Title and media type come from the tracked entry, and the description is
+    the per-year wording from ``metadata/``. If the template has the
+    ``default`` role, its latest year's copy keeps it, so a client asking for
+    one style gets the newest.
     """
     assets: dict[str, Document] = document.get("assets", {})
     templates = {key: asset for key, asset in assets.items() if "style" in asset.get("roles", [])}
@@ -294,12 +269,10 @@ def check_style_coverage(
     years: Sequence[int],
     styles: Mapping[str, Path],
 ) -> None:
-    """Refuse a published web-map archive its year's style does not draw.
+    """Check that every published web-map archive has a layer in its year's style.
 
-    A client finds an archive as a ``visual`` asset of the year item and draws
-    it through the year's style, under the layer id ``glace-{key}-{year}``.
-    Before one style was written per year, 42 of 56 archives had no layer in
-    any published style, and nothing failed.
+    A client finds an archive as a ``visual`` asset of the year's mosaic item
+    and draws it through that year's style, as layer ``glace-{key}-{year}``.
 
     Raises
     ------
@@ -342,12 +315,10 @@ def write_documents(
     base_url: str,
     years: Sequence[int],
 ) -> None:
-    """Stage the patched source documents and upload them.
+    """Stage the documents, styles and static files, then upload them.
 
-    The root catalog gains its absolute ``self`` link here and only here. A
-    tracked file whose correct content depends on the deployment target is diff
-    noise and a merge conflict waiting to happen, so ``public_base`` is applied
-    at publication rather than committed.
+    The root catalog's absolute ``self`` link is added here, so the tracked
+    catalog stays independent of where it is deployed.
     """
     base = base_url.rstrip("/")
     with tempfile.TemporaryDirectory() as tmp:
@@ -361,8 +332,8 @@ def write_documents(
             json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
         )
 
-        # The prose travels with the documents that link it: PTL-FIL-001 wants
-        # both files in every catalog and collection directory.
+        # Portolan requires a README.md and an AGENTS.md beside every catalog
+        # and collection (rule PTL-FIL-001).
         for name in ("README.md", "AGENTS.md"):
             (staged / name).write_bytes((source_dir / name).read_bytes())
             for directory in documents:
@@ -371,10 +342,8 @@ def write_documents(
                     (source_dir / directory / name).read_bytes(),
                 )
 
-        # `_assets/` holds what the documents link but do not describe -- the
-        # wordmark the root catalog carries as its `rel: "icon"`. It travels
-        # with them because a registry that renders the icon reads the document
-        # and the file from the same tree.
+        # `_assets/` holds files the documents link to, such as the root
+        # catalog's icon. They are published beside the documents.
         assets = source_dir / ASSETS_DIR
         if assets.is_dir():
             (staged / ASSETS_DIR).mkdir(parents=True, exist_ok=True)
@@ -382,13 +351,12 @@ def write_documents(
                 if path.is_file():
                     (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
 
-        # Before the documents are written: the mosaics collection declares a
-        # digest over the styles it links, and the bytes a reader downloads are
-        # the per-year copies -- the tracked template names one year only.
+        # Write the styles first: the mosaics collection records the size and
+        # checksum of each per-year copy.
         styles = repoint_styles(source_dir, staged, years)
         register_style_assets(documents[MOSAICS_DIR], years, max(years))
         stamp_style_assets(documents, styles)
-        # The last chance to catch an archive no published style draws.
+        # Every archive must have a layer in its year's style.
         check_style_coverage(layout, years, styles)
 
         for directory, document in documents.items():
@@ -402,12 +370,10 @@ def write_documents(
 def stamped_asset_paths(
     layout: stac.StoreLayout,
 ) -> dict[str, dict[str, Path | UPath]]:
-    """Where each collection-level asset this run measures keeps its bytes.
+    """Store paths of the collection assets :func:`stamp_collection_assets` measures.
 
-    Only the assets whose bytes already sit in the store are listed. The styles
-    are not among them: they are staged and uploaded with the documents, so at
-    this point they do not yet exist -- :func:`stamp_style_assets` measures them
-    where they are written.
+    The styles are measured separately by :func:`stamp_style_assets`, once
+    they are staged.
     """
     return {
         TILES_DIR: {
@@ -426,13 +392,10 @@ def stamp_style_assets(
     documents: Mapping[str, Document],
     styles: Mapping[str, Path],
 ) -> None:
-    """Fill ``file:size`` and ``file:checksum`` on the staged MapLibre styles.
+    """Fill ``file:size`` and ``file:checksum`` on the per-year MapLibre styles.
 
-    The styles are the collection assets whose published bytes are written during
-    this very run and differ from the tracked file: :func:`repoint_styles` writes
-    one copy per year, so each digest has to be of the copy a reader downloads. It
-    is measured here rather than in :func:`stamp_collection_assets`, which runs
-    before the styles are staged.
+    Each value is measured on the staged copy that :func:`repoint_styles`
+    wrote, which is the file readers download.
     """
     for key, path in sorted(styles.items()):
         asset = documents.get(MOSAICS_DIR, {}).get("assets", {}).get(key)
@@ -446,14 +409,12 @@ def stamp_style_assets(
 
 
 def require_existing_thumbnails(layout: stac.StoreLayout) -> None:
-    """Fail unless ``--skip-thumbnail`` really does leave a usable thumbnail behind.
+    """Check that the store holds both thumbnails before ``--skip-thumbnail`` reuses them.
 
-    Skipping only holds when the store already carries the file the collection
-    documents name. It stops holding the moment the thumbnail is renamed or its
-    format changes: the documents point at the new name, no bytes answer to it,
-    and :func:`stamp_collection_assets` only warns, so the run would publish two
-    collections whose thumbnail link 404s -- with no ``file:size`` or
-    ``file:checksum`` to make the gap visible -- and still validate locally.
+    The collections link their thumbnails by file name. A missing file (after
+    a rename, say) would publish a broken link, and
+    :func:`stamp_collection_assets` only logs a warning for it, so this check
+    stops the run.
 
     Raises
     ------
@@ -479,18 +440,13 @@ def stamp_collection_assets(
 ) -> None:
     """Fill ``file:size`` and ``file:checksum`` on the collection-level assets.
 
-    The assets a collection declares over itself -- its item mirror, its
-    thumbnail and, for the tiles, the glacier fractions -- are written by this
-    run rather than by the pipeline, so no manifest carries their digests. They
-    are measured here, from the bytes as they now sit in the store, which is
-    what closes ``PTL-AST-003``: a reader can check a downloaded mirror against
-    the release that cites it, the same way the item assets already allow
-    (R-16).
+    These are the item indexes, the thumbnails and the glacier fractions. The
+    run manifest holds no digest for them, so they are measured here from the
+    bytes in the store. Readers can then verify a download, as they can for
+    item assets (Portolan rule ``PTL-AST-003``).
 
-    Runs after the indexes and the thumbnails are written and before the
-    documents are staged; an asset whose bytes are absent is left unstamped with
-    a warning rather than stamped with a stale or guessed value, which Portolan
-    treats as worse than an absent field.
+    Call this after the indexes and thumbnails are written. An asset whose
+    file is missing is logged as a warning and left as it is.
     """
     paths = stamped_asset_paths(layout)
     for directory, document in documents.items():
@@ -508,11 +464,10 @@ def stamp_collection_assets(
 
 
 def validate(layout: stac.StoreLayout) -> None:
-    """Read the written catalogue back and validate it against the STAC schemas.
+    """Read the written catalog back and validate it against the STAC schemas.
 
-    Read through :class:`~glace_catalog.stac.save.UPathStacIO`, so a store on
-    object storage is validated as it actually sits there rather than from the
-    local copy that was uploaded.
+    Reads through :class:`~glace_catalog.stac.save.UPathStacIO`, so a store on
+    object storage is validated where it is published.
     """
     stac_io = stac.UPathStacIO(UPath(layout.root).storage_options)
     catalog = pystac.Catalog.from_file(str(layout.catalog), stac_io=stac_io)
@@ -523,21 +478,25 @@ def validate(layout: stac.StoreLayout) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    """Command-line arguments of the catalogue finalizer."""
+    """Command-line arguments of the catalog finalizer."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     parser.add_argument(
         "--base-url",
         required=True,
-        help="absolute URL the published root answers at, for the root self link and the indexes",
+        help="public URL of the store root, used in the root self link and items.parquet hrefs",
     )
     parser.add_argument(
         "--source",
         type=Path,
         default=Path(__file__).resolve().parent.parent / "catalog",
-        help="tracked catalog/ directory holding the hand-maintained documents",
+        help="tracked catalog/ directory rendered from metadata/",
     )
-    parser.add_argument("--skip-thumbnail", action="store_true")
+    parser.add_argument(
+        "--skip-thumbnail",
+        action="store_true",
+        help="reuse the thumbnails already in the store",
+    )
     parser.add_argument(
         "--thumbnail-basemap",
         default=DEFAULT_BASEMAP,
@@ -548,7 +507,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="credit override; use an empty string only for attribution-free basemaps",
     )
-    parser.add_argument("--skip-validate", action="store_true")
+    parser.add_argument(
+        "--skip-validate",
+        action="store_true",
+        help="skip the final STAC schema validation",
+    )
     return parser.parse_args()
 
 
@@ -566,8 +529,7 @@ def main() -> None:
     if len(versions) > 1:
         msg = (
             f"the store's tile items carry editions {sorted(versions)}. A collection "
-            "spanning two editions could not describe its own pixels; republish the "
-            "whole dataset for one."
+            "describes one edition; republish every year with the same one."
         )
         raise SystemExit(msg)
     logger.info("%d tile items across %d year(s)", tile_count, len(years))
@@ -579,9 +541,8 @@ def main() -> None:
         mosaic_items,
     )
 
-    # The indexes and the thumbnails are written before the documents are staged
-    # because the documents declare their size and digest, and those can only be
-    # measured on bytes that exist.
+    # Write the indexes and thumbnails first: the collection documents record
+    # their size and checksum.
     stac.concat_indexes(
         [layout.year_index(year) for year in years],
         layout.tiles_index,
