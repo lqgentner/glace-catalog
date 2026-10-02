@@ -506,7 +506,10 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
 
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the per-year publisher."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("year", type=int)
     parser.add_argument("--src", required=True, help="local path or s3:// URI of one year")
     parser.add_argument("--scope", required=True, choices=["ch", "alps"])

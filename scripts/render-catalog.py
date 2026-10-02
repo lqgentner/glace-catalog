@@ -22,7 +22,10 @@ logger = logging.getLogger(Path(__file__).stem)
 
 def main() -> None:
     """Render the tracked documents, or report which are stale."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--out",
         type=Path,

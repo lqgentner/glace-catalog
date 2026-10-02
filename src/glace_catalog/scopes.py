@@ -168,11 +168,6 @@ class Scope:
     perimeter_tiles
         Number of MGRS tiles in the scope's perimeter. Completeness checks
         compare the tiles present against this number.
-    coverage
-        Fraction of the grid those tiles occupy. The extent is a bounding box
-        around an irregular perimeter, and the rest of it is nodata, which
-        compresses to almost nothing, so a mosaic's file size scales with
-        this fraction.
     utm_zones
         UTM zones the perimeter's MGRS tiles fall in, northern hemisphere, as
         the prose names them: ``("32N",)`` for Switzerland.
@@ -183,7 +178,6 @@ class Scope:
     analysis_grid: Grid
     display_grid: Grid
     perimeter_tiles: int
-    coverage: float
     utm_zones: tuple[str, ...]
 
     @property
@@ -233,7 +227,6 @@ SCOPES: Mapping[str, Scope] = {
         # in config/lrw-ch.yml), so the perimeter is the SGI2023 glacier
         # inventory buffered by 250 m.
         perimeter_tiles=143,
-        coverage=0.307,
         utm_zones=("32N",),
     ),
     "alps": Scope(
@@ -256,7 +249,6 @@ SCOPES: Mapping[str, Scope] = {
         ),
         # The Alpine Convention perimeter, 2025 edition, as MGRS tiles.
         perimeter_tiles=2210,
-        coverage=0.454,
         # The perimeter spans about 5°E to 17°E.
         utm_zones=("31N", "32N", "33N"),
     ),

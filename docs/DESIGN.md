@@ -415,7 +415,7 @@ A scope switch touches:
 | root catalog identity and every document's prose | `metadata/catalog.yaml` | `scope`, `region`, `years`, `title`, the preliminary notice; the prose takes the region and years as variables, so nothing else is retyped |
 | the rendered tree | `catalog/` | `uv run scripts/render-catalog.py` after the edit above |
 | the years | `metadata/catalog.yaml` | 2015–2025; publication sets the exact extent from the compositing windows |
-| measured numbers | `docs/`, `metadata/assets.yaml` | Swiss measurements; the default stretches are re-measured on Alpine mosaics under P-8 |
+| measured numbers | `docs/`, `metadata/assets.yaml` | The default stretches and transport ranges are measured on the scope's own display mosaics |
 
 STATUS.md has the search command that finds the remaining Swiss references.
 
@@ -485,7 +485,7 @@ rather than struck through; git keeps them.
 | R-10 | The root catalog carries a `rel: "icon"` link to `_assets/glace-wordmark.svg` | 2 |
 | R-11 | No `.portolan/metadata.yaml`, since `portolan add` is not used here. Title, license and contact live in `metadata/catalog.yaml`, the only copy (R-18) | 4 |
 | R-12 | **Warp once per layer, tile locally.** The RGBA intermediate is a local GeoTIFF without overviews; the tiler is in-tree (`glace_catalog.tiler`, from rio-pmtiles, MIT) and shares one worker pool across the year's layers | 3 |
-| R-12 | The item mirror satisfies `PTL-DAT-006/007/008/016` as rashid implements them: Hilbert-ordered rows, a float64 `bbox` covering column, 2 048-row groups | 2 |
+| R-19 | The item mirror satisfies `PTL-DAT-006/007/008/016` as rashid implements them: Hilbert-ordered rows, a float64 `bbox` covering column, 2 048-row groups | 2 |
 | R-13 | `RasterInfo.statistics` is a typed `BandStatistics` record; a missing field is a `ValueError` at manifest read, not a `KeyError` at publication | 5 |
 | R-14 | The docs are split: `DESIGN.md` for decisions, `STATUS.md` for state and open work, `UPSTREAM.md` for the on-disk contracts with other repositories | — |
 | R-15 | `uv.lock` is tracked, so a fresh clone resolves to the dependency set CI ran | 6 |

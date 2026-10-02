@@ -274,51 +274,6 @@ def build_year_vrts(
     )
 
 
-def build_cog_chain(
-    cogs: Mapping[str, Path | UPath],
-    vrt_dir: Path,
-    *,
-    decibel: bool = True,
-) -> YearVrts:
-    """Build a chain over written mosaic COGs, in place of the tiles.
-
-    The mosaic COGs take the place of step (3): they are already on the target
-    grid and carry overviews. A reader opens one file per band, and low zoom
-    levels read an overview.
-
-    Parameters
-    ----------
-    cogs
-        Written mosaic COG per asset key.
-    vrt_dir
-        Local directory the derived VRTs are written into.
-    decibel
-        Also derive the decibel readings.
-
-    Returns
-    -------
-    YearVrts
-        The same shape as :func:`build_year_vrts`, over the mosaics.
-    """
-    vrt_dir.mkdir(parents=True, exist_ok=True)
-    # Keep the paths as given: a remote mosaic needs its UPath protocol to be
-    # opened.
-    linear: dict[str, Path | UPath] = dict(cogs)
-
-    decibels: dict[str, Path] = {}
-    if decibel:
-        for asset_key in sorted(set(DECIBEL_BANDS) & set(cogs)):
-            db_vrt = vrt_dir / f"{asset_key}_cog_db.vrt"
-            create_decibel_vrt(cogs[asset_key], db_vrt)
-            decibels[asset_key] = db_vrt
-
-    return YearVrts(
-        linear=linear,
-        decibel=decibels,
-        sources_at=next(iter(cogs.values())) if cogs else None,
-    )
-
-
 @contextmanager
 def chain_env(vrts: YearVrts) -> Generator[None]:
     """Enter the environment the chain's sources need, if they are remote.
@@ -604,7 +559,6 @@ __all__ = [
     "MosaicWrite",
     "YearVrts",
     "band_statistics",
-    "build_cog_chain",
     "build_mosaic_cog",
     "build_mosaic_cogs",
     "build_year_vrts",

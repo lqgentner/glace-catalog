@@ -51,17 +51,17 @@ decibel conversions for displaying the COGs.
 | Asset key | Title | Transport range | Default range | Default ramp |
 | --- | --- | --- | --- | --- |
 | `coh12_vv` | Coherence VV | 0 to 1 | 0.1 to 0.75 | `cmc.lipari` |
-| `coh12_vv_qa_num` | Coherence VV – Contributing Observations | 0 to 253 | 0 to 90 | `cmc.glasgow` |
-| `coh12_vv_qa_cqm` | Coherence VV – Composite Quality Map | -13 to 19 dB | -3 to 10 dB | `cmc.glasgow` |
+| `coh12_vv_qa_num` | Coherence VV – Contributing Observations | 0 to 253 | 8 to 40 | `cmc.glasgow` |
+| `coh12_vv_qa_cqm` | Coherence VV – Composite Quality Map | -13 to 19 dB | -2.5 to 8 dB | `cmc.glasgow` |
 | `coh12_vh` | Coherence VH | 0 to 1 | 0.1 to 0.55 | `cmc.lipari` |
-| `coh12_vh_qa_num` | Coherence VH – Contributing Observations | 0 to 253 | 0 to 90 | `cmc.glasgow` |
-| `coh12_vh_qa_cqm` | Coherence VH – Composite Quality Map | -13 to 19 dB | -3 to 10 dB | `cmc.glasgow` |
-| `rtc_vv` | Backscatter VV | -25 to 5 dB | -16.5 to -4 dB | `cmc.grayC` |
-| `rtc_vv_qa_num` | Backscatter VV – Contributing Observations | 0 to 253 | 0 to 90 | `cmc.glasgow` |
-| `rtc_vv_qa_cqm` | Backscatter VV – Composite Quality Map | -13 to 12 dB | -4 to 8 dB | `cmc.glasgow` |
-| `rtc_vh` | Backscatter VH | -31 to -1 dB | -23.5 to -11 dB | `cmc.grayC` |
-| `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | 0 to 253 | 0 to 90 | `cmc.glasgow` |
-| `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | -13 to 12 dB | -4 to 8 dB | `cmc.glasgow` |
+| `coh12_vh_qa_num` | Coherence VH – Contributing Observations | 0 to 253 | 8 to 40 | `cmc.glasgow` |
+| `coh12_vh_qa_cqm` | Coherence VH – Composite Quality Map | -13 to 19 dB | -2.5 to 8 dB | `cmc.glasgow` |
+| `rtc_vv` | Backscatter VV | -25 to 5 dB | -14.5 to -4.5 dB | `cmc.grayC` |
+| `rtc_vv_qa_num` | Backscatter VV – Contributing Observations | 0 to 253 | 8 to 40 | `cmc.glasgow` |
+| `rtc_vv_qa_cqm` | Backscatter VV – Composite Quality Map | -13 to 12 dB | -2.5 to 7.5 dB | `cmc.glasgow` |
+| `rtc_vh` | Backscatter VH | -31 to -1 dB | -21 to -11 dB | `cmc.grayC` |
+| `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | 0 to 253 | 8 to 40 | `cmc.glasgow` |
+| `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | -13 to 12 dB | -2.5 to 7.5 dB | `cmc.glasgow` |
 
 ## Compare with tiles
 

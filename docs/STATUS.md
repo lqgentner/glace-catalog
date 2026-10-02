@@ -42,12 +42,6 @@ Ordered by what blocks what. Everything not listed here is done.
   `tests/test_manifest_contract.py`, but only ever read on Swiss years.
   *Verified when* `publish-year.py --steps copy` on an Alpine year reports zero
   mismatches.
-- **P-8 — Re-measure the display ranges for the Alps.** The default stretches
-  in `metadata/assets.yaml` were measured on the Swiss 2021–2024 display
-  mosaics. `glace-alps` covers 2015–2025, including more years in which both
-  Sentinel-1A and 1B flew. *Verified when* the ranges in
-  `metadata/assets.yaml` are re-derived from published Alpine mosaics and
-  `catalog/` re-rendered.
 - **P-9 — First release: the DOI fields.** Enable the Zenodo integration for
   this repository on zenodo.org, cut the release (DESIGN.md §7), then add
   `sci:doi` (the concept DOI) and `sci:citation` to `catalog/catalog.json`,
@@ -96,5 +90,5 @@ grep -rn 'Switzerland\|Swiss\|glace-ch' --include='*.json' --include='*.md' \
 The substantive files are `metadata/catalog.yaml` (`scope`, `region`, `years`,
 `title`, the preliminary notice) and `catalog.publish.yaml`; then
 `uv run scripts/render-catalog.py` rewrites `catalog/`. The rest are
-constants, comments, Swiss measurements in `docs/` and the Swiss-measured
-stretches in `metadata/assets.yaml` (P-8).
+constants, comments and Swiss measurements in `docs/`. The default stretches
+and transport ranges in `metadata/assets.yaml` are measured per scope.

@@ -27,17 +27,17 @@ followed by `_qa_num` or `_qa_cqm`.
 | Asset key | Title | Data type | Nodata | Display |
 | --- | --- | --- | --- | --- |
 | `coh12_vv` | Coherence VV | float32 | NaN | 0.1 to 0.75, `cmc.lipari` |
-| `coh12_vv_qa_num` | Coherence VV – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
-| `coh12_vv_qa_cqm` | Coherence VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -3 to 10 dB, `cmc.glasgow` |
+| `coh12_vv_qa_num` | Coherence VV – Contributing Observations | uint16 | 0 | 8 to 40, `cmc.glasgow` |
+| `coh12_vv_qa_cqm` | Coherence VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -2.5 to 8 dB, `cmc.glasgow` |
 | `coh12_vh` | Coherence VH | float32 | NaN | 0.1 to 0.55, `cmc.lipari` |
-| `coh12_vh_qa_num` | Coherence VH – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
-| `coh12_vh_qa_cqm` | Coherence VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -3 to 10 dB, `cmc.glasgow` |
-| `rtc_vv` | Backscatter VV | float32 | NaN | `10*log10(x)`, then -16.5 to -4 dB, `cmc.grayC` |
-| `rtc_vv_qa_num` | Backscatter VV – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
-| `rtc_vv_qa_cqm` | Backscatter VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -4 to 8 dB, `cmc.glasgow` |
-| `rtc_vh` | Backscatter VH | float32 | NaN | `10*log10(x)`, then -23.5 to -11 dB, `cmc.grayC` |
-| `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | uint16 | 0 | 0 to 90, `cmc.glasgow` |
-| `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -4 to 8 dB, `cmc.glasgow` |
+| `coh12_vh_qa_num` | Coherence VH – Contributing Observations | uint16 | 0 | 8 to 40, `cmc.glasgow` |
+| `coh12_vh_qa_cqm` | Coherence VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -2.5 to 8 dB, `cmc.glasgow` |
+| `rtc_vv` | Backscatter VV | float32 | NaN | `10*log10(x)`, then -14.5 to -4.5 dB, `cmc.grayC` |
+| `rtc_vv_qa_num` | Backscatter VV – Contributing Observations | uint16 | 0 | 8 to 40, `cmc.glasgow` |
+| `rtc_vv_qa_cqm` | Backscatter VV – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -2.5 to 7.5 dB, `cmc.glasgow` |
+| `rtc_vh` | Backscatter VH | float32 | NaN | `10*log10(x)`, then -21 to -11 dB, `cmc.grayC` |
+| `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | uint16 | 0 | 8 to 40, `cmc.glasgow` |
+| `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | float32 | NaN | `10*log10(x)`, then -2.5 to 7.5 dB, `cmc.glasgow` |
 
 Average backscatter and composite quality maps in linear units. Apply decibel
 conversion only for display. The collection's `renders` block defines the

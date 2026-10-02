@@ -89,8 +89,8 @@
       ],
       "rescale": [
         [
-          0.0,
-          90.0
+          8.0,
+          40.0
         ]
       ],
       "colormap_name": "viridis",
@@ -105,8 +105,8 @@
       "expression": "10*log10(coh12_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -3.0,
-          10.0
+          -2.5,
+          8.0
         ]
       ],
       "colormap_name": "viridis",
@@ -135,8 +135,8 @@
       ],
       "rescale": [
         [
-          0.0,
-          90.0
+          8.0,
+          40.0
         ]
       ],
       "colormap_name": "viridis",
@@ -151,8 +151,8 @@
       "expression": "10*log10(coh12_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -3.0,
-          10.0
+          -2.5,
+          8.0
         ]
       ],
       "colormap_name": "viridis",
@@ -167,8 +167,8 @@
       "expression": "10*log10(rtc_vv_b1)",
       "rescale": [
         [
-          -16.5,
-          -4.0
+          -14.5,
+          -4.5
         ]
       ],
       "colormap_name": "gray",
@@ -182,8 +182,8 @@
       ],
       "rescale": [
         [
-          0.0,
-          90.0
+          8.0,
+          40.0
         ]
       ],
       "colormap_name": "viridis",
@@ -198,8 +198,8 @@
       "expression": "10*log10(rtc_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -4.0,
-          8.0
+          -2.5,
+          7.5
         ]
       ],
       "colormap_name": "viridis",
@@ -214,7 +214,7 @@
       "expression": "10*log10(rtc_vh_b1)",
       "rescale": [
         [
-          -23.5,
+          -21.0,
           -11.0
         ]
       ],
@@ -229,8 +229,8 @@
       ],
       "rescale": [
         [
-          0.0,
-          90.0
+          8.0,
+          40.0
         ]
       ],
       "colormap_name": "viridis",
@@ -245,8 +245,8 @@
       "expression": "10*log10(rtc_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -4.0,
-          8.0
+          -2.5,
+          7.5
         ]
       ],
       "colormap_name": "viridis",

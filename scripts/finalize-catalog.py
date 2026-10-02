@@ -479,7 +479,10 @@ def validate(layout: stac.StoreLayout) -> None:
 
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the catalog finalizer."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     parser.add_argument(
         "--base-url",
