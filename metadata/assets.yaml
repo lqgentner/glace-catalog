@@ -60,7 +60,7 @@ qa:
     # The same ranges for coherence and backscatter.
     cmap: cmc.glasgow
     portable_cmap: viridis
-    stretch: [8.0, 40.0]
+    stretch: [0.0, 40.0]
     transport: [0.0, 253.0]
     decibel: false
     # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen
