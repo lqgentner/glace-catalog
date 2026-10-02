@@ -1,26 +1,17 @@
-"""Canonical grids and identifiers of the published GLACE stores.
+"""Grids and identifiers of the published GLACE stores.
 
-A store is built over one *scope* — Switzerland as a rehearsal, then the Alps —
-and everything that distinguishes the two lives here: the collection ids, the
-composite perimeter, and above all the two target grids it is
-published on: an equal-area one for the annual analysis mosaics, and the
-WebMercatorQuad one the web-map archives are tiled on.
+A store is built over one *scope*: Switzerland (a rehearsal) or the Alps. This
+module defines each scope's collection ids, its tile perimeter and its two
+target grids: an equal-area grid for the annual analysis mosaics and a
+WebMercatorQuad grid for the web-map archives.
 
-The extents are **hard-coded constants, not derived at build time**. An extent
-recomputed from whatever tiles happen to exist is not canonical: it would move
-whenever an acquisition gap moves, and two years of the same dataset would then
-sit on two grids. Pinning them means every year has identical ``proj:shape`` and
-``proj:transform``, so stacking and differencing are a read with no alignment
-step.
+The grid extents are fixed constants, the same for every year. All years
+therefore share ``proj:shape`` and ``proj:transform`` and can be stacked or
+differenced directly.
 
-The LAEA extents are derived from the committed WebMercator ones — reprojected
-with densified edges, then snapped outward to :data:`ANALYSIS_ALIGNMENT` — so
-they are a superset of the same perimeter rather than a fresh derivation. A
-from-perimeter run would be marginally tighter.
-
-Changing any of them must be a visible commit;
-``deep-glacier-mapping/cache/stac-store-refactor/derive-extents.py`` is what
-recomputes the WebMercator pair from the perimeter itself.
+The WebMercator extents cover the scope's perimeter. The LAEA extents are the
+WebMercator extents reprojected with densified edges and snapped outward to
+:data:`ANALYSIS_ALIGNMENT`, so both grids cover the same area.
 """
 
 from __future__ import annotations
@@ -39,12 +30,9 @@ WEB_MERCATOR = "EPSG:3857"
 LAEA = "EPSG:3035"
 """ETRS89-LAEA, the standard European equal-area grid.
 
-The annual mosaics are written on it because WebMercator is **not** equal-area:
-a nominal 19.109 m pixel there is 13.2 m on the ground at 46.5 degrees north,
-and the factor varies with latitude across the perimeter. Any area or
-area-change statistic taken on such a grid needs a correction the catalog does
-not declare, which for a glacier dataset is a correctness problem rather than a
-preference. See M-24.
+The annual analysis mosaics use it so that pixel counts measure area directly.
+On WebMercator, a nominal 19.109 m pixel is 13.2 m on the ground at 46.5
+degrees north, and the factor varies with latitude across the perimeter.
 """
 
 COMPOSITE_RESOLUTION = 10.0
@@ -54,10 +42,10 @@ ANALYSIS_RESOLUTION = 40.0
 """Pixel size of the annual analysis mosaics, in metres."""
 
 ANALYSIS_ALIGNMENT = 1000.0
-"""Extents are snapped outward to this, which the 40 m pixel divides.
+"""Analysis extents are snapped outward to multiples of this, in metres.
 
-A round kilometre origin is the European reference-grid convention and makes a
-mosaic's shape a round number of pixels.
+Whole-kilometre edges follow the European reference-grid convention, and the
+40 m pixel divides them evenly.
 """
 
 MERCATOR_ORIGIN = -20037508.342789244
@@ -70,11 +58,10 @@ TILE_PX = 256
 """Side of one WebMercatorQuad tile, in pixels."""
 
 MOSAIC_ZOOM = 13
-"""Zoom level the annual mosaics are written on.
+"""Zoom level of the WebMercatorQuad display grid, and the web maps' top zoom.
 
-Aligning the mosaic to the pyramid is what removes the second resampling: at max
-zoom a tiler's warp is the identity, and the COG's own internal overview levels
-land exactly on z12, z11, …, so the file *is* a tile pyramid.
+The display grid has this zoom's pixel size and is aligned to its tiles, so
+tiles at this zoom are cut from it without resampling.
 """
 
 
@@ -127,19 +114,17 @@ class Grid:
     def step(self) -> float:
         """Granularity an extent is snapped to, in CRS units.
 
-        A whole tile on the WebMercatorQuad display grid, so a mosaic begins and
-        ends on a tile boundary and a tiler never pads a partial edge tile; one
-        pixel on any other grid, where tiles mean nothing and the only thing that
-        must hold is that a warped zone lands on the target's own pixel centres.
+        One whole tile on the WebMercatorQuad grid, so a mosaic begins and ends
+        on tile boundaries. One pixel on any other grid, so a warped zone lands
+        on the target's pixel centres.
         """
         return self.resolution * TILE_PX if self.crs == WEB_MERCATOR else self.resolution
 
     def snap(self, bounds: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
         """Grow ``bounds`` outward until they land on this grid.
 
-        Aligned to the grid's **own origin** rather than to zero: a warped zone
-        that does not share the target's pixel centres would be resampled a
-        second time when the zones are mosaicked together.
+        Steps are counted from the grid's own origin. A warped zone then shares
+        the target's pixel centres, so mosaicking the zones resamples nothing.
         """
         step = self.step
         left, bottom, right, top = bounds
@@ -175,20 +160,19 @@ class Scope:
     title
         Human-readable region name, used in collection titles.
     analysis_grid
-        Equal-area grid the annual mosaics are written on (M-24).
+        Equal-area grid the annual mosaics are written on.
     display_grid
         WebMercatorQuad grid at :data:`MOSAIC_ZOOM` that the web-map archives
-        are tiled on. Both are resampled straight from the UTM composites;
-        neither is derived from the other, so LAEA never enters the display
-        path and the tiler never pays a second resampling.
+        are tiled on. Both grids are resampled directly from the UTM
+        composites, so each output is resampled only once.
     perimeter_tiles
-        Number of MGRS tiles the scope's perimeter claims. The extent is derived
-        from these rather than from the tiles that exist, so this is what a
-        completeness check compares against.
+        Number of MGRS tiles in the scope's perimeter. Completeness checks
+        compare the tiles present against this number.
     coverage
         Fraction of the grid those tiles occupy. The extent is a bounding box
-        around a ragged perimeter, so most of it is empty; since nodata
-        compresses to almost nothing under LERC, this is what prices a mosaic.
+        around an irregular perimeter, and the rest of it is nodata, which
+        compresses to almost nothing, so a mosaic's file size scales with
+        this fraction.
     utm_zones
         UTM zones the perimeter's MGRS tiles fall in, northern hemisphere, as
         the prose names them: ``("32N",)`` for Switzerland.
@@ -206,9 +190,8 @@ class Scope:
     def catalog_title(self) -> str:
         """Title of the root catalog, as ``root`` links to it must repeat.
 
-        Portolan requires a title on every ``child`` and ``item`` link, and a
-        client renders link titles without fetching what they point at, so the
-        title travels with the link rather than being looked up.
+        Portolan requires a title on every ``child`` and ``item`` link. Clients
+        show link titles without fetching the target, so the link carries it.
         """
         return f"GLACE {self.title}"
 
@@ -247,10 +230,8 @@ SCOPES: Mapping[str, Scope] = {
             ),
         ),
         # The Swiss run composites glacier tiles only (`glacier_buffer_m: 250`
-        # in config/lrw-ch.yml), so the perimeter is the buffered SGI2023, not
-        # the national boundary — which would quadruple the extent with nodata.
-        # Confirmed by the data: the completed 2022-2024 runs hold exactly these
-        # 143 tiles, every one carrying data and none falling outside.
+        # in config/lrw-ch.yml), so the perimeter is the SGI2023 glacier
+        # inventory buffered by 250 m.
         perimeter_tiles=143,
         coverage=0.307,
         utm_zones=("32N",),
@@ -273,10 +254,7 @@ SCOPES: Mapping[str, Scope] = {
                 6173665.900537115,
             ),
         ),
-        # The Alpine Convention perimeter, 2025 edition, via MGRSGrid. The 2018
-        # edition gave 2 209 tiles; the 2025 one adds 31TFL60, 32TKP81 and
-        # 32TPR24 and drops 33TWM56 and 33TXP00. Every tile of either edition
-        # lies inside both extents above, so the grids did not move.
+        # The Alpine Convention perimeter, 2025 edition, as MGRS tiles.
         perimeter_tiles=2210,
         coverage=0.454,
         # The perimeter spans about 5°E to 17°E.
@@ -307,8 +285,8 @@ def snap_to_tiles(
 ) -> tuple[float, float, float, float]:
     """Grow ``bounds`` outward to whole 256 px tiles of the WebMercatorQuad grid.
 
-    Snapping to a tile rather than to a pixel means the mosaic begins and ends on
-    a tile boundary, so a tiler never has to pad a partial edge tile.
+    The mosaic then begins and ends on a tile boundary, so every edge tile is
+    complete.
     """
     step = zoom_resolution(zoom) * TILE_PX
     left, bottom, right, top = bounds

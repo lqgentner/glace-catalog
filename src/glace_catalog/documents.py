@@ -1,18 +1,17 @@
 """Render the tracked catalog documents from ``metadata/``.
 
-``catalog/`` is generated output that is committed: the root catalog, both
-collections, the MapLibre style template and every README and AGENTS.md down
-to the collection level are written here from the vocabulary and the templates
-under ``metadata/``, so that a title, a stretch or a sentence exists once and
-every document that repeats it repeats the same thing. The tree stays in git
-because a rendered diff is what a reviewer reads, because the Portolan browser
-and rashid read a tree rather than a config, and because a release archived on
-Zenodo then carries the STAC metadata itself. ``tests/test_render.py`` holds
-the tracked tree to a fresh render.
+``catalog/`` is generated output that is committed. The root catalog, both
+collections, the MapLibre style template, and the README and AGENTS.md files
+down to collection level are rendered from the vocabulary and templates under
+``metadata/``, so each title, stretch or sentence is defined once. The tree is
+committed so that reviewers see rendered diffs, the Portolan browser and
+rashid can read it, and a release archived on Zenodo includes the STAC
+metadata. ``tests/test_render.py`` checks that the tracked tree matches a fresh
+render.
 
-Rendering is a commit-time step and nothing else: ``finalize-catalog`` still
-patches the rendered documents with what only a build knows (the years, the
-temporal extent, the digests, the ``self`` link) and never touches prose.
+Rendering happens at commit time. ``finalize-catalog`` later adds what only a
+build knows (the years, the temporal extent, the digests, the ``self`` link)
+and keeps the prose.
 """
 
 from __future__ import annotations
@@ -61,7 +60,7 @@ ALTERNATE_ASSETS_EXTENSION_URI = (
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 
 PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
-"""The Portolan browser opens any public catalog by its https URL without the scheme."""
+"""Portolan browser base URL; append a public catalog's https URL without the scheme."""
 
 STYLE_MEDIA_TYPE = "application/vnd.mapbox.style+json"
 STYLE_TEMPLATE_NAME = "default"
@@ -111,8 +110,8 @@ def load_public_bases(path: Path = PUBLISH_CONFIG) -> PublicBases:
     Raises
     ------
     ValueError
-        If either is missing. An asset href has to be absolute, and a relative
-        one written here would only be found once a client failed to fetch it.
+        If either is missing, because collection asset hrefs must be
+        absolute.
     """
     config = yaml.safe_load(path.read_text()) or {}
     missing = [key for key in ("public_base", "public_s3_base") if not config.get(key)]
@@ -128,9 +127,9 @@ def load_public_bases(path: Path = PUBLISH_CONFIG) -> PublicBases:
 def wgs84_bbox(grid: Grid, decimals: int = 4) -> list[float]:
     """Return the WGS84 bounding box of a grid, with densified edges.
 
-    Four decimals is about ten metres, which is enough for an extent and coarse
-    enough that a PROJ upgrade moving the last digit does not fail the
-    regeneration gate for no metadata reason.
+    Four decimals is about ten metres: precise enough for an extent, and
+    coarse enough that a PROJ upgrade changing the last digit leaves the
+    render test passing.
     """
     transformer = Transformer.from_crs(grid.crs, "EPSG:4326", always_xy=True)
     left, bottom, right, top = transformer.transform_bounds(*grid.bounds, densify_pts=21)
@@ -151,9 +150,8 @@ def _json(document: Document) -> str:
 def catalog_document(vocabulary: Vocabulary) -> Document:
     """Build the root ``catalog.json``.
 
-    The ``self`` link is not here: ``finalize-catalog`` writes it from the
-    deployment target, so the tracked tree stays valid in a checkout, in a
-    preview and in production.
+    ``finalize-catalog`` adds the ``self`` link from the deployment target, so
+    the tracked tree is valid in a checkout, in a preview and in production.
     """
     catalog = vocabulary.catalog
     links = [
@@ -238,9 +236,9 @@ def collection_document(
     collection: str,
     bases: PublicBases,
 ) -> Document:
-    """One ``collection.json``, every field.
+    """Build one ``collection.json``.
 
-    What depends on a build is left for ``finalize-catalog``: the year links,
+    ``finalize-catalog`` later adds what depends on a build: the year links,
     the measured temporal extent and the digests.
     """
     catalog = vocabulary.catalog
@@ -308,14 +306,14 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
 
     Each archive is a ``raster-dem`` source whose custom encoding decodes its
     codes back to values, drawn by a ``color-relief`` layer over the layer's
-    default ramp and stretch (:mod:`glace_catalog.encoding`). Nothing in the
-    archive depends on that ramp, so a client may replace it.
+    default ramp and stretch (:mod:`glace_catalog.encoding`). The ramp lives
+    only in the style, so a client may replace it.
 
-    ``finalize-catalog`` re-years the copy it publishes per year, so the
-    template names the last year the tracked tree claims and every year-bearing
-    string takes the shape its regular expressions expect: ``/{year}/`` in each
-    source url, ``({year})`` in the name, ``-{year}`` at the end of each layer
-    id, and the year at the end of the credit line.
+    ``finalize-catalog`` publishes one copy per year, replacing the year with
+    regular expressions. The template uses the last year of the tracked tree,
+    in the forms those expressions expect: ``/{year}/`` in each source url,
+    ``({year})`` in the name, ``-{year}`` at the end of each layer id, and the
+    year at the end of the credit line.
     """
     sources: Document = {}
     layers: list[Document] = []
@@ -339,8 +337,8 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
             layer["layout"] = {"visibility": "none"}
         layer["paint"] = {
             "color-relief-opacity": 1,
-            # Interpolating codes across a nodata edge would draw values that
-            # are not there.
+            # Nearest-neighbour keeps every drawn value a real code, also at
+            # nodata edges.
             "resampling": "nearest",
             "color-relief-color": style.encoding.ramp(
                 ramp_colors(style.cmap),
@@ -433,12 +431,11 @@ def render_year_prose(
     year: int,
     bases: PublicBases | None = None,
 ) -> tuple[str, str]:
-    """Render the ``README.md`` and ``AGENTS.md`` a tiles year sub-catalog owes.
+    """Render the ``README.md`` and ``AGENTS.md`` of one tiles year sub-catalog.
 
-    Portolan requires both in every catalog directory (``PTL-FIL-001``) and
-    requires them linked. They are rendered at publication rather than tracked
-    because there is one pair per year and the year is all that distinguishes
-    them.
+    Portolan requires both, linked, in every catalog directory
+    (``PTL-FIL-001``). They are rendered at publication time, one pair per
+    year, from templates that differ only in the year.
     """
     bases = bases or load_public_bases()
     return (
@@ -467,10 +464,9 @@ def tracked_documents(root: Path) -> set[Path]:
 def stale_documents(vocabulary: Vocabulary, tracked: Path) -> list[str]:
     """Compare ``tracked`` with a fresh render; return one line per difference.
 
-    Empty when the tree is current. A file the render does not write, one it
-    writes that is not tracked, and one whose bytes differ are each named, so
-    the regeneration gate and ``render-catalog.py --check`` report the same
-    thing.
+    The list is empty when the tree is current. It names every file that is
+    tracked but not rendered, rendered but not tracked, or different. The
+    render test and ``render-catalog.py --check`` both report this list.
     """
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
@@ -497,8 +493,8 @@ def render_tree(
 ) -> list[Path]:
     """Write every tracked document under ``out``; return what was written.
 
-    Files not written here (``_assets/``, dotfiles) are left alone, so the
-    default target is the tracked ``catalog/`` itself.
+    Other files (``_assets/``, dotfiles) are kept as they are, so the default
+    target is the tracked ``catalog/`` itself.
     """
     vocabulary = vocabulary or load_vocabulary()
     bases = bases or load_public_bases()

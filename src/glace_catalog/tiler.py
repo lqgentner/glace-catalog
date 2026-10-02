@@ -1,4 +1,4 @@
-"""Raster PMTiles tiling, in this process.
+"""Tile a raster into a PMTiles archive.
 
 Adapted from **rio-pmtiles 1.2.1** (``rio_pmtiles/worker.py`` and
 ``rio_pmtiles/scripts/cli.py``), Copyright (c) 2025 Protomaps LLC and 2014-2021
@@ -6,27 +6,17 @@ Mapbox, released under the MIT License; the full notice is in
 ``THIRD_PARTY_NOTICES.md`` at the repository root. rio-pmtiles is itself derived
 from Sean Gillies's rio-mbtiles.
 
-Why it lives here rather than behind the ``rio pmtiles`` command it came from:
+The tiles of every layer in a year are rendered in one shared
+:class:`~concurrent.futures.ProcessPoolExecutor`, and archives are written by
+:class:`pmtiles.writer.Writer` from the PMTiles package. This module warps
+single tiles and lists which tiles to warp. :func:`render_tile` chooses the
+overview level separately for each tile.
 
-- One :class:`~concurrent.futures.ProcessPoolExecutor` serves every layer of a
-  year, instead of one subprocess per archive with its own worker pool, its own
-  environment and a ``rio`` executable to find.
-- The archive is written by :class:`pmtiles.writer.Writer`, the maintained
-  writer of the PMTiles package, so the only code owned here is the warp of one
-  tile and the enumeration of which tiles to warp.
-
-What first prompted the move is no longer a reason: the per-tile worker in
-rio-pmtiles 1.2.1 kept the ``OVERVIEW_LEVEL`` it chose in a module-level
-dictionary and never cleared it, so every finer tile the same worker rendered
-afterwards was read from that overview and upsampled. Upstream fixed that in
-1.2.2 (protomaps/PMTiles#670); :func:`render_tile` chooses the level per call,
-as the fixed version does.
-
-The reprojection call and the image creation options are rio-pmtiles'. Three
-rules differ, all on purpose and documented where they apply: the tile image
-declares no nodata, a tile is empty when its own footprint is, and alpha is
-binary with the colour bands zeroed beneath it, because the bands carry value
-codes (:mod:`glace_catalog.encoding`) rather than colours.
+The reprojection call and image creation options follow rio-pmtiles, with
+three differences, each explained where it applies: tile images declare no
+nodata value, a tile is empty when its own footprint holds no data, and alpha
+is binary with the bands zeroed beneath it. These rules keep the value codes
+in the bands (:mod:`glace_catalog.encoding`) intact.
 """
 
 from __future__ import annotations
@@ -68,23 +58,22 @@ TILE_TYPES: dict[str, TileType] = {
     "WEBP": TileType.WEBP,
     "PNG": TileType.PNG,
 }
-"""PMTiles tile type per GDAL raster driver the tiles are encoded with.
+"""PMTiles tile type for each supported GDAL image driver.
 
-Every tile carries alpha, which is why JPEG is not offered: GDAL writes a
-four-band JPEG as CMYK, not RGBA.
+Both formats store the alpha band that every tile carries.
 """
 
 LOSSY_FORMATS = frozenset({"WEBP"})
-"""The formats that take a ``QUALITY``; PNG rejects the option."""
+"""The formats that accept a ``QUALITY`` option."""
 
 EDGE_EPS = 1e-6
 """Tolerance for an edge to count as lying on a boundary, in tiles or in pixels."""
 
 OVERSAMPLING_FACTOR = 4
-"""Source pixels per output pixel a tile is warped from, at least.
+"""Minimum number of source pixels per tile pixel, along each axis.
 
-An overview is only chosen when it still leaves this many pixels per tile
-pixel for the resampling kernel to work on; from rio-pmtiles.
+A tile is read from an overview only if the overview still provides this many
+source pixels per tile pixel (the rule rio-pmtiles uses).
 """
 
 
@@ -131,17 +120,17 @@ def tiles_covering(
 ) -> list[int]:
     """Tile ids of every tile touching ``bounds`` (WebMercator metres) at each zoom.
 
-    Ascending, which is the order a clustered archive wants them written in:
-    by zoom, and along the Hilbert curve within one.
+    The ids are sorted ascending: by zoom, then along the Hilbert curve. This
+    is the order a clustered archive is written in.
     """
     left, bottom, right, top = bounds
     ids: list[int] = []
     for zoom in zooms:
         span = MERCATOR_SPAN_M / 2**zoom
         last = 2**zoom - 1
-        # An edge within a millionth of a tile of a boundary is on it: the
-        # scope extents sit exactly on z13 tile edges, and at a coarser zoom
-        # the division lands a rounding error either side of the integer.
+        # Treat an edge within a millionth of a tile of a boundary as on it.
+        # The scope extents lie on z13 tile edges, and the division at coarser
+        # zooms is off by a rounding error.
         x0 = min(max(math.floor((left - MERCATOR_ORIGIN) / span + EDGE_EPS), 0), last)
         x1 = min(max(math.ceil((right - MERCATOR_ORIGIN) / span - EDGE_EPS) - 1, x0), last)
         y0 = min(max(math.floor((-MERCATOR_ORIGIN - top) / span + EDGE_EPS), 0), last)
@@ -153,8 +142,7 @@ def tiles_covering(
 _datasets: dict[tuple[str, int | None], rasterio.DatasetReader] = {}
 """Open sources of this worker process, keyed by path and overview level.
 
-Kept open across tiles: every tile would otherwise reopen the file and re-read
-its header, twice, as the upstream worker does.
+They stay open across tiles, so each worker reads a file's header once.
 """
 
 
@@ -170,8 +158,8 @@ def _open(path: str, overview_level: int | None) -> rasterio.DatasetReader:
 def _overview_level(overviews: list[int], zoom: int, max_zoom: int) -> int | None:
     """Overview to read a tile at ``zoom`` from, or ``None`` for full resolution.
 
-    The coarsest overview that still oversamples the tile by
-    :data:`OVERSAMPLING_FACTOR`; rio-pmtiles's rule, chosen here per tile.
+    Picks the coarsest overview that still oversamples the tile by
+    :data:`OVERSAMPLING_FACTOR`.
     """
     if not overviews or zoom >= max_zoom:
         return None
@@ -187,15 +175,13 @@ def _footprint_is_empty(
 ) -> bool:
     """Whether no source pixel under a tile's footprint carries any alpha.
 
-    The footprint is rounded outward to whole source pixels. rio-pmtiles tests
-    a window with a one-pixel margin instead, which keeps a ring of fully
-    transparent tiles around the data; on the aligned display grid the
-    footprint itself is exact.
+    The footprint is rounded outward to whole source pixels. On the aligned
+    display grid it is exact, so tiles just outside the data count as empty.
     """
     west, south, east, north = transform_bounds(WEB_MERCATOR, src.crs, *bounds)
     window = window_from_bounds(west, south, east, north, transform=src.transform)
-    # Outward, but not across a pixel edge the footprint merely sits on to
-    # within rounding: that would read one column of the neighbouring tile.
+    # Round outward, but treat an edge within rounding error of a pixel edge
+    # as on it, so the window stays inside the tile's own pixels.
     col0, row0 = math.floor(window.col_off + EDGE_EPS), math.floor(window.row_off + EDGE_EPS)
     col1 = math.ceil(window.col_off + window.width - EDGE_EPS)
     row1 = math.ceil(window.row_off + window.height - EDGE_EPS)
@@ -203,25 +189,23 @@ def _footprint_is_empty(
     full = Window(0, 0, src.width, src.height)
     if not intersect(footprint, full):
         return True
-    # Band 4 read as data rather than `read_masks`, which only consults it when
-    # the file declares it as alpha; the warp reads it as alpha unconditionally,
-    # and the two must agree on what is empty.
+    # Read band 4 directly, as the warp does: it always treats band 4 as
+    # alpha, whereas `read_masks` uses it only when the file declares it so.
     return not src.read(4, window=footprint.intersection(full)).any()
 
 
 def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes | None]:
     """Warp one tile out of ``path`` and encode it; ``None`` if the tile is empty.
 
-    Runs in a worker process. The source under the tile's footprint is read
-    first to decide whether it holds any valid pixel, then reprojected onto
-    the tile's own 3857 grid with ``spec.resampling``.
+    Runs in a worker process. The source under the tile's footprint is first
+    checked for valid pixels, then reprojected onto the tile's EPSG:3857 grid
+    with ``spec.resampling``.
 
-    The bands are value codes, code 0 nodata. Code 0 is written wherever the
-    warped alpha is 0, and alpha is binary: a browser premultiplies alpha on
-    decode, which would corrupt the codes under a partial one. The alpha band
-    stays, because WebP stores it losslessly, and keeps the encoder's ringing
-    at a data edge out of the nodata pixels, which a browser decodes as black,
-    that is, code 0.
+    The bands hold value codes, with code 0 for nodata. Wherever the warped
+    alpha is 0 the bands are set to 0, and alpha is set to either 0 or 255,
+    because browsers premultiply alpha when decoding and would corrupt codes
+    under partial alpha. WebP stores the alpha band losslessly, so nodata
+    pixels stay nodata despite compression artefacts at a data edge.
     """
     zoom, x, y = tileid_to_zxy(tile_id)
     level = _overview_level(_open(path, None).overviews(1), zoom, spec.max_zoom)
@@ -231,9 +215,8 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
     if spec.exclude_empty and _footprint_is_empty(src, (left, bottom, right, top)):
         return tile_id, None
 
-    # No destination nodata: the alpha band says where the data is. rio-pmtiles
-    # sets 255, which makes the warper move pure white to 254 to keep it apart
-    # from the sentinel — a change the source never asked for.
+    # The alpha band marks the data, so the tile declares no nodata value and
+    # the warper keeps every code as it is.
     profile: dict[str, Any] = {
         "driver": spec.image_format,
         "dtype": "uint8",
@@ -272,9 +255,8 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
 WORKER_GDAL_CACHE_MB = 256
 """GDAL block cache of one tiler worker, in megabytes.
 
-Set per process at start, in place of GDAL's default of 5 % of physical
-memory. A worker reads 256 px tiles from one local raster, so with this bound
-it stays well under a gigabyte.
+Set in each worker at start-up. A worker reads 256 px tiles from one local
+raster, so this keeps it well under a gigabyte.
 """
 
 
@@ -288,17 +270,16 @@ def _close_datasets() -> None:
 def _configure_worker(cache_mb: int) -> None:
     """Bound GDAL's cache before the worker touches a raster.
 
-    Runs in the spawned process before any GDAL call, which is when the
-    environment variable is read. The sources the worker keeps open are closed
-    at exit rather than left to interpreter shutdown, where GDAL may already be
-    gone when the reader objects are collected.
+    Runs in the spawned process before the first GDAL call, which reads the
+    environment variable. An exit handler closes the worker's open sources
+    while GDAL is still loaded.
     """
     os.environ.setdefault("GDAL_CACHEMAX", str(cache_mb))
     atexit.register(_close_datasets)
 
 
 def worker_gdal_cache(_: int = 0) -> str:
-    """Report the GDAL cache a worker runs with; mapped over a pool by the gate."""
+    """Report a worker's GDAL cache setting; tests map it over a pool."""
     return os.environ.get("GDAL_CACHEMAX", "unset")
 
 
@@ -309,9 +290,9 @@ def spawn_pool(
 ) -> ProcessPoolExecutor:
     """Start a worker pool for :func:`write_archive`, one process per core by default.
 
-    Spawned rather than forked: the caller may be running the warps of other
-    layers in threads, and forking a multi-threaded process is unsafe. Each
-    worker's GDAL cache is bounded to ``cache_mb``.
+    Workers are spawned, because the caller may run other layers' warps in
+    threads and forking a multi-threaded process is unsafe. Each worker's GDAL
+    cache is bounded to ``cache_mb``.
     """
     return ProcessPoolExecutor(
         max_workers=workers,
@@ -387,10 +368,9 @@ def write_archive(
     written = 0
     with out_path.open("wb") as handle, nullcontext(pool) if pool else spawn_pool() as executor:
         writer = Writer(handle)
-        # Results arrive in submission order, so the archive comes out
-        # clustered. One tile per task: a tile's cost varies from a mask read
-        # to a full warp, and batching them was measured 3.5x slower on a
-        # Swiss layer (22.5 s at 32 per task against 6.5 s at one).
+        # Results arrive in submission order, so the archive is written
+        # clustered. Each task renders one tile, because tile costs vary widely
+        # (from a mask read to a full warp) and single-tile tasks balance best.
         for tile_id, payload in executor.map(render, tiles):
             if payload is None:
                 continue
@@ -399,8 +379,7 @@ def write_archive(
         if not written:
             msg = f"{name}: no tile between z{min_zoom} and z{max_zoom} holds any data"
             raise ValueError(msg)
-        # The bounds a viewer reads. Clamped to the projection's own limits, as
-        # rio-pmtiles does; the mosaics never reach them.
+        # The bounds a viewer reads, clamped to the projection's limits.
         eps = 1e-10
         west, east = max(-180 + eps, west), min(180 - eps, east)
         south, north = max(-85.051129, south), min(85.051129, north)

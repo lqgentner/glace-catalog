@@ -1,16 +1,11 @@
-"""The catalog's vocabulary: every name, description and display number, from one source.
+"""The catalog's vocabulary: every name, description and display setting, from one source.
 
-``metadata/assets.yaml`` names the twelve published assets and their twelve
-web-map archives once; ``metadata/catalog.yaml`` holds the catalog's identity and
-prose. This module reads both and answers every naming question the repository
-has, so that a collection's ``item_assets``, an item's assets, a ``renders``
-entry, a style ramp and a README table all say the same thing about the same
-file because they were all asked here.
-
-Before this module, the asset titles were written in eight places that did not
-read each other, and the ``renders`` stretches had drifted from the style's
-after a remeasurement. The vocabulary is the fix: one origin, and
-``tests/test_render.py`` holds the rendered tree to it.
+``metadata/assets.yaml`` defines the twelve published assets and their twelve
+web-map archives; ``metadata/catalog.yaml`` holds the catalog's identity and
+prose. This module reads both and answers every naming question in the
+repository, so a collection's ``item_assets``, an item's assets, a ``renders``
+entry, a style ramp and a README table all describe a file the same way.
+``tests/test_render.py`` checks the rendered tree against it.
 """
 
 from __future__ import annotations
@@ -42,8 +37,8 @@ Collection = str
 """``"tiles"`` or ``"mosaics"``, the directory a collection lives in."""
 
 METADATA_DIR = Path(__file__).resolve().parents[2] / "metadata"
-"""The tracked source directory. Resolved from the package location, which holds
-in a checkout, where the build and the render run."""
+"""The tracked source directory, found relative to the package. This works in a
+checkout, where the build and the render run."""
 
 COG_MEDIA_TYPE = "image/tiff; application=geotiff; profile=cloud-optimized"
 PMTILES_MEDIA_TYPE = "application/vnd.pmtiles"
@@ -70,7 +65,7 @@ class AssetRef:
     qa
         ``num`` or ``cqm``; ``None`` for a measurement.
     viz
-        Whether the key names a rendering rather than a raster.
+        Whether the key names a web-map rendering.
     """
 
     key: str
@@ -329,7 +324,7 @@ class Vocabulary:
         return f"10*log10({band})" if self.display(key).decibel else ""
 
     def portable_cmap(self, key: str) -> str:
-        """Name the matplotlib colormap a client without cmcrameri can resolve (M-10)."""
+        """Name a standard matplotlib colormap for clients without cmcrameri."""
         ref = parse_key(key)
         source = self._product(ref) if ref.qa is None else self._qa(ref)
         return str(source["portable_cmap"])
@@ -524,7 +519,7 @@ def load_vocabulary(root: Path = METADATA_DIR) -> Vocabulary:
 def vocabulary() -> Vocabulary:
     """Return the checkout's vocabulary, read once.
 
-    The build reads it for every title it writes, and the files do not change
-    under a run.
+    The files do not change during a run, so one read serves every title the
+    build writes.
     """
     return load_vocabulary()

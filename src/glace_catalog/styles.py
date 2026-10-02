@@ -1,15 +1,13 @@
-"""Display defaults of the web-map layers, and the colour ramps they name.
+"""Default display settings of the web-map layers, and their colour ramps.
 
-Every PMTiles archive carries values, not colours (:mod:`glace_catalog.encoding`),
-so no ramp and no stretch is baked into a pixel. What a layer is *drawn with by
-default* — a colormap over a value range — is a property of the style alone,
-and a client is free to replace it without re-tiling anything. The defaults
-live in ``metadata/assets.yaml`` with their reasoning, reach the committed
-MapLibre style as each layer's ``color-relief-color`` expression and the
-collections' ``renders`` blocks, and are read through
-:meth:`glace_catalog.metadata.Vocabulary.display`. What the build does need is
-the transport range each archive is encoded over, which travels with the same
-record.
+The PMTiles archives store encoded values, not colours (see
+:mod:`glace_catalog.encoding`). The colormap and value range a layer is drawn
+with are set only in the MapLibre style, so a client can change them without
+re-tiling. The defaults are defined in ``metadata/assets.yaml`` and read
+through :meth:`glace_catalog.metadata.Vocabulary.display`. They end up in each
+style layer's ``color-relief-color`` expression and in the collections'
+``renders`` blocks. The same record gives the value range each archive is
+encoded over, which the build needs.
 """
 
 from __future__ import annotations
@@ -27,20 +25,19 @@ if TYPE_CHECKING:
 
     from glace_catalog.encoding import ValueEncoding
 
-#: Colour stops a default ramp is sampled at. A renderer interpolates linearly
-#: in sRGB between them, which at nine stops drifts up to 8/255 from a
-#: perceptually uniform ramp; seventeen keeps it under 4/255.
+#: Number of colour stops sampled from a default ramp. Renderers interpolate
+#: linearly in sRGB between stops; 17 stops keep the result within 4/255 of
+#: the perceptually uniform original.
 RAMP_STOPS = 17
 
 ATTRIBUTION = "University of Zurich, Contains modified Copernicus Sentinel data {year}"
-"""The credit line every archive header and style source carries (M-29)."""
+"""The credit line in every archive header and style source."""
 
 YEAR_IN_TEXT = re.compile(r"\b(?:19|20)\d{2}\b")
 """A four-digit year anywhere in a credit line.
 
-The committed style carries the most recent published year, like its
-``pmtiles://`` URLs do; ``finalize-catalog`` re-years both for the style it
-publishes per year.
+The committed style credits the latest published year, as its ``pmtiles://``
+URLs do. ``finalize-catalog`` replaces the year in each per-year style.
 """
 
 
@@ -72,8 +69,8 @@ class LayerStyle:
     units
         Unit label of the drawn values.
     decibel
-        Whether the values are drawn in decibels, so the tiler must read the
-        chain's decibel VRT rather than its linear one.
+        Whether the values are drawn in decibels, in which case the tiler
+        reads the decibel VRT.
     """
 
     cmap: str

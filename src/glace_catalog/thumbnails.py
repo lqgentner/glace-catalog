@@ -1,17 +1,12 @@
-"""Collection thumbnails from the latest analysis COGs over a muted OpenStreetMap basemap.
+"""Collection thumbnails: the latest analysis COGs over a grey OpenStreetMap basemap.
 
-Both collections use a 1400 x 933 landscape frame. 3:2 is what a catalog
-browser's card is shaped like, so it is what Portolan's thumbnail guidance
-frames to; no conformance rule fixes an aspect (rashid checks only that a
-geospatial collection carries a thumbnail asset whose type is PNG, JPEG or
-WebP), but a thumbnail drawn at any other shape is letterboxed or cropped by
-the reader that matters most. The mosaic and the actual MGRS tile keep their
-projected proportions inside that frame: the short axis grows, nothing is cut.
+Both thumbnails use a 1400 x 933 frame. The 3:2 shape matches the cards of
+STAC catalog browsers, which Portolan's thumbnail guidance follows. The mosaic
+and the example tile keep their projected proportions inside the frame, with
+margin added along the shorter axis.
 
-1400 px wide is twice the widest card, so the image is still sharp where the
-card is laid out at 700 CSS px on a 2x display — the case where a smaller
-thumbnail is upscaled and reads as soft. A browser downscales for everyone
-else at no visible cost.
+The width of 1400 px is twice the widest card (700 CSS px), so thumbnails stay
+sharp on 2x displays.
 """
 
 from __future__ import annotations
@@ -52,30 +47,26 @@ THUMBNAIL_HEIGHT = 933
 THUMBNAIL_MARGIN = 0.05
 THUMBNAIL_QUALITY = 90
 FIGURE_WIDTH_IN = 6.0
-"""Figure width in inches, held constant so the dpi carries the pixel size.
+"""Figure width in inches. The dpi sets the pixel size.
 
-Matplotlib sizes text in points, so a figure whose inches grow with the output
-draws the credit at a fixed pixel height that shrinks against an ever-larger
-picture. Fixing the inches and deriving the dpi instead makes every typographic
-size a constant fraction of the image, at any :data:`THUMBNAIL_WIDTH`.
+Matplotlib sizes text in points. With a fixed width in inches, text keeps the
+same size relative to the image at any :data:`THUMBNAIL_WIDTH`.
 """
 
 ATTRIBUTION_SIZE = "small"
-"""Credit size, named rather than numeric so it scales with :data:`FIGURE_WIDTH_IN`."""
+"""Credit font size, as a named size that scales with :data:`FIGURE_WIDTH_IN`."""
 
 ASCII_COPYRIGHT = "(C)"
-"""What xyzservices spells the copyright sign as in a provider's own credit."""
+"""How xyzservices writes the copyright sign in a provider's credit."""
 
 DEFAULT_BASEMAP = "OpenStreetMap.Mapnik"
 
 
 def cache_dir() -> Path:
-    """Per-user directory contextily keeps downloaded tiles in.
+    """Per-user directory for contextily's downloaded tiles.
 
-    Under ``XDG_CACHE_HOME`` rather than the system temporary directory: a
-    fixed name in a world-writable ``/tmp`` is a directory another account can
-    already own, which turns the first cache write into a ``PermissionError``
-    that has nothing to do with the catalog.
+    It lives under ``XDG_CACHE_HOME``, which belongs to the current user, so
+    other accounts cannot own it.
     """
     base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
     return Path(base) / "glace-catalog" / "basemap-tiles"
@@ -87,9 +78,7 @@ def resolve_basemap(basemap: str) -> TileProvider | str:
     Raises
     ------
     ValueError
-        If the name is neither. Falling through to contextily would hand it a
-        provider name as a file path, and the run would fail with a
-        "no such file or directory" that names the wrong problem.
+        If the name is neither.
     """
     known = providers.flatten()
     if basemap in known:
@@ -111,21 +100,19 @@ def add_background(
     *,
     attribution_size: str | float = ATTRIBUTION_SIZE,
 ) -> None:
-    """Add a credited basemap; render standard OSM tiles in grayscale.
+    """Add a credited basemap; render standard OSM tiles in greyscale.
 
     Raises
     ------
     ValueError
         If a tile provider's credit is suppressed with ``attribution=""``. The
-        published thumbnails carry the basemap's cartography into a CC-BY-4.0
-        release, so the credit is the licence term, not a caption: only an
-        attribution-free local raster may go without one.
+        basemap's licence requires the credit; only an attribution-free local
+        raster may omit it.
     """
     source = resolve_basemap(basemap)
     if attribution is None and not isinstance(source, str):
-        # The provider's own wording, with the copyright sign it spells out in
-        # ASCII: xyzservices carries "(C)" for portability, and the thumbnail is
-        # a picture, where the sign itself is what a reader expects to see.
+        # Use the provider's credit, with xyzservices' ASCII "(C)" replaced by
+        # the copyright sign.
         declared = str(source.get("attribution") or "")
         attribution = declared.replace(ASCII_COPYRIGHT, "\N{COPYRIGHT SIGN}") or None
     if attribution == "" and not isinstance(source, str):
@@ -167,15 +154,16 @@ def render_from_cog(
     height: int = THUMBNAIL_HEIGHT,
     attribution_size: str | float = ATTRIBUTION_SIZE,
 ) -> Image.Image:
-    """Plot coherence VV over a basemap, preserving native projected aspect.
+    """Plot VV coherence over a basemap, keeping the raster's projected aspect.
 
-    Read only a thumbnail-sized overview of the source. Nodata and values outside [0, 1]
-    are transparent; zero coherence is valid. Basemap failures and empty data fail the render, so a
-    basemap alone cannot masquerade as a successful thumbnail.
+    Only a thumbnail-sized overview of the source is read. Nodata and values
+    outside [0, 1] are transparent; zero coherence is valid. A basemap failure
+    or a raster without valid data raises an error, so every thumbnail shows
+    data.
 
     ``basemap`` accepts a contextily provider name or a local georeferenced
-    raster. Providers retain their credit, which only an attribution-free local
-    raster (for example Natural Earth) may drop with ``attribution=""``.
+    raster. Providers keep their credit; only an attribution-free local raster
+    (for example Natural Earth) may drop it with ``attribution=""``.
     """
     if width < 1 or height < 1:
         msg = "Thumbnail dimensions must be positive"
@@ -188,10 +176,8 @@ def render_from_cog(
             msg = f"{source} must be an axis-aligned raster"
             raise ValueError(msg)
         if src.transform.a <= 0 or src.transform.e >= 0:
-            # `imshow` draws row 0 at `top` and column 0 at `left`. A south-up
-            # or east-left raster satisfies both checks above and comes out
-            # mirrored -- a wrong picture that is neither blank nor an error,
-            # so nothing downstream would catch it.
+            # `imshow` draws row 0 at `top` and column 0 at `left`, so any other
+            # orientation would be drawn mirrored without an error.
             msg = f"{source} must be north-up and east-right"
             raise ValueError(msg)
         left, bottom, right, top = src.bounds
@@ -253,17 +239,13 @@ def write_collection_thumbnails(
     basemap: str = DEFAULT_BASEMAP,
     attribution: str | None = None,
 ) -> None:
-    """Write the mosaic and Aletsch tile thumbnails from the selected latest year.
+    """Write the mosaic and Aletsch tile thumbnails from ``year``.
 
-    Render both before writing either, so a missing tile or failed basemap does
-    not leave a newly rendered mosaic paired with an older tile thumbnail.
+    Both are rendered before either is written, so the two thumbnails always
+    come from the same run.
 
-    Written as lossy WebP at :data:`THUMBNAIL_QUALITY`, flattened to RGB: the
-    frame is opaque, the basemap covers it edge to edge, and the losslessly
-    stored copy of these pixels is the COG the picture is drawn from. Lossless
-    here would roughly treble the bytes a card loads to preserve detail no
-    reader sees, and at this quality the only visible cost is a trace of
-    smoothing in the speckle.
+    The images are opaque, so they are saved as RGB lossy WebP at
+    :data:`THUMBNAIL_QUALITY`, which keeps them small at no visible cost.
     """
     images = [
         (

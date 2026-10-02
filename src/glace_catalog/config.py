@@ -1,24 +1,19 @@
-"""Where the store's inputs are read from and where its bytes are written to.
+"""Where a build reads its inputs and writes its outputs.
 
-Three locations, deliberately separate, because they have different owners and
-different failure modes:
+Three locations are kept separate on purpose:
 
-- **source** — the composite archive a run produced, on the private UZH bucket.
-  Read-only here; this repository never writes into it. It is named per run, as
-  ``publish-year.py --src``, because one year's archive is one prefix and a
-  store may draw on more than one.
-- **store** — where the published tree is assembled: a prefix on the private UZH
-  bucket or a local directory. The store *is* what gets published, object for
-  object, and ``tools/sync_data.py`` streams it from either.
-- **publish target** — Source Cooperative, which this module does *not* know
-  about. It lives in ``catalog.publish.yaml`` and is read by
-  ``tools/sync_data.py`` alone, so a credential for the public bucket can never
-  be picked up by a build step that only meant to read a composite.
+- **source**: the composite archive of an upstream run, on the private UZH
+  bucket. It is only ever read, and is passed per run as
+  ``publish-year.py --src``.
+- **store**: where the published tree is built, an ``s3://`` prefix or a local
+  directory (``GLACE_STORE_ROOT``). ``tools/sync_data.py`` uploads it as is.
+- **publish target**: Source Cooperative, configured in ``catalog.publish.yaml``
+  and read only by ``tools/sync_data.py``. Only the upload therefore holds
+  credentials for the public bucket.
 
-Configuration is read from the environment only, so every command needs
-``--env-file .env``. Fields without a default are required at import time: a
-build that cannot say where its data is should fail before it opens a file, not
-half-way through a year.
+Settings come from the environment only, so run commands with
+``--env-file .env``. Required settings are checked at import time, so a
+misconfigured build fails before it touches any data.
 """
 
 from __future__ import annotations
@@ -37,12 +32,7 @@ type AnyDir = Path | UPath
 
 
 class StoreSettings(BaseSettings):
-    """Locations from ``GLACE_*`` environment variables, held as raw strings.
-
-    ``store_root`` is where the published tree is assembled, normally an
-    ``s3://`` prefix on the private bucket. A local path resolves the same way
-    and is written the same way; only publication insists on the bucket.
-    """
+    """Locations from ``GLACE_*`` environment variables, as raw strings."""
 
     model_config = SettingsConfigDict(env_prefix="GLACE_", extra="ignore")
 
@@ -55,14 +45,13 @@ class Settings:
 
     Directory values resolve to :class:`~pathlib.Path` when local and to
     :class:`~upath.UPath` carrying the S3 profile and endpoint when they start
-    with ``s3://``, so downstream code does not branch on the storage backend.
+    with ``s3://``, so downstream code treats both backends alike.
 
-    The S3 side is :class:`freezebase.settings.S3Settings` under the
-    ``GLACE_S3_`` prefix: authentication is by named profile only, so no access
-    key passes through the environment; ``GLACE_S3_ENDPOINT_URL`` is optional
-    when the profile's config section carries the endpoint; and the two
-    checksum policies default to ``when_required``, which the UZH Ceph gateway
-    needs.
+    S3 access uses :class:`freezebase.settings.S3Settings` with the
+    ``GLACE_S3_`` prefix. It authenticates with a named AWS profile only.
+    ``GLACE_S3_ENDPOINT_URL`` may be left
+    unset when the profile defines the endpoint. Both checksum policies default
+    to ``when_required``, which the UZH Ceph gateway needs.
     """
 
     def __init__(self) -> None:
@@ -96,10 +85,10 @@ class Settings:
 
     @property
     def cache_dir(self) -> Path:
-        """Scratch directory for the VRT chain and other build artefacts.
+        """Scratch directory for the VRT chain and other unpublished build files.
 
         Honours ``FREEZEBASE_CACHE``, falling back to the platform cache
-        directory. Nothing here is published; a chain is rebuilt in seconds.
+        directory.
         """
         return get_cache_dir()
 

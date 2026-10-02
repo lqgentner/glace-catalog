@@ -1,30 +1,22 @@
-"""Web-map tiling of the annual mosaics into PMTiles archives.
+"""Tile the annual display mosaics into PMTiles web-map archives.
 
-Encodes a display-grid mosaic into 8-bit value codes over the layer's fixed
-transport range (:mod:`glace_catalog.encoding`) and packs them into one PMTiles
-archive per layer, named ``{layer}_viz.pmtiles`` so it sits beside the COG it
-renders without sharing its stem. No colour is baked in: the archive's header
-and the year item's ``visual`` asset declare the decoding, and the committed
-MapLibre style decodes and colours it. ``publish-year`` writes the asset from
-the record this module returns.
+Each layer's display-grid mosaic is encoded into 8-bit value codes over the
+layer's fixed transport range (:mod:`glace_catalog.encoding`) and tiled into
+one archive, ``{layer}_viz.pmtiles``, beside the COG it shows. The archive
+header and the year item's ``visual`` asset declare how to decode the codes,
+and the MapLibre style decodes and colours them. ``publish-year`` writes the
+item asset from the :class:`LayerInfo` this module returns.
 
-The source is the **VRT chain's canonical-grid mosaic**, which already sits on
-the WebMercatorQuad grid at the maximum zoom. That retires the double resampling
-of the old 40 m EPSG:3035 overview: at max zoom the tiler's warp is the identity,
-and every level below it is a clean 2x decimation, which is why the resampling
-kernel here is ``average`` rather than the ``bilinear`` an oversampled source
-needed.
+The source is the VRT chain's display mosaic, which is already on the
+WebMercatorQuad grid at the maximum zoom. The top zoom level is therefore cut
+without resampling, and each lower level halves the resolution, so tiles are
+resampled with ``average``.
 
-**The warp happens once per layer.** The encoded RGBA VRT over the chain
-is copied to a local tiled GeoTIFF before anything is tiled, and the tiler
-(:mod:`glace_catalog.tiler`) reads that file. Tiling straight from the VRT was
-measured at 174 s per Swiss layer against 10 s from the local copy: every tile
-of every zoom level warped the 1 716 remote UTM composites over its own ground
-again, nine zoom levels deep, so the object store was read nine times per
-archive. The local copy is written **without overviews**: the levels below z13
-are decimated out of the full-resolution copy, which costs a few seconds per
-archive and keeps the intermediate a third smaller — and disk is the constraint
-at Alpine scale, where the fourteen copies of one year are 15 GB.
+Each layer is warped once: the encoded RGBA VRT is copied to a local tiled
+GeoTIFF, and the tiler (:mod:`glace_catalog.tiler`) reads that file, so the
+remote composites are read once per layer. The local copy has no overviews,
+which keeps it small on scratch disk; lower zoom levels are computed from full
+resolution.
 """
 
 from __future__ import annotations
@@ -77,10 +69,11 @@ RGBA_CREATION = {
     "ZLEVEL": 6,
     "BIGTIFF": "IF_SAFER",
 }
-"""Creation options of the warped-once RGBA intermediate.
+"""Creation options of the local RGBA copy each layer is warped into.
 
-256 px blocks so a max-zoom tile is one block read; DEFLATE because the file is
-written once and read once. No overviews: see the module docstring.
+With 256 px blocks, a max-zoom tile is one block read. DEFLATE suits a file
+that is written once and read once. The file has no overviews (see the module
+docstring).
 """
 
 TILE_FORMAT = "WEBP"
@@ -89,18 +82,15 @@ TILE_FORMAT = "WEBP"
 WEBP_QUALITY = 90
 """WebP quality of every archive.
 
-Lossless value tiles were measured at 1.7-2.1x the colour-mapped archives for
-speckled SAR; lossy grey tiles at 90 are smaller than those archives and carry
-no more value error than the colour mapping did.
+For speckled SAR data, lossy tiles at this quality are less than half the size
+of lossless ones, with small value errors.
 """
 
 DEFAULT_CONCURRENT_LAYERS = 4
-"""Layers warped at once by :func:`build_layers`, absent a better-informed choice.
+"""Default number of layers :func:`build_layers` warps at once.
 
-Four Alpine intermediates are under 5 GB of scratch. The tiling spike measured
-the Swiss year at 5.5 min with all fourteen layers warping at once; at four the
-warps run in four rounds, which projects to 9-10 min. Raise it where the disk
-has room.
+Four Alpine RGBA rasters take under 5 GB of scratch disk. More concurrent
+layers finish a year faster; raise the number when the disk has room.
 """
 
 
@@ -108,10 +98,9 @@ has room.
 class LayerInfo:
     """One built PMTiles archive, as the build reports it.
 
-    A build-time record, not a published document: ``publish-year`` writes it
-    into the year's build state so a later run can tell what changed. What a
-    reader sees instead is the archive's own header, the year item's
-    ``visual`` asset, and the year style.
+    ``publish-year`` stores this record in the year's build state, so a later
+    run can tell what changed. Readers of the store see the archive header,
+    the year item's ``visual`` asset and the year style.
     """
 
     id: str
@@ -133,12 +122,11 @@ class LayerInfo:
 
 
 def native_max_zoom(res_m: float, lat_deg: float) -> int:
-    """Smallest zoom level that does not undersample ``res_m`` at ``lat_deg``.
+    """Smallest zoom level that resolves ``res_m`` on the ground at ``lat_deg``.
 
-    WebMercator resolution is quoted at the equator; at latitude ``lat_deg`` a
-    zoom level covers ``cos(lat)`` times as much ground per pixel, so the Alps
-    reach their native detail one level earlier than the equatorial figure
-    suggests.
+    WebMercator resolution is quoted at the equator. At latitude ``lat_deg`` a
+    pixel covers ``cos(lat)`` times that distance on the ground, so in the Alps
+    native detail is reached one zoom level earlier.
     """
     scale = math.cos(math.radians(lat_deg))
     return max(0, math.ceil(math.log2(MERCATOR_SPAN_M * scale / (TILE_SIZE * res_m))))
@@ -173,13 +161,12 @@ def rgba_raster(
     *,
     luts: Sequence[Sequence[tuple[float, int]]],
 ) -> Path:
-    """Warp and encode one layer into a local RGBA GeoTIFF, once.
+    """Warp and encode one layer into a local RGBA GeoTIFF.
 
     The lookup-table VRT of :func:`rgba_vrt` is written beside ``out_path`` and
-    copied through GDAL's ``CreateCopy`` — what ``gdal_translate`` does — so the
-    whole chain below it runs exactly once, as one streaming pass. This process
-    must be inside the chain's environment (:func:`~glace_catalog.mosaics.chain_env`)
-    when the sources are remote.
+    copied with GDAL's ``CreateCopy`` (as ``gdal_translate`` does), so the
+    whole VRT chain runs once, in one streaming pass. When the sources are
+    remote, call this inside :func:`~glace_catalog.mosaics.chain_env`.
 
     Parameters
     ----------
@@ -217,39 +204,39 @@ def build_pmtiles(
     scratch: Path | None = None,
     pool: ProcessPoolExecutor | None = None,
 ) -> LayerInfo:
-    """Encode, warp once and tile one display-grid mosaic into a PMTiles archive.
+    """Encode, warp and tile one display-grid mosaic into a PMTiles archive.
 
     Parameters
     ----------
     src_vrt
         A VRT from the chain: the linear mosaic or its decibel reading.
     out_path
-        Destination ``.pmtiles`` file. Must be local — packing an archive needs
-        random writes.
+        Destination ``.pmtiles`` file. Must be local, because writing an
+        archive needs random access.
     layer_id
         Identifier of the layer. The archive is named ``viz_filename(layer_id)``,
         so a reader derives the data stem by stripping the suffix.
     year
         Composite year, for the manifest entry.
     style
-        The layer's display record; its transport range is what the codes
-        span. Fixed per layer, so that a year slider compares like with like.
+        The layer's display record. The codes span its transport range, which
+        is the same for every year, so years are directly comparable.
     start_date, end_date
         Composite window the layer covers.
     min_zoom, max_zoom
-        Zoom range of the pyramid. The default maximum is the zoom the source
-        already sits on, so that level is a copy and every level below it a 2x
-        decimation, which is why the tiles are warped with ``average``.
+        Zoom range of the pyramid. The default maximum is the source's own
+        zoom, so that level is copied unchanged and each lower level halves
+        the resolution; tiles are therefore resampled with ``average``.
     workers
         Worker processes of the pool started for this call, one per core by
         default. Ignored when ``pool`` is given.
     attribution
         Archive attribution, as a viewer displays it.
     scratch
-        Directory the warped-once RGBA raster is written under, in a temporary
-        subdirectory removed on return. Defaults to the system temporary
-        directory; at Alpine scale the raster is about 1.1 GB, so point this at
-        a volume that has room for it.
+        Directory for the local RGBA raster, written to a temporary
+        subdirectory that is removed on return. Defaults to the system
+        temporary directory. At Alpine scale the raster is about 1.1 GB, so
+        choose a volume with room for it.
     pool
         A running :func:`~glace_catalog.tiler.spawn_pool` to render the tiles
         in, so several archives can share one.
@@ -296,8 +283,7 @@ def build_pmtiles(
             ),
             name=layer_id,
             attribution=attribution,
-            # The decoding, as a raster-dem source declares it, the way a
-            # terrain archive's metadata names its encoding.
+            # Record the raster-dem decoding parameters, as terrain archives do.
             extra_metadata={**encoding.maplibre(), "unit": style.units},
             pool=executor,
         )
@@ -361,17 +347,16 @@ def build_layers(
     """Build one PMTiles archive per layer of one year, from the VRT chain.
 
     The layers are pipelined: ``concurrent_layers`` of them warp at once, each
-    in its own thread, and every warped raster is tiled in one shared worker
-    pool as soon as it is ready.
-    The warp is single-threaded inside GDAL and bound by the object store, so
-    running several is what keeps the cores busy; the tiler scales linearly
-    with its workers once the source is local.
+    in its own thread, and each warped raster is tiled in one shared worker
+    pool as soon as it is ready. A warp is single-threaded and waits on the
+    object store, so running several keeps the cores busy. Tiling a local
+    raster scales with the number of workers.
 
     Parameters
     ----------
     vrts
         Chain built by :func:`glace_catalog.mosaics.build_year_vrts`. Its
-        paths are the inputs; nothing is globbed and no filename is parsed.
+        paths are the inputs.
     out_dir
         Local directory the archives are written to.
     year, start_date, end_date
@@ -387,9 +372,9 @@ def build_layers(
     workers
         Worker processes of the shared tiling pool, one per core by default.
     concurrent_layers
-        Layers warped at the same time. This bounds the scratch disk: each
-        holds one RGBA raster of the whole scope while it is being written and
-        tiled — about 100 MB for Switzerland, about 1.1 GB for the Alps.
+        Layers warped at the same time. This bounds scratch disk use: each
+        layer holds one RGBA raster of the whole scope while it is written and
+        tiled, about 100 MB for Switzerland or 1.1 GB for the Alps.
     scratch
         Where those rasters are written; the system temporary directory by
         default.
@@ -428,14 +413,12 @@ def build_layers(
     for layer_id in sorted(set(wanted) - set(sources)):
         logger.info("No VRT for %s; skipping", layer_id)
 
-    # The VRTs are local but read remote tiles, so the store's credentials are
-    # established here, in the main thread, around every warp. That placement
-    # is load-bearing: rasterio sets a main thread's options process-wide and
-    # any other thread's thread-locally, where GDAL's own reader threads (a
-    # VRT reads its sources in parallel) cannot see them — a warp that enters
-    # the environment inside its worker thread opens the first sources and
-    # then fails with "No valid AWS credentials". The tiler pool reads the
-    # local raster and needs no environment at all.
+    # The VRTs are local but read remote files, so the store's credentials are
+    # set here, in the main thread, around all warps. rasterio applies options
+    # set in the main thread to the whole process, but options set in another
+    # thread only to that thread. GDAL reads a VRT's sources in its own
+    # threads, so credentials set inside a warp thread would be missing there
+    # ("No valid AWS credentials"). The tiler pool reads local rasters only.
     with (
         chain_env(vrts),
         spawn_pool(workers) as pool,

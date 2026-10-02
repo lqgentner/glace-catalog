@@ -1,37 +1,36 @@
-"""Value-encoded web-map tiles: physical values packed into RGB.
+"""Pack physical values into the RGB channels of web-map tiles.
 
-A web-map archive carries the quantised value rather than a colour, so a client
-chooses the ramp and the stretch and can read a value back under the cursor.
-The packing is the one MapLibre's ``raster-dem`` source decodes with
+Each web-map archive stores a quantised value per pixel, so a client chooses
+the colour ramp and stretch and can read values back under the cursor. The
+packing is the one MapLibre's ``raster-dem`` source decodes with
 ``"encoding": "custom"``::
 
     value = R * redFactor + G * greenFactor + B * blueFactor - baseShift
 
-and the ``color-relief`` layer colours that value through an ``interpolate``
-expression on ``["elevation"]``. Both are in the MapLibre style
-specification, so a style that declares the four numbers is self-describing.
-MapLibre subtracts ``baseShift``, although the specification says it is added;
-Terrarium's built-in ``baseShift = 32768`` confirms the subtraction.
+A ``color-relief`` layer then colours that value with an ``interpolate``
+expression on ``["elevation"]``. Both are part of the MapLibre style
+specification. Note that MapLibre subtracts ``baseShift``, although the
+specification says it is added.
 
-Two constraints of MapLibre GL JS 6.9 shape the factors:
+Two details of MapLibre GL JS 6.9 constrain the factors:
 
-- The colour-relief layer packs its *stops* with ``packDEMData``, which treats
-  the factors as the weights of a positional number (red the most
-  significant): it divides by the smallest factor, so none may be zero.
-- A value is decoded as a dot product, so any ``R:G:B`` split of one step
-  decodes the same grey pixel.
+- The colour-relief layer packs its stops with ``packDEMData``, which treats
+  the factors as digit weights (red most significant) and divides by the
+  smallest one, so no factor may be zero.
+- A pixel is decoded as a weighted sum, so any split of one step across R, G
+  and B decodes a grey pixel the same way.
 
-:class:`ValueEncoding` writes the 8-bit code into all three channels — a grey
-tile — and splits one step ``scale`` over them as ``65536 : 256 : 1``. A grey
-pixel ``(n, n, n)`` decodes to ``n * scale - baseShift`` exactly, and a stop
-packed positionally decodes to itself. A grey tile survives lossy WebP: the
-encoder's chroma planes are flat and only luma carries the signal.
+:class:`ValueEncoding` therefore writes the same 8-bit code into all three
+channels (a grey tile) and splits one step as ``65536 : 256 : 1``. A grey pixel
+``(n, n, n)`` then decodes to ``n * scale - baseShift`` exactly, and stops
+packed by ``packDEMData`` decode back to themselves. Grey tiles also survive
+lossy WebP well, because only the luma plane carries signal.
 
-Code ``0`` is nodata. The tiles keep a *binary* alpha band beside it
-(:func:`glace_catalog.tiler.render_tile`): WebP stores alpha losslessly, so the
-encoder's ringing at a data edge cannot leak a code into nodata, and partial
-alpha is never written, because browsers premultiply alpha on decode and would
-corrupt the code beneath it.
+Code ``0`` means nodata. The tiles also carry a binary alpha band
+(:func:`glace_catalog.tiler.render_tile`). WebP stores alpha losslessly, so
+nodata stays nodata despite compression artefacts at a data edge. Alpha is
+either 0 or 255, because browsers premultiply alpha when decoding, which would
+corrupt any code under partial alpha.
 """
 
 from __future__ import annotations
@@ -123,12 +122,11 @@ class ValueEncoding:
         return band
 
     def luts(self, *, stops: int = 256) -> list[list[tuple[float, int]]]:
-        """GDAL ``<LUT>`` tables that write the code into all three bands.
+        """Return GDAL ``<LUT>`` tables that write the code into all three bands.
 
-        The lookup is piecewise-linear, so a value between two stops takes a
-        code between theirs; at 256 stops over 254 codes the round-off is
-        under one code. Values below ``lo`` are clamped to code 1, so a valid
-        pixel never reads as nodata.
+        GDAL interpolates linearly between stops; with 256 stops over 254
+        codes the rounding error stays under one code. Values below ``lo``
+        map to code 1, so every valid pixel has a nonzero code.
         """
         values = np.linspace(self.lo, self.hi, stops)
         table = [
@@ -142,13 +140,12 @@ class ValueEncoding:
         vmin: float,
         vmax: float,
     ) -> list[Any]:
-        """Build a ``color-relief-color`` expression: ``colors`` over ``vmin``-``vmax``.
+        """Build a ``color-relief-color`` expression spreading ``colors`` over ``vmin``-``vmax``.
 
-        Code 0 decodes one step under ``lo``. The ramp is transparent up to
-        half a step under ``lo`` and jumps to the first colour a hundredth of
-        a step later, so nodata draws nothing and every valid code below
-        ``vmin`` clamps to the first colour, as above ``vmax`` it clamps to
-        the last.
+        Nodata (code 0) decodes to one step below ``lo``. The expression is
+        transparent up to half a step below ``lo`` and switches to the first
+        colour just after, so nodata is transparent. Valid values below ``vmin``
+        take the first colour and values above ``vmax`` the last.
         """
         edge = self.lo - self.scale / 2
         stops: list[tuple[float, str]] = [

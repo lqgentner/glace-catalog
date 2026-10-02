@@ -1,11 +1,9 @@
-"""The documents of a GLACE store: its items and its two collections.
+"""The STAC items of a GLACE store, and their collections' extents.
 
-A store splits into a per-tile collection and a per-year mosaic collection —
-different products, different grids, different consumers. The split is a
-collection boundary rather than a property because a boundary is enforced: with
-it, one asset key names exactly one thing inside its own collection, which is
-what lets both collections declare ``item_assets`` and lets a consumer read the
-index of one without filtering the other out of it.
+A store has two collections: one item per tile and year, and one annual mosaic
+item per year. They hold different products on different grids. Within each
+collection an asset key always names the same kind of file, so both
+collections can declare ``item_assets`` and each has its own item index.
 """
 
 from __future__ import annotations
@@ -20,9 +18,10 @@ from freezebase.mgrs import MGRSGeoBox
 import pystac
 from pystac.utils import datetime_to_str
 
-# The module, not the name: metadata imports the naming module through this
-# package, so under one import order this package is still initializing when
-# metadata is. Resolving `vocabulary` at call time keeps both orders working.
+# Import the module, not the name: metadata imports the naming module through
+# this package, so with some import orders this package is still initializing
+# when metadata loads. Looking up `metadata.vocabulary` at call time works for
+# every order.
 from glace_catalog import metadata
 from glace_catalog.stac.naming import (
     POLARIZATIONS,
@@ -48,14 +47,13 @@ GEOMETRY_SIMPLIFY_DEG = 1e-4  # ~11 m at the equator
 DATASET_VERSION = "0.1"
 """Published edition of the GLACE dataset, as the STAC version extension's ``version``.
 
-Bump the major part when the pixels change meaning, so that a value stored under
-one edition can never be reinterpreted under a later reading.
+Bump the major part when the pixels change meaning, so a value is always read
+with the meaning of the edition it was stored under.
 
-A release is one version string, and this is where it is bumped. Both
-``catalog/*/collection.json`` and ``CITATION.cff`` restate it and follow this
-value; ``tests/test_version.py`` fails when any of them disagrees. Tag
-``v{DATASET_VERSION}`` only after the store is published and finalized, because
-the tag is what a citation resolves to.
+This is the one place to bump the version. ``catalog/*/collection.json`` and
+``CITATION.cff`` repeat it, and ``tests/test_version.py`` checks that they
+agree. Tag ``v{DATASET_VERSION}`` only after the store is published and
+finalized, because citations resolve to the tag.
 """
 
 MGRS_EXTENSION_URI = "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
@@ -70,22 +68,17 @@ PROCESSING_EXTENSION_URI = "https://stac-extensions.github.io/processing/v1.2.0/
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 
 CEOS_ARD_LINK_REL = "ceos-ard-specification"
-"""Relation type of the CEOS-ARD extension, used without declaring the extension.
+"""Relation type of the STAC CEOS-ARD extension, used without declaring it.
 
-The extension's README explicitly allows this, and its schema would reject the
-declaration anyway: it enumerates no Composite Backscatter product.
+The extension's README allows this. Its schema lists no Composite Backscatter
+product, so declaring the extension would fail validation.
 """
-
-"""Where a tile item finds its year's manifest, relative to the item."""
 
 
 def _add_specification_link(target: pystac.Item | pystac.Collection) -> None:
-    """Link to the CEOS-ARD PFS the metadata borrows its vocabulary from.
+    """Link to the CEOS-ARD PFS whose vocabulary the metadata uses.
 
-    Uses the ``ceos-ard-specification`` relation type of the STAC CEOS-ARD
-    extension without declaring the extension, which the extension's README
-    explicitly allows and which its schema would reject anyway: it enumerates
-    no Composite Backscatter product.
+    The relation type is :data:`CEOS_ARD_LINK_REL`.
     """
     target.add_link(
         pystac.Link(
@@ -122,11 +115,10 @@ def _apply_common_metadata(item: pystac.Item, geobox: MGRSGeoBox, tile: str) -> 
 def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:
     """Return the one compositing window a set of composites shares, as inclusive days.
 
-    s1bursts names and tags every composite of a run with the caller's window,
-    so every tile and every layer of a year carries the same pair, and the year
-    has exactly one time range. A second pair is a file left from a different
-    window, which the archive has to resolve before the year can be published;
-    it is never averaged or widened into the extent.
+    s1bursts names and tags every composite of a run with the run's window, so
+    all tiles and layers of a year share one pair and the year has one time
+    range. A second pair means a leftover file from another run, which must be
+    resolved in the archive before the year is published.
 
     Parameters
     ----------
@@ -152,10 +144,10 @@ def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:
 def published_time_range(window: tuple[date, date]) -> tuple[datetime, datetime]:
     """Return the window as every item publishes it: ``start_datetime`` and ``end_datetime``.
 
-    A window is inclusive calendar days; STAC wants instants with an exclusive
-    end. That is the first day at midnight UTC and the midnight after the last
-    day, and this is the only place the translation is written, so the tile
-    items and the mosaic item cannot end a day apart.
+    A window is a range of inclusive calendar days. STAC uses instants with an
+    exclusive end: midnight UTC at the start of the first day, and the
+    midnight after the last day. Tile and mosaic items both use this function,
+    so their time ranges match.
     """
     start, end = window
     return (
@@ -170,9 +162,9 @@ def _acquisition_spans(
 ) -> dict[str, tuple[str, str]]:
     """First and last contributing acquisition per product, over its data layers.
 
-    Read from ``FIRST_ACQUISITION_DATE`` and ``LAST_ACQUISITION_DATE``; the two
-    polarizations of a product may differ by an acquisition, so the span is the
-    union. ISO dates compare as strings.
+    Read from ``FIRST_ACQUISITION_DATE`` and ``LAST_ACQUISITION_DATE``. The two
+    polarizations of a product may differ by an acquisition, so the span covers
+    both. ISO dates compare correctly as strings.
     """
     spans: dict[str, tuple[str, str]] = {}
     for file in files:
@@ -208,35 +200,32 @@ def _asset(
 ) -> pystac.Asset:
     """Build one asset: its name from the vocabulary, its pixels from the raster's own metadata.
 
-    Title, description and roles are the collection's ``item_assets`` entry for
-    the same key, asked of the same vocabulary, so an item and its collection
-    cannot name one file two ways. The raster's own ``LAYER_DESCRIPTION`` stays
-    in its tags.
+    Title, description and roles come from the collection's ``item_assets``
+    entry for the same key, so the item and its collection describe the file
+    identically. The raster's own ``LAYER_DESCRIPTION`` stays in its tags.
     """
     require_valid(file, info)
     entry = metadata.vocabulary().item_asset(file.asset_key, "tiles")
     asset = pystac.Asset(
-        # Relative to the item that owns it, which is what keeps the store
-        # relocatable: moving the bucket edits one self href, not every asset.
+        # Relative to the item, so the store can move by changing its self
+        # href alone.
         href=file.published_name,
         title=entry["title"],
         description=entry["description"],
         media_type=pystac.MediaType.COG,
         roles=list(entry["roles"]),
     )
-    # The band is named by its asset key, like the collection's item_assets
-    # entry and, once s1bursts writes it (UPSTREAM.md S-4), the file's own
-    # band description. Its type, nodata, unit and statistics stay the file's.
+    # The band is named by its asset key, as in the collection's item_assets.
+    # Its type, nodata, unit and statistics come from the file.
     band: dict[str, Any] = {"name": entry["bands"][0]["name"], "data_type": info.data_type}
     nodata = _nodata(info.nodata, info.data_type)
     if nodata is not None:
         band["nodata"] = nodata
-    # A dimensionless band carries no unit at all rather than an empty string.
+    # Dimensionless bands omit the unit.
     if info.band_unit:
         band["unit"] = info.band_unit
-    # The manifest records the valid percentage of the published pixels
-    # separately from the writer's embedded statistics; where it has one, it is
-    # the one measured over the file as published.
+    # Prefer the manifest's valid percentage, measured on the published file,
+    # to the one embedded by the writer.
     stats = info.statistics.to_dict() if info.statistics is not None else {}
     if valid_percent is not None:
         stats["valid_percent"] = valid_percent
@@ -342,16 +331,15 @@ def build_tile_item(
         Raster metadata per asset key, from the run manifest. Every
         statement the item makes about pixels comes from here.
     glacier_fraction, glacier_fraction_buffered
-        RGI7 area fractions (plain and buffered), looked up in the scope's
-        precomputed table; stored as ``glace:*`` properties. They are never
-        recomputed per run, so one tile cannot carry different values in two
-        years of the same dataset.
+        RGI7 area fractions (plain and buffered), from the scope's fixed
+        lookup table, so a tile has the same values in every year. Stored as
+        ``glace:*`` properties.
     valid_percents
         Valid-data percentage per data-asset key (e.g. ``{"coh12_vv": 98.2}``).
     version
-        Published edition this item belongs to. Carried on the item as well as
-        the collection, so that an item extracted on its own — a geoparquet row,
-        a single item JSON — still says which edition it is.
+        Published edition this item belongs to. Stored on the item as well as
+        the collection, so an item read on its own (a geoparquet row or a
+        single item JSON) still states its edition.
 
     Raises
     ------
@@ -363,10 +351,10 @@ def build_tile_item(
     """
     geobox = MGRSGeoBox.from_mgrs(tile)
     geometry, bbox = _tile_geometry(geobox)
-    # The rasters' own tags carry the compositing window, the same for every
-    # tile of a year, so every tile item of a year shares one time range and a
-    # reader stacking them gets one time coordinate. Which acquisitions
-    # contributed is per product and per tile, and comes from the tags too.
+    # The compositing window comes from the rasters' tags and is the same for
+    # every tile of a year, so all tile items of a year share one time range.
+    # The contributing acquisitions, per product and tile, also come from the
+    # tags.
     window = composite_window(
         (
             raster_info[file.asset_key].tags["COMPOSITE_START_DATE"],
@@ -439,8 +427,8 @@ class MosaicAsset:
         Multihash-encoded sha256 of the file, published as ``file:checksum``
         (``PTL-AST-003``). Measured on the staged bytes before upload.
     description
-        What the file is, where a title cannot say it: a rendering has to say
-        which COG to read instead of it.
+        Longer description where the title is not enough, e.g. a rendering
+        names the COG that holds its data.
     band
         Single-band description, for a raster asset.
     extra
@@ -494,7 +482,7 @@ def build_mosaic_item(
     Parameters
     ----------
     scope
-        Scope being published; supplies the item id and the canonical grid.
+        Scope being published; supplies the item id and the analysis grid.
     year
         Composite year.
     geometry, bbox
@@ -506,7 +494,7 @@ def build_mosaic_item(
         Written mosaic COGs and per-year documents, keyed by asset key.
     build_fingerprint
         Fingerprint of the inputs this year was built from, so a store can be
-        checked against them without re-deriving anything.
+        checked against its inputs directly.
     version
         Published edition; see :data:`DATASET_VERSION`.
     """
