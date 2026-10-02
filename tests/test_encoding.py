@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Gate on value-encoded tiles: the codes, their MapLibre decoding, the tiles.
+"""Checks value-encoded tiles: the codes, their MapLibre decoding, the tiles.
 
-Three things must hold for a client to read values back out of an archive. The
-quantisation round-trips to within half a step. The factors the style declares
-decode a grey pixel to its value, *and* survive MapLibre's own packing of
-colour-relief stops (``packDEMData`` in GL JS 6.9, ported below), which treats
-them as positional digits. And the tiler writes tiles whose alpha is binary,
-whose nodata is code 0, and whose max-zoom codes are the source's.
+For a client to read values back out of an archive, three things must hold:
+
+- encoding and decoding a value round-trips to within half a quantisation step;
+- the factors the style declares decode a grey pixel to its value, and survive
+  MapLibre's own packing of color-relief stops (``packDEMData`` in GL JS 6.9,
+  ported below), which treats them as positional digits;
+- the tiler writes tiles with a binary alpha, code 0 for nodata, and the
+  source's codes at max zoom.
 
 Writes only into a temporary directory and needs no network.
 
@@ -180,8 +182,8 @@ def check_lossy_tiles(checks: dict[str, bool], work: Path) -> None:
     checks["lossy: max-zoom tiles are opaque where the source is"] = bool(
         (tile[..., 3] == 255).all()
     )
-    # The synthetic pattern is a worst case (a sawtooth at the pixel scale),
-    # so this only bounds gross corruption, not the error on real scenes.
+    # The synthetic pattern is a worst case (a sawtooth at the pixel scale), so
+    # this bound catches gross corruption only; real scenes compress far better.
     error = np.abs(tile[..., 0].astype(int) - codes[:TILE_PX, :TILE_PX].astype(int))
     checks["lossy: the codes survive in the median"] = float(np.median(error)) < 16
 

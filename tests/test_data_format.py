@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """Format gates for the JSON and YAML this repository tracks.
 
-Python has ``ruff format``; JSON and YAML have nothing equivalent that is worth
-a dependency, so the checks are written directly against the parsers.
+These checks use the JSON and YAML parsers directly.
 
-**JSON** — every tracked ``.json`` under ``catalog/`` must already be in the
-canonical form the generator writes: two-space indent, keys in the order the
-document declares them, one trailing newline, non-ASCII left as itself. Most of
-these documents are written by ``scripts/`` and the rest are hand-edited beside
-them; without a canonical form, a hand edit and a regeneration produce a diff
-full of reindentation that hides the one line that actually changed.
+**JSON**: every tracked ``.json`` file must already be in the form the
+generator writes: two-space indent, keys in their existing order, one trailing
+newline, non-ASCII characters kept as they are. With one fixed form, a hand
+edit and a regeneration produce the same bytes, and a diff shows only the lines
+that really changed.
 
-**YAML** — every tracked ``.yaml`` / ``.yml`` must parse, and must not use the
-constructs that make YAML surprising. ``yaml.safe_load`` rejects arbitrary
-object construction; the tab check catches the single most common YAML error,
-which reports as a parse failure far from its cause.
+**YAML**: every tracked ``.yaml`` / ``.yml`` file must parse with
+``yaml.safe_load``, which refuses to build arbitrary Python objects. Tabs in
+indentation are reported by line, because YAML forbids them and the parser
+reports them as an error somewhere else.
 
 Neither gate reads asset bytes, so both run offline and in CI.
 

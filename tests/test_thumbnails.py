@@ -94,8 +94,7 @@ def guard_checks(source: Path, backdrop: Path) -> dict[str, bool]:
 def footprint_span(line: np.ndarray, colour: np.ndarray) -> int:
     """How many pixels of one row or column carry the fixture's uniform data colour.
 
-    Within a tolerance, because the thumbnails are lossy WebP: a flat area
-    survives as very nearly one colour rather than exactly one.
+    Within a tolerance, since lossy WebP renders a flat area as nearly one colour.
     """
     return int((np.abs(line - colour).max(axis=1) <= 12).sum())
 

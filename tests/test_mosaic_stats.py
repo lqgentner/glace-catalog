@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Gate on what an annual mosaic COG carries about itself.
+"""Checks the metadata an annual mosaic COG carries in its own header.
 
-Portolan raises the embedded band statistics to an error (``PTL-DAT-009``, and
-``PTL-DAT-010`` for the valid percent wherever a band declares nodata) and reads
-them from the file's own ``GDAL_METADATA``: a PAM sidecar does not count, and
-the sidecar is not published anyway. The per-tile composites get theirs from
-s1bursts; the mosaics are written here, so this is where they have to be proved.
+Portolan requires embedded band statistics (``PTL-DAT-009``), plus the valid
+percent for bands that declare nodata (``PTL-DAT-010``). It reads them from the
+file's own ``GDAL_METADATA`` tag, since only the COG itself is published.
+The per-tile composites get their statistics from s1bursts; the mosaics are
+written in this repository, so they are checked here.
 
-The digest published as ``file:checksum`` is measured on the same write, since
-the file is staged locally before upload and hashing it there costs nothing.
+The ``file:checksum`` digest is computed during the same write, while the file
+is still on local disk.
 
 Writes a tiny raster into a temporary directory. Reads no data and needs no
 network.
@@ -43,7 +43,7 @@ VALUES = np.array(
 
 
 def _source(tmp: Path) -> Path:
-    """Write the fixture raster and a VRT over it, the shape the chain hands the writer."""
+    """Write the fixture raster and a VRT over it, as the VRT chain passes it on."""
     source = tmp / "source.tif"
     with rasterio.open(
         source,
@@ -65,7 +65,7 @@ def _source(tmp: Path) -> Path:
 
 
 def _expected() -> dict[str, float]:
-    """Compute the five statistics here rather than in the code under test."""
+    """Compute the five expected statistics independently of the code under test."""
     finite = VALUES[np.isfinite(VALUES)].astype("float64")
     return {
         "minimum": float(finite.min()),
@@ -119,8 +119,7 @@ def main() -> int:
             band_name="12-day repeat-pass coherence VV",
             tags={"COMPOSITING_METHOD": "LRW"},
         )
-        # PAM off, so a value can only have come out of the file's own header --
-        # which is where Portolan reads it from, and the sidecar is never published.
+        # With PAM off, GDAL reads only the file's own header, as Portolan does.
         with rasterio.Env(GDAL_PAM_ENABLED="NO"), rasterio.open(written.path) as src:
             band_tags = src.tags(1)
             dataset_tags = src.tags()

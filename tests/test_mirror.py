@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
-"""Gate on the item mirror against the GeoParquet rules rashid enforces.
+"""Checks the item index against the GeoParquet rules rashid enforces.
 
-Portolan holds an ``items.parquet`` to the full vector rules: spatially ordered
-rows (``PTL-DAT-006``), per-row-group spatial statistics over a ``bbox``
-covering column (``PTL-DAT-007``), bounded row groups (``PTL-DAT-008``), and one
-row reproducing each of the collection's items (``PTL-DAT-016``). Decision R-12
-says those rules are what the mirror satisfies *as rashid implements them*, so
-this gate imports rashid's own check functions and uses them as its assertions
-rather than restating them. If rashid's reading of the spec changes, this gate
-changes with it and there is nothing to keep in step by hand.
+Each collection's ``items.parquet`` (the "mirror" in the code) holds one row
+per item. Portolan requires spatially ordered rows (``PTL-DAT-006``),
+per-row-group spatial statistics over a ``bbox`` covering column
+(``PTL-DAT-007``), bounded row groups (``PTL-DAT-008``), and one row matching
+each of the collection's items (``PTL-DAT-016``). This gate imports rashid's
+own check functions and uses them as its assertions, so it follows rashid's
+reading of the spec automatically.
 
-The fixture is 400 synthetic tile items on a 20 x 20 MGRS grid — the ids,
-geometries and datetimes a real tile item carries, without the tags
-``tests/test_items.py`` owns. 400 rows is above the floor below which rashid's
-row-ordering measurement says nothing, and small enough to build in a second.
+The fixture is 400 synthetic tile items on a 20 x 20 MGRS grid, with the ids,
+geometries and datetimes of real tile items; their tags are covered by
+``tests/test_items.py``. 400 rows is enough for rashid's row-ordering
+measurement to apply, and builds in about a second.
 
-Negative controls keep the gate honest: the same rows in shuffled order must
-fail the ordering rule, a mirror stripped of its covering declaration must fail
-the statistics rule, and the writer must refuse to write one. Without them a
-gate that only ever sees conforming files cannot tell that it is checking
-anything.
+Negative controls show that the gate can fail: shuffled rows must fail the
+ordering rule, a file without its covering declaration must fail the
+statistics rule, and the writer must refuse to write such a file.
 
 Reads no data and needs no network.
 
@@ -73,9 +70,9 @@ COLLECTION_ID = "glace-ch-tiles"
 MIRROR_KEY = "items"
 BASE_URL = "https://data.source.coop/lqgentner/glace-ch"
 
-# Enough groups for rashid's row-group metrics to apply (its floor is five) over
-# a 400-row fixture. The store reaches the same place at the writer's default,
-# 2 048 rows over some 24 000; a fixture that large would cost a minute to build.
+# Small row groups give the 400-row fixture enough groups (rashid needs at least
+# five) for its row-group metrics to apply. The real store gets there with the
+# writer's default of 2 048 rows per group over about 24 000 rows.
 SMALL_ROW_GROUP = 64
 
 
@@ -119,10 +116,9 @@ def _item_payload(tile: str, year: int) -> dict[str, Any]:
 def _year_payloads(tiles: Sequence[str], year: int) -> list[dict[str, Any]]:
     """One year of items, in an order that carries no spatial information.
 
-    Shuffled deterministically rather than left in tile-code order, which on
-    this grid is already a column-by-column scan and would pass the ordering
-    rule on its own. The mirror must be ordered because the writer orders it,
-    not because the run happened to hand the items over in a helpful sequence.
+    Shuffled deterministically, because tile-code order is already a
+    column-by-column scan of this grid and would pass the ordering rule by
+    itself. The shuffle makes the writer responsible for the ordering.
     """
     order = np.random.default_rng(year).permutation(len(tiles))
     return [_item_payload(tiles[int(i)], year) for i in order]
@@ -136,9 +132,8 @@ def _locator(path: Path) -> Locator:
 def _graph(payloads: Sequence[dict[str, Any]], root: Path) -> tuple[CatalogGraph, Node]:
     """Build an in-memory catalog holding one collection and its items.
 
-    rashid derives ownership from the file tree alone — an item belongs to the
-    nearest collection above it — so the nodes need paths and parsed JSON, not
-    files on disk.
+    rashid assigns each item to the nearest collection above it in the file
+    tree, so the nodes need only paths and parsed JSON.
     """
     collection_path = PurePosixPath("tiles/collection.json")
     collection = Node(
@@ -207,7 +202,7 @@ def _shuffled_copy(path: Path, out_path: Path) -> None:
     """Rewrite a mirror with its rows shuffled, keeping everything else.
 
     The negative control for the ordering rule: same schema, same metadata, same
-    row-group size, only the row order thrown away.
+    row-group size; only the row order differs.
     """
     table = pq.read_table(path)
     order = np.random.default_rng(0).permutation(table.num_rows)
@@ -218,9 +213,9 @@ def _shuffled_copy(path: Path, out_path: Path) -> None:
 def _uncovered_copy(path: Path, out_path: Path) -> None:
     """Rewrite a mirror without its covering declaration.
 
-    The negative control for the statistics rule: the ``bbox`` column stays, but
-    nothing in the ``geo`` metadata says it covers the geometry, so a reader
-    cannot use its statistics and rashid must say so.
+    The negative control for the statistics rule: the copy keeps the ``bbox``
+    column but removes its declaration as the geometry's covering from the
+    ``geo`` metadata, so rashid must report the statistics as unusable.
     """
     table = pq.read_table(path)
     metadata = dict(table.schema.metadata or {})
@@ -254,11 +249,10 @@ def _year_of(item_id: str) -> str:
 def _writer_checks(root: Path) -> dict[str, bool]:
     """Check what the writer does with input it should not accept quietly.
 
-    Whole-number bboxes are the case that makes the type explicit: Arrow infers
-    ``int64`` for them, and a year written that way could not be concatenated
-    with a year of ordinary float coordinates. A table with no covering
-    declaration at all must not be written, since nothing downstream would
-    notice a mirror whose row groups carry no spatial statistics.
+    Arrow infers ``int64`` for whole-number bboxes; the writer must store them
+    as ``float64`` so that every year concatenates with the others. A table
+    with no covering declaration must be refused, because its row groups would
+    carry no usable spatial statistics.
     """
     payloads = [_item_payload(tile, 2023) for tile in _tile_codes()[:5]]
     for i, payload in enumerate(payloads):
@@ -312,10 +306,9 @@ def main() -> int:
             year_paths.append(path)
         _check_file(year_paths[0], checks, "one year")
 
-        # The per-year file holds one row group at the writer's default, which is
-        # right for 400 rows and leaves rashid measuring the rows themselves.
-        # Regrouped small, the same rows go through the row-group metrics the
-        # store-level mirror will be judged by.
+        # At the writer's default, a 400-row year is a single row group, so rashid
+        # measures the rows themselves. Rewritten in small row groups, the same
+        # rows also go through the row-group metrics that apply to the full index.
         grouped = root / "grouped.parquet"
         _write_mirror(pq.read_table(year_paths[0]), grouped, row_group_size=SMALL_ROW_GROUP)
         _check_file(grouped, checks, "several row groups")
@@ -359,8 +352,8 @@ def main() -> int:
         checks["two years concatenated: the asset hrefs are rebased"] = all(
             href.startswith(f"{BASE_URL}/tiles/") for href in hrefs
         )
-        # Ordered across the years, not concatenated in year order: a store-level
-        # mirror that kept the parts end to end would change year exactly once.
+        # Rows are sorted spatially across both years, so the year changes many
+        # times along the file.
         years = [_year_of(item_id) for item_id in table.column("id").to_pylist()]
         switches = sum(1 for a, b in itertools.pairwise(years) if a != b)
         checks["two years concatenated: the rows are ordered across the years"] = switches > 1

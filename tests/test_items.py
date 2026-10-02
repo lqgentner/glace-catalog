@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Gate on the dates a tile item publishes.
+"""Checks the dates and assets of tile and mosaic items.
 
-Every tile of a year is composited from the same search window, and that window
-is what the filename and ``COMPOSITE_*_DATE`` tags carry, so every tile item of
-a year gets the same ``start_datetime``, ``end_datetime`` and ``datetime`` and a
-reader stacking them gets one time coordinate. Which acquisitions actually
-contributed varies per tile and product; that is the ``FIRST_ACQUISITION_DATE``
-and ``LAST_ACQUISITION_DATE`` tags, published per product as
-``glace:{coh,rtc}_first_acquisition`` / ``_last_acquisition``.
+All tiles of a year are composited from the same search window, which the
+filename and the ``COMPOSITE_*_DATE`` tags record. Every tile item of a year
+therefore has the same ``start_datetime``, ``end_datetime`` and ``datetime``,
+so a reader stacking them gets one time coordinate. The acquisitions that
+actually contributed vary by tile and product. They come from the
+``FIRST_ACQUISITION_DATE`` and ``LAST_ACQUISITION_DATE`` tags and are published
+per product as ``glace:{coh,rtc}_first_acquisition`` and ``_last_acquisition``.
 
-A tile whose files disagree about the window is refused rather than widened,
-and the window-to-range translation is checked once, since every item uses it.
+A tile whose files disagree about the window is refused. The conversion from
+window to time range is checked once, since every item uses it.
 
-The mosaic item is checked for what its web-map archives are: assets with the
-``visual`` role beside the COGs they render, and never a link.
+The mosaic item carries its web-map archives only as assets with the
+``visual`` role, beside the COGs they render.
 
 Reads no data and needs no network.
 
@@ -101,7 +101,7 @@ def _info(first: str, last: str, **extra: str) -> RasterInfo:
 
 
 def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
-    """Check that a stale file from a different window refuses the tile, never widens it."""
+    """Check that a stale file from a different window makes the tile fail."""
     info = {
         "coh12_vv": _info("2023-07-21", "2023-09-30"),
         "rtc_vv": _info("2023-07-21", "2023-10-12", COMPOSITE_END_DATE="2023-10-20"),
@@ -140,8 +140,8 @@ def _mosaic_item(
 def _publisher() -> ModuleType:
     """Load ``scripts/publish-year.py`` as a module.
 
-    The script resolves its store root at import; a local value keeps this gate
-    off object storage, and nothing here reads or writes it.
+    The script resolves its store root on import, so the gate first points it
+    at a local placeholder path.
     """
     os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
     spec = importlib.util.spec_from_file_location(
@@ -234,7 +234,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
             props.get("glace:rtc_last_acquisition"),
         )
         == ("2023-07-21", "2023-10-12"),
-        "the filename-derived span fields are gone": "glace:coh_start" not in props
+        "no filename-derived span fields": "glace:coh_start" not in props
         and "glace:rtc_end" not in props,
         "acquisition tags reach the asset": item.assets["coh12_vv"].extra_fields.get(
             "glace:first_acquisition_date",
@@ -242,11 +242,9 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         == "2023-07-21",
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
-    # The item carries the archives as `visual` assets and nothing links them
-    # (docs/conformance.md, `PORTO-FMT-011`), so the item declares no
-    # web-map-links extension. Checked on the item that actually carries the
-    # renderings, since that is where a link or an extension declaration would
-    # creep in.
+    # The archives are reached through `visual` assets alone, a recorded
+    # deviation from `PORTO-FMT-011` (docs/conformance.md). Check this on an
+    # item that carries the renderings.
     built = _publisher().visual_assets(_pmtiles_state())
     rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()
@@ -254,9 +252,9 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["the mosaic item declares no web-map-links extension"] = not any(
         "web-map-links" in uri for uri in rendered.stac_extensions
     )
-    # PTL-AST-003 wants a digest on every asset whose bytes the run wrote; the
-    # mosaics are hashed as they are staged, and an unmeasured asset says nothing
-    # rather than guessing.
+    # Portolan rule PTL-AST-003 asks for a checksum on every asset the run wrote.
+    # Mosaics are hashed as they are staged; an asset with no measured checksum
+    # omits the field.
     digest = "1220" + "ab" * 32
     checks["a measured mosaic asset publishes its digest"] = (
         _mosaic_item(digest).assets["coh12_vv"].extra_fields.get("file:checksum") == digest
@@ -283,7 +281,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering sits in its year's item directory"] = layout.viz(2024, "coh12_vv") == Path(
         "/store/mosaics/2024/coh12_vv_viz.pmtiles"
     )
-    checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
+    checks["the layout has no pmtiles directory"] = not hasattr(layout, "pmtiles")
     checks["visual_assets keys by rendering key"] = list(built) == [
         "coh12_vv_viz",
         "rtc_vv_viz",
@@ -312,8 +310,8 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a tile band is named by its asset key"] = (
         item.assets["coh12_vv"].extra_fields["bands"][0]["name"] == "coh12_vv"
     )
-    # Every title is the vocabulary's, so an item and its collection's
-    # `item_assets` cannot name one file two ways.
+    # Titles come from the vocabulary, so an item and its collection's
+    # `item_assets` always name a file the same way.
     words = vocabulary()
     checks["a tile asset is titled by the vocabulary"] = (
         item.assets["coh12_vv"].title == words.asset_title("coh12_vv") == "Coherence VV"
@@ -329,8 +327,8 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         viz.description or ""
     )
     checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
-    # A state file that outlived a transport range change describes an archive
-    # encoded over other numbers; its band must not declare the new ones.
+    # A build state recorded before the transport range changed describes an
+    # archive encoded with the old range, so publishing it must fail.
     stale = _pmtiles_state()
     stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
     try:

@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Gate on what ``finalize-catalog`` writes over the published years.
+"""Checks what ``finalize-catalog`` writes for the published years.
 
-Three things only this script does, and each one can go wrong quietly:
+Three steps belong to this script alone, and a mistake in any of them is easy
+to miss:
 
-- the published styles, one per year written from the one tracked template, so
-  every year's archives have a style that names their layers;
-- the style registrations on the collection, one per year with the latest the
-  default;
-- the coverage check between the store's archives and the styles, which is what
-  makes an archive no style draws a failed run rather than a layer nobody can see.
+- it writes one style per year from the tracked template, so each year's
+  archives have a style that names their layers;
+- it registers those styles on the collection, one per year, with the latest
+  year as the default;
+- it checks that every archive in the store appears in its year's style, so the
+  run fails on an archive that no style draws.
 
-Runs the script's own functions against a temporary store of empty files. Reads
-no data, writes nothing outside the temporary directory and needs no network.
+Runs the script's own functions against a temporary store of empty files.
+Writes only into the temporary directory, reads no data and needs no network.
 
 Run: uv run tests/test_finalize.py
 """
@@ -39,8 +40,8 @@ SOURCE = ROOT / "catalog"
 def _finalizer() -> ModuleType:
     """Load ``scripts/finalize-catalog.py`` as a module.
 
-    The script resolves its store root at import; a local value keeps this gate
-    off object storage, and nothing here reads or writes it.
+    The script resolves its store root on import, so the gate first points it
+    at a local placeholder path.
     """
     os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
     spec = importlib.util.spec_from_file_location(
@@ -121,8 +122,7 @@ def check_registration(
     checks["the href is the year's file under styles/"] = (
         styles["style-2023"]["href"] == "./styles/2023.json"
     )
-    # The tracked entry describes the template; a published entry describes one
-    # year's style, so its prose is written here rather than copied.
+    # A published entry describes one year's style, so it has its own wording.
     checks["a published style does not describe itself as the template"] = (
         "template" not in styles["style-2023"]["description"]
     )
@@ -143,9 +143,9 @@ def check_coverage(
         checks["every archive is in its year's style, and the COG is ignored"] = False
     try:
         fin.check_style_coverage(layout, [2022], written)
-        checks["a year the store holds no archives of passes"] = True
+        checks["a year with no archives in the store passes"] = True
     except SystemExit:
-        checks["a year the store holds no archives of passes"] = False
+        checks["a year with no archives in the store passes"] = False
     try:
         fin.check_style_coverage(layout, [2024], {"style-2023": written["style-2023"]})
         checks["an archive whose year has no style is refused"] = False

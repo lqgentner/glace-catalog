@@ -8,21 +8,17 @@
 
 Fails on any error-severity finding whose rule is not in ACCEPTED.
 
-ACCEPTED ships empty, and the rule for growing it is not negotiable: every
-entry needs a row in docs/conformance.md giving the rule, where it fires, why
-it is accepted, and the issue tracking its removal. A known deviation with an
-issue number is a debt. A silently widened allow-list is a lie about what this
-catalog conforms to.
+Every entry in ACCEPTED needs a row in docs/conformance.md giving the rule,
+where it fires, why it is accepted, and the issue tracking its removal.
 
-Runs with --no-data. The byte checks read every asset, which over remote hrefs
-makes CI slow and dependent on a third-party host being up. Run the full check
-yourself before publishing:
+Runs with --no-data, which keeps CI fast and independent of remote hosts. Run
+the full check, which reads every asset, yourself before publishing:
 
     rashid check catalog/
 
-Fails when rashid is absent, or when its version is outside the required range.
-A skip reports a green run for a catalog that no validator read. The failure
-message gives the one command that installs a usable rashid.
+Also fails when rashid is missing or its version is outside the supported
+range, so a passing run always means the catalog was checked. The failure
+message says how to install a suitable rashid.
 
 Run: uv run tests/test_conformance.py
 """
@@ -35,27 +31,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Two findings are structural consequences of generating the item tree rather
-# than committing it, and neither is a metadata defect. Both are recorded in
-# docs/conformance.md; both disappear the moment the gate runs against a built
-# tree, which is what happens before publication.
+# Findings caused by the tracked tree holding no built items. They are recorded
+# in docs/conformance.md and disappear when the gate runs against a built tree
+# before publication.
 #
-#   PTL-COL-005  each collection registers its items.parquet mirror, and a fresh
-#                clone holds no items for it to mirror. Dropping the registration
-#                from the tracked collection.json would make the committed
-#                document differ from the published one, which is worse.
+#   PTL-COL-005  each collection lists its items.parquet index, and a fresh
+#                clone has no items to index. The tracked collection.json keeps
+#                the entry so that it matches the published document.
 ACCEPTED: set[str] = {"PTL-COL-005"}
 
-# Local deviation from upstream: tools/publish.py is deleted (R-8), so the
-# tracked catalog directory is named here instead of read from publish_dir.
+# Local deviation from upstream: the catalog directory is fixed here.
 target = ROOT / "catalog"
 
-# 0.1.8 is the first release carrying the spec v0.2.0 rules. Below it, a `self`
-# link and an absolute structural href are both reported as errors, which v0.2.0
-# allows and this catalog relies on. Below 0.1.5 the rules PTL-LNK-007 through
-# PTL-LNK-009 and PTL-AST-006 do not exist at all, so an older rashid reports a
-# pass for a catalog it never checked against them. The upper bound stops an
-# unreviewed 0.2 rule set from silently changing what this gate means.
+# 0.1.8 is the first release with the Portolan spec v0.2.0 rules, which allow
+# the `self` link and absolute structural hrefs this catalog uses. The upper
+# bound means a new 0.2 rule set is reviewed before this gate adopts it.
 MIN_VERSION = (0, 1, 8)
 MAX_VERSION = (0, 2, 0)
 SPEC = "rashid>=0.1.8,<0.2.0"
@@ -79,9 +69,8 @@ def rashid_version() -> tuple[int, ...]:
         fail(f"rashid --version did not run ({exc})")
     if proc.returncode != 0:
         fail(f"rashid --version exited {proc.returncode}")
-    # rashid 0.1.6 prints "rashid, version 0.1.6". Read the first X.Y.Z in the
-    # output, and fail on a string with no version in it. A gate that cannot
-    # read the version must not assume the version is good.
+    # rashid prints e.g. "rashid, version 0.1.6". Take the first X.Y.Z, and
+    # fail when the output has none.
     text = (proc.stdout + proc.stderr).strip()
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
     if match is None:
