@@ -43,16 +43,10 @@ declares each archive `{stem}_viz.pmtiles` as a `raster-dem` source with a
 custom encoding and draws it as the `color-relief` layer `glace-{stem}-{year}`.
 The latest style also has the `default` role.
 
-Transport ranges are fixed across years, so years compare like with like.
-The styles draw a default ramp over a default range; a client can change
-either without re-tiling. `renders` names portable colormaps and declares the
-decibel conversions for displaying the COGs.
-
-| Asset key | Title | Transport range | Default range | Default ramp |
-| --- | --- | --- | --- | --- |
-{% for row in mosaic_assets %}
-| `{{ row.key }}` | {{ row.title }} | {{ row.transport }} | {{ row.stretch }} | `{{ row.cmap }}` |
-{% endfor %}
+Each layer's transport range is the same every year, so years compare like
+with like. The styles draw a default ramp over a default range, which a client
+can change without re-tiling. The `renders` block holds the same defaults for
+the COGs and declares their decibel conversions.
 
 ## Compare with tiles
 

@@ -56,8 +56,5 @@ equal-area grid across years.
 `glace:glacier_fraction` uses one RGI7 version and is computed once per scope.
 The lookup table is the tiles collection's `glacier-fractions` asset.
 
-Default display ranges are the same for every year. The collections'
-`renders` blocks name portable matplotlib colormaps. The MapLibre styles draw
-the intended cmcrameri ramps: `cmc.lipari` for coherence,
-`cmc.grayC` for backscatter and `cmc.glasgow` for the QA layers.
-The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) draws the PMTiles with these styles.
+Default display ramps and ranges are in the collections' `renders` blocks and
+the year styles. The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) draws the PMTiles with these styles.

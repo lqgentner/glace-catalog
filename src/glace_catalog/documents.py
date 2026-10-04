@@ -389,30 +389,12 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],
         "tile_assets": vocabulary.asset_rows(TILES_DIR),
-        "mosaic_assets": vocabulary.asset_rows(MOSAICS_DIR),
-        "viz_assets": vocabulary.viz_rows(),
         "analysis_grid": catalog.scope.analysis_grid,
         "min_zoom": VIZ_MIN_ZOOM,
         "max_zoom": MOSAIC_ZOOM,
         "pmtiles_media_type": PMTILES_MEDIA_TYPE,
         "version": DATASET_VERSION,
-        "rescale": lambda key: _rescale(vocabulary, key),
-        "cmap": lambda key: _cmap(vocabulary, key),
-        "portable_cmap": vocabulary.portable_cmap,
-        "expression": vocabulary.expression,
-        "title": vocabulary.asset_title,
     }
-
-
-def _cmap(vocabulary: Vocabulary, key: str) -> str:
-    """Name the designed colormap of one layer."""
-    return vocabulary.display(key).cmap
-
-
-def _rescale(vocabulary: Vocabulary, key: str) -> str:
-    """Format the ``rescale`` query parameter of one layer, ``vmin,vmax``."""
-    style = vocabulary.display(key)
-    return f"{style.vmin:g},{style.vmax:g}"
 
 
 def render_markdown(

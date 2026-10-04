@@ -329,11 +329,6 @@ class Vocabulary:
         source = self._product(ref) if ref.qa is None else self._qa(ref)
         return str(source["portable_cmap"])
 
-    def stretch_text(self, key: str) -> str:
-        """Format the default stretch as prose: ``0.1 to 0.75`` or ``-16.5 to -4 dB``."""
-        style = self.display(key)
-        return _range_text(style.vmin, style.vmax, style.units)
-
     def transport_text(self, key: str) -> str:
         """Format the transport range as prose: ``0 to 1`` or ``-25 to 5 dB``."""
         style = self.display(key)
@@ -482,25 +477,10 @@ class Vocabulary:
                     "band": band["name"],
                     "data_type": band["data_type"],
                     "nodata": "NaN" if band["nodata"] == "nan" else band["nodata"],
-                    "stretch": self.stretch_text(key),
-                    "transport": self.transport_text(key),
-                    "cmap": style.cmap,
                     "decibel": style.decibel,
                 },
             )
         return rows
-
-    def viz_rows(self) -> list[dict[str, Any]]:
-        """One row per rendering, for the mosaics prose."""
-        return [
-            {
-                "key": key,
-                "title": self.asset_title(key),
-                "stretch": self.stretch_text(data_key(key)),
-                "transport": self.transport_text(data_key(key)),
-            }
-            for key in VIZ_KEYS
-        ]
 
     @property
     def keys(self) -> Sequence[str]:

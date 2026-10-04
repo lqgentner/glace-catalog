@@ -24,15 +24,15 @@ ORDER BY frac DESC;
 Asset keys are filenames without `.tif`. QA layers use the measurement's key
 followed by `_qa_num` or `_qa_cqm`.
 
-| Asset key | Title | Data type | Nodata | Display |
+| Asset key | Title | Data type | Nodata | Display in |
 | --- | --- | --- | --- | --- |
 {% for row in tile_assets %}
-| `{{ row.key }}` | {{ row.title }} | {{ row.data_type }} | {{ row.nodata }} | {% if row.decibel %}`10*log10(x)`, then {% endif %}{{ row.stretch }}, `{{ row.cmap }}` |
+| `{{ row.key }}` | {{ row.title }} | {{ row.data_type }} | {{ row.nodata }} | {% if row.decibel %}dB, `10*log10(x)`{% else %}stored units{% endif %} |
 {% endfor %}
 
 Average backscatter and composite quality maps in linear units. Apply decibel
-conversion only for display. The collection's `renders` block defines the
-same display ranges with portable matplotlib colormap names.
+conversion only for display. The collection's `renders` block holds the
+default display ranges and colormaps.
 
 ## Processing and dates
 
