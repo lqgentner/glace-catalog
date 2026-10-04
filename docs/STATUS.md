@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-09-22.** Update this file in the same commit as the change it
+**As of 2026-10-04.** Update this file in the same commit as the change it
 describes: the next person will trust it. The design and its reasons are in
 [`DESIGN.md`](DESIGN.md).
 
@@ -14,6 +14,7 @@ describes: the next person will trust it. The design and its reasons are in
 | source composites | Swiss 2021–2024, regenerated with s1bursts 0.5.0 and verified on 2026-09-08 with `load_and_verify_manifest`: 143 tiles and 1 716 files a year, every row with a multihash sha256 and the five band statistics, `manifest_version: 2`, one compositing window per year |
 | glacier fractions | `tiles/glacier-fractions.parquet` is on the bucket, derived once per region from the inventories (AGENTS.md step 1); `finalize-catalog` records its `file:size` and `file:checksum` |
 | build pipeline | `publish-year.py` (copy, vrt, mosaics, pmtiles, items) and `finalize-catalog.py` (patch, mirror, thumbnails, per-year styles, asset sizes and checksums, coverage check, validation). Run end to end over Swiss 2021–2024 on 2026-09-09, and over Alpine 2023 on 2026-09-24 (timings in AGENTS.md) |
+| web maps | Twelve value-encoded PMTiles archives per year (M-37), built for Alpine 2015, 2016 and 2022–2024 in the local store `/mnt/data/glace-alps` and finalized on 2026-10-04: 2.1–2.2 GB a year, one style per year, `rashid check --no-data` 0 errors. Not yet synced to `giuz/glace-alps`. `glace-viewer` reads them on its `spike/encoded-pmtiles` branch |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
 | publication | `tools/sync_data.py`, store to Source Cooperative, gated offline by `tests/test_sync_data.py`. The four Swiss years are published at `lqgentner/glace-ch` in the item-asset layout with the R-18 metadata; `rashid check --live` over the mirrored store reported 0 errors on 2026-09-14. The last republication, on 2026-09-20, replaced the thumbnails with WebP and deleted the old `thumbnail.png` pair. **A live conformance pass after that republication is outstanding** |
