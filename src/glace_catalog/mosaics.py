@@ -68,7 +68,7 @@ DENSIFY_PTS = 51
 MAX_Z_ERROR: dict[str, float] = {
     "rtc": 1e-5,
     "coh12": 1e-4,
-    "qa_cqm": 1e-4,
+    "qa_cqm": 1e-3,
     "qa_num": 0.0,
 }
 """LERC error bound per quantity, in the quantity's own units.
