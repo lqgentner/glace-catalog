@@ -48,6 +48,7 @@ from rasterio.warp import transform_bounds
 from upath import UPath
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.stac.items import GEOMETRY_SIMPLIFY_DEG
 from glace_catalog.stac.naming import published_name
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.stac.tags import BandStatistics
@@ -541,6 +542,12 @@ def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list
 
     The mosaic covers the scope's fixed extent, a bounding box around an
     irregular perimeter. The item geometry follows the tiles that hold data.
+
+    The union of the tile extents has tens of thousands of vertices, most of
+    them along the reprojected tile edges. It is grown by
+    :data:`~glace_catalog.stac.items.GEOMETRY_SIMPLIFY_DEG` and then simplified
+    by the same tolerance, so the footprint keeps a few hundred vertices and
+    still covers every tile. The bbox is that footprint's.
     """
     from shapely.geometry import mapping  # noqa: PLC0415
     from shapely.ops import unary_union  # noqa: PLC0415
@@ -548,7 +555,10 @@ def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list
     tiles = sorted({file.tile for file in files})
     extents = [MGRSGeoBox.from_mgrs(tile).geographic_extent.geom for tile in tiles]
     union = unary_union(extents)
-    return mapping(union), list(union.bounds)
+    footprint = union.buffer(GEOMETRY_SIMPLIFY_DEG, join_style="mitre").simplify(
+        GEOMETRY_SIMPLIFY_DEG
+    )
+    return mapping(footprint), list(footprint.bounds)
 
 
 __all__ = [

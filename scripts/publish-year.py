@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(Path(__file__).stem)
 
-CATALOGUE_SCHEMA_VERSION = 3
+CATALOGUE_SCHEMA_VERSION = 4
 """Version of the item documents' layout. Bump it to make the ``items`` step rerun."""
 
 

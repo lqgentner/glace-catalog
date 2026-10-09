@@ -13,7 +13,8 @@ A tile whose files disagree about the window is refused. The conversion from
 window to time range is checked once, since every item uses it.
 
 The mosaic item carries its web-map archives only as assets with the
-``visual`` role, beside the COGs they render.
+``visual`` role, beside the COGs they render. Its footprint is simplified to a
+few vertices per tile edge and still covers every tile.
 
 Reads no data and needs no network.
 
@@ -30,7 +31,12 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+from freezebase.mgrs import MGRSGeoBox
+from shapely import get_num_coordinates
+from shapely.geometry import shape
+
 from glace_catalog.metadata import vocabulary
+from glace_catalog.mosaics import data_footprint
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import (
     MosaicAsset,
@@ -194,6 +200,27 @@ def _staging_is_cleared() -> bool:
         return removed == 2 and sorted(p.name for p in staged.iterdir()) == ["notes.txt"]
 
 
+def _footprint_checks() -> dict[str, bool]:
+    """Check the mosaic footprint of a block of tiles that spans two UTM zones."""
+    tiles = [f"31TGK{e}{n}" for e in "789" for n in "012"] + ["32TLQ02", "32TLQ12"]
+    files = [
+        file
+        for tile in tiles
+        if (file := parse_composite_name(Path(f"/a/S1_RTC_LRW_{tile}_VV_{WINDOW}.tif")))
+    ]
+    geometry, bbox = data_footprint(files)
+    footprint = shape(geometry)
+    return {
+        "the footprint fixture parsed": len(files) == len(tiles),
+        "the footprint is valid": footprint.is_valid,
+        "the footprint covers every tile": all(
+            footprint.covers(MGRSGeoBox.from_mgrs(tile).geographic_extent.geom) for tile in tiles
+        ),
+        "the footprint is simplified": int(get_num_coordinates(footprint)) < 10 * len(tiles),
+        "the mosaic bbox is the footprint's": bbox == list(footprint.bounds),
+    }
+
+
 def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     """Run the gate."""
     names = {
@@ -327,6 +354,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         viz.description or ""
     )
     checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
+    checks.update(_footprint_checks())
     # A build state recorded before the transport range changed describes an
     # archive encoded with the old range, so publishing it must fail.
     stale = _pmtiles_state()
