@@ -10,7 +10,7 @@ Use this guide to change the repository. To use the published data, read
 | Source | Output | Generator |
 | --- | --- | --- |
 | `metadata/catalog.yaml`, `metadata/assets.yaml`, `metadata/templates/` | Tracked STAC documents, default style, READMEs and agent guides in `catalog/` | `scripts/render-catalog.py` |
-| Composite manifests, rasters and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles and updated collections | `scripts/publish-year.py`, `scripts/finalize-catalog.py` |
+| Composite manifests, rasters and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles and updated collections | `scripts/build-year.py`, `scripts/finalize-catalog.py` |
 
 The rendered catalog is committed, for review and for release archives; built
 store outputs live only in the store. The other hand-maintained files are
@@ -20,10 +20,12 @@ store outputs live only in the store. The other hand-maintained files are
 After editing metadata or templates:
 
 ```bash
-uv run scripts/render-catalog.py
-uv run tests/test_render.py
-uv run tests/run_all.py
+make render   # uv run scripts/render-catalog.py, then tests/test_render.py
+make check    # uv run tests/run_all.py
 ```
+
+`make` lists the targets. Settings come from `.env` and the tracked
+configuration.
 
 The render test requires the tracked catalog to match its sources. Lint runs
 `ruff format --check`, `ruff check` and strict `pyrefly check`; a missing tool
@@ -53,7 +55,7 @@ Preserve these rules:
 - Structural links, item asset hrefs and the collections' style asset hrefs are
   relative. The other collection asset hrefs and the hrefs in `items.parquet`
   are absolute HTTPS; `s3://` hrefs appear only in the `alternate` extension.
-- Publication writes the `self` link, from `public_base`; tracked documents
+- Finalization writes the `self` link, from `public_base`; tracked documents
   leave it out.
 - Analysis COGs store linear values. PMTiles store 8-bit value codes: each
   layer is encoded over a fixed transport range from `metadata/assets.yaml`,
@@ -73,24 +75,28 @@ A store holds a region's COGs, mosaics, web maps and STAC documents, on object
 storage or a local disk. Run commands from this checkout unless stated
 otherwise.
 
-### Credentials
+### Settings
 
-Building reads `.env` through `freezebase.settings.S3Settings`:
+Building reads `.env`, the S3 settings through `freezebase.settings.S3Settings`:
 
 ```bash
 GLACE_S3_PROFILE=        # named profile in ~/.aws/credentials
 GLACE_S3_ENDPOINT_URL=   # UZH gateway, unless set in the profile
+GLACE_SOURCE=            # one year's composite archive, with {year}:
+                         #   s3://s1-bursts/data/alps-total/{year}/s1-comp
 GLACE_STORE_ROOT=        # built store: s3:// prefix, or a local directory
 FREEZEBASE_CACHE=        # local scratch: VRT chains, staged mosaics, RGBA rasters
 ```
 
-`publish-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`
-unless `--root` is given. A local root works offline and publishes the same way.
+`build-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`. A
+local root works offline and publishes the same way. The scope comes from
+`metadata/catalog.yaml` and the public address from `public_base` in
+`catalog.publish.yaml`.
 
 Set `FREEZEBASE_CACHE` to a volume with room for an Alpine year: about 2.5 GB
 of staged mosaics, or 1.1 GB per concurrently warped web-map layer plus 1.8 GB
 of staged archives. Unset, the cache falls back to `~/.cache/freezebase`, which
-is usually the system disk. `publish-year.py` stops before any work when the
+is usually the system disk. `build-year.py` stops before any work when the
 cache has less room than its estimate, and removes each step's staged files
 after the upload.
 
@@ -120,8 +126,9 @@ manifests come only from that run: to add a missing one, rerun the upstream
 year, which skips complete tiles and describes and hashes their files.
 
 ```bash
-uv run --env-file .env scripts/publish-year.py 2023 \
-    --src s3://s1-bursts/data/alps-total/2023/s1-comp --scope alps
+make build YEAR=2023   # uv run --env-file .env scripts/build-year.py 2023
+make build YEAR=2023 ARGS="--force-from pmtiles"
+GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 ```
 
 | Step | Result |
@@ -144,7 +151,6 @@ unseen by the fingerprints. Replace a composite by writing a new file.
 | `--steps copy,mosaics` | Run selected steps. |
 | `--force-from mosaics` | Rebuild from a step onward. |
 | `--layers coh12_vv,rtc_vv` | Select layers. |
-| `--root` | Use another store prefix, such as a scratch location. |
 | `--max-workers` | Set copy threads; transfers are network-bound. |
 | `--mosaic-workers` | Set mosaic processes, one layer each; defaults to four. |
 | `--tiler-workers` | Set tiler processes; defaults to one per core, each with a 256 MB GDAL cache. |
@@ -155,33 +161,26 @@ writes a local RGBA raster of the whole scope: about 100 MB for Switzerland,
 1.1 GB for the Alps. The defaults suit a 16 GB laptop. If memory runs out,
 lower `--concurrent-layers` first, then `--tiler-workers`.
 
-Swiss runs on 2026-09-11, with 15 cores and 60 GB RAM:
+The Alpine years 2015–2026 on 2026-10-16, with 15 cores and 60 GB RAM,
+source and store on one local disk, `--mosaic-workers 12`,
+`--concurrent-layers 12` and 15 tiler workers, per year:
 
-| Tiler workers | Concurrent layers | Peak process-tree RSS | PMTiles time |
-| --- | --- | --- | --- |
-| 15 | 4 | 11 GB | 12 min |
-| 15 | 7 | Not measured | 7 min |
+| Step | Time | Peak process-tree RSS |
+| --- | --- | --- |
+| `copy` | 4 s | |
+| `vrt` | 2 min | |
+| `mosaics` | 10 min | 33 GB |
+| `pmtiles` | 41 min | 17 GB |
+| `items` | 1 min | |
+| Total | 54 min | |
 
-Alpine 2023 on 2026-09-24, same machine, default workers, source and store on
-one local disk (2 210 tiles, 35 GB store):
-
-| Step | Time |
-| --- | --- |
-| `copy` | 4 min |
-| `vrt` | 4 min |
-| `mosaics` | 48 min |
-| `pmtiles` | 1 h 44 min |
-| `items` | 1 min |
-| Total | 2 h 41 min |
-
-Scratch use peaked near 7 GB: about 4 GB of RGBA rasters and 2.7 GB of staged
-mosaics.
+The six decibel layers take longest to warp, about 30 min against 18 min for
+the others.
 
 ### 3. Finalize after adding or changing a year
 
 ```bash
-uv run --env-file .env scripts/finalize-catalog.py \
-    --base-url https://data.source.coop/giuz/glace-alps
+make finalize   # uv run --env-file .env scripts/finalize-catalog.py
 ```
 
 Finalization:
@@ -198,11 +197,13 @@ Finalization:
 
 Prose, providers, license and `item_assets` come from the tracked metadata.
 
-**Use the public serving address for `--base-url` before publication.** It is
-written into the root `self` link and every asset href in `items.parquet`. The
-absolute collection asset hrefs come from `public_base` in
-`catalog.publish.yaml` at render time, so both must name the same address. To
-add a year, build it and finalize again; the other years stay as they are.
+`public_base` in `catalog.publish.yaml` is written into the root `self` link
+and every asset href in `items.parquet`, as it is into the collection asset
+hrefs at render time. To add a year, build it and finalize again; the other
+years stay as they are.
+
+Before publication, check the built store's documents with `make conformance`
+(rashid, without reading asset bytes).
 
 Thumbnails are drawn from the latest year's `coh12_vv.tif` COGs over an
 OpenStreetMap basemap, so this step needs network access to the tile service.
@@ -213,12 +214,12 @@ thumbnails already in the store, and fails if there are none.
 
 ## Publish the store
 
-`tools/sync_data.py` streams the built store from `settings.store_root`
+`tools/publish.py` streams the built store from `settings.store_root`
 (`GLACE_STORE_ROOT`) to `write_prefix` in `catalog.publish.yaml`, using that
 file's named profile and its configured endpoint. Objects are copied directly,
 in chunks, with their content types.
 
-**Upload the built store. Do not sync the tracked `catalog/` over it:** that
+**Upload the built store. Do not upload the tracked `catalog/` over it:** that
 would overwrite the collection updates made by finalization. Do not use
 `portolan push`; its `versions.json` upload tracking conflicts with this
 uploader.
@@ -242,15 +243,16 @@ Public reads use HTTPS at `data.source.coop` or anonymous S3 at
 ### Upload commands
 
 ```bash
-uv run --env-file .env tools/sync_data.py            # dry run
-uv run --env-file .env tools/sync_data.py --confirm  # upload the store
-uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
+make publish-plan   # uv run --env-file .env tools/publish.py
+make publish        # uv run --env-file .env tools/publish.py --confirm
+uv run --env-file .env tools/publish.py --prefix tiles/2024 --confirm
 ```
 
-The dry run lists the proposed uploads and their reasons. `--prefix` limits
-the subtree, `--force` re-uploads matching objects and `--workers` sets
-concurrency. Publishing only adds and replaces objects; remove remote objects
-separately.
+The plan lists the proposed uploads and their reasons, and changes nothing.
+`--prefix` limits the subtree, `--force` re-uploads matching objects and
+`--workers` sets concurrency. Publishing only adds and replaces objects; remove
+remote objects separately. After publishing, `make conformance-live` checks
+the published catalog, its collection assets and its server.
 
 ## Related repositories
 

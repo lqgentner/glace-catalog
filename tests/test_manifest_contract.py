@@ -2,12 +2,12 @@
 """Checks the run-manifest contract with ``deep-glacier-mapping``.
 
 The composite run in that repository writes ``manifest.parquet``, and the
-publisher here reads it. The file is the only contract between the two
+build here reads it. The file is the only contract between the two
 repositories, so a change on either side must show up here. This gate writes a
 manifest in exactly the producer's column layout and checks that everything the
-publisher needs survives the round trip, including the checksum and the band
-statistics, which the publisher takes from the manifest alone. It also checks
-the header reader, which the publisher uses for the mosaics it writes itself.
+build needs survives the round trip, including the checksum and the band
+statistics, which the build takes from the manifest alone. It also checks
+the header reader, which the build uses for the mosaics it writes itself.
 
 The column list below is copied verbatim from
 ``glacier_mapping/manifest.py::COLUMNS``; keep the two identical.
@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -41,6 +42,9 @@ from glace_catalog.stac.store import (
     read_manifest,
 )
 from glace_catalog.stac.tags import BandStatistics, read_raster_info
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 PRODUCER_COLUMNS = (
     "filename",
@@ -69,6 +73,25 @@ PRODUCER_COLUMNS = (
 )
 
 DIGEST = "1220" + "ab" * 32
+
+
+def _build_year() -> ModuleType:
+    """Load ``scripts/build-year.py`` as a module.
+
+    The script resolves its store root on import, so the gate first points it
+    at a local placeholder path.
+    """
+    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
+    spec = importlib.util.spec_from_file_location(
+        "build_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "build-year.py",
+    )
+    if spec is None or spec.loader is None:
+        msg = "scripts/build-year.py did not load"
+        raise ImportError(msg)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def producer_manifest() -> pd.DataFrame:
@@ -169,7 +192,7 @@ def header_checks(tmp: Path) -> dict[str, bool]:
 def refuses_partial_statistics() -> bool:
     """Check a manifest missing one ``stat_*`` value is refused, by column name.
 
-    Four of five values means a producer bug. The publisher reports it at once,
+    Four of five values means a producer bug. The build reports it at once,
     by column, close to the run that caused it.
     """
     frame = producer_manifest()
@@ -188,18 +211,7 @@ def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
     own product's tags: ``PASS_DIRECTION``, for example, appears only for pass
     composites.
     """
-    # The script resolves its store root on import; point it at a local
-    # placeholder path.
-    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
-    spec = importlib.util.spec_from_file_location(
-        "publish_year",
-        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
-    )
-    if spec is None or spec.loader is None:
-        return False
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    tags = module.mosaic_tags(frame, "coh12_vv")
+    tags = _build_year().mosaic_tags(frame, "coh12_vv")
     return tags.get("COMPOSITING_METHOD") == "LRW" and "PASS_DIRECTION" not in tags
 
 
@@ -226,13 +238,32 @@ def local_copy_links(tmp: Path) -> dict[str, bool]:
     }
 
 
+def source_pattern_checks() -> dict[str, bool]:
+    """Check that ``GLACE_SOURCE`` names each year's archive and refuses a pattern without one."""
+    settings = _build_year().settings
+    locations = settings.locations
+    original = locations.source
+    refused: dict[str, bool] = {}
+    try:
+        for name, pattern in (("an unset source", None), ("a source without {year}", "/a/b")):
+            locations.source = pattern
+            try:
+                settings.source(2023)
+                refused[f"{name} is refused"] = False
+            except SystemExit as error:
+                refused[f"{name} is refused"] = "GLACE_SOURCE" in str(error)
+        locations.source = "/data/alps-total/{year}/s1-comp"
+        named = str(settings.source(2023)) == "/data/alps-total/2023/s1-comp"
+    finally:
+        locations.source = original
+    return {**refused, "the source pattern names the year's archive": named}
+
+
 def main() -> int:
     """Run the gate."""
     missing = set(MANIFEST_COLUMNS) - set(PRODUCER_COLUMNS)
     if missing:
-        print(
-            f"error  the publisher requires columns the producer does not write: {sorted(missing)}"
-        )
+        print(f"error  the build requires columns the producer does not write: {sorted(missing)}")
         return 1
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -266,6 +297,7 @@ def main() -> int:
         ),
     }
     checks.update(header)
+    checks.update(source_pattern_checks())
     with tempfile.TemporaryDirectory() as tmp:
         checks.update(local_copy_links(Path(tmp)))
     failed = [name for name, ok in checks.items() if not ok]

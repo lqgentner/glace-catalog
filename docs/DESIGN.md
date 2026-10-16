@@ -85,13 +85,13 @@ year's style, as layer `glace-{stem}-{year}`. The collection carries no
 [`conformance.md`](conformance.md)). Registering the archives as *collection*
 assets would put 144 cards on one page.
 
-**Per-year run records are not published.** The manifest is the publisher's
+**Per-year run records are not published.** The manifest is the build's
 cache and the configuration is pipeline state. Both stay beside the source
 archive; the items carry every value a reader needs.
 
 **Every tile item of a year shares one time range.** The `COMPOSITE_*_DATE`
 tags carry the compositing window, which the pipeline takes from a committed
-per-scope windows file and passes to s1bursts (0.5.0 and later). The publisher
+per-scope windows file and passes to s1bursts (0.5.0 and later). The build
 reads the window from the manifest and requires one window per year: a file
 from another window stops the year rather than widening its extent.
 `published_time_range` is the one place that turns the inclusive days into
@@ -100,7 +100,7 @@ as `glace:*_first_acquisition` / `_last_acquisition`.
 
 **Dotfiles are build state.** `.build-state.json` and `.items.parquet` (the
 year's slice of the mirror, before `finalize-catalog` combines them) start
-with a dot so the publish sync skips them.
+with a dot so publishing skips them.
 
 ---
 
@@ -234,10 +234,10 @@ The build uses the same vocabulary (`glace_catalog.metadata`) for every asset
 title it writes, so an item and its collection's `item_assets` always name a
 file the same way.
 
-**The build writes only to the store.** `scripts/publish-year.py` and
-`scripts/finalize-catalog.py` read the composites from the archive given by
-`publish-year.py --src` and write to `GLACE_STORE_ROOT`: a prefix on the
-private UZH gateway, or a local directory. `finalize-catalog` copies the
+**The build writes only to the store.** `scripts/build-year.py` and
+`scripts/finalize-catalog.py` read the composites from the archive that
+`GLACE_SOURCE` names for the year and write to `GLACE_STORE_ROOT`: a prefix
+on the private UZH gateway, or a local directory. `finalize-catalog` copies the
 tracked documents into the store and *patches* those copies with what
 depends on the build: year links, temporal extent, the per-year style
 entries, and `file:size` and `file:checksum` on the collection assets it
@@ -245,13 +245,13 @@ wrote. It leaves prose, providers, license, `item_assets` and `renders`
 alone. Rendering happens at commit time, with a reviewable diff; publication
 does not rewrite prose.
 
-**The store is the published tree.** `tools/sync_data.py` streams every object
+**The store is the published tree.** `tools/publish.py` streams every object
 under `GLACE_STORE_ROOT` to the `write_prefix` in `catalog.publish.yaml`,
 documents and data alike, object to object, without staging. Both sides are
 `UPath` roots. An `s3://` store comes from `freezebase.make_s3_upath`, so its
 listing, reads and writes share one client configuration and retry budget
 with the target. The target needs only the profile: botocore reads the Source
-Cooperative endpoint from that profile's config section. Syncing the tracked
+Cooperative endpoint from that profile's config section. Uploading the tracked
 `catalog/` over the store would replace the patched documents with unpatched
 ones, so nothing does.
 
@@ -284,7 +284,7 @@ collection asset hrefs and the hrefs in `items.parquet` are absolute HTTPS
 built from `public_base`, because a client reading one object alone has no
 base to resolve against, and the Source Cooperative file listing shows asset
 hrefs as download links that work only when absolute. `s3://` appears only
-under the `alternate` extension. The publish step writes the root `self`
+under the `alternate` extension. Finalization writes the root `self`
 link; it is not tracked, because its correct value depends on the deployment
 target.
 
@@ -376,10 +376,9 @@ The release procedure, run by hand:
 
 1. Bump `DATASET_VERSION` and `CITATION.cff`, set the new version DOI in
    `metadata/catalog.yaml`, and re-render.
-2. Build and finalize the store.
-3. `uv run --env-file .env tools/sync_data.py --confirm`.
-4. `uv run rashid check "$GLACE_STORE_ROOT" --live --live-base-url` the
-   `public_base` from `catalog.publish.yaml`.
+2. Build and finalize the store, and run `make conformance`.
+3. `make publish-plan`, then `make publish`.
+4. `make conformance-live`.
 5. Commit `date-released` in `CITATION.cff`.
 6. `git tag v{version}` and push the tag.
 7. Create the GitHub release with the rashid summary in its notes.
@@ -431,7 +430,7 @@ rather than struck through; git keeps them.
 | M-10 | `colormap_name` names portable matplotlib maps; the cmcrameri maps are named in `AGENTS.md` | 3 |
 | M-11 | UZH is both producer and host, in one provider entry, so the catalog is official. Source Cooperative is the storage vendor, not the host | 1 |
 | M-12 | License `CC-BY-4.0` | 1 |
-| M-13 | Structural links, item asset hrefs and style asset hrefs relative; the other collection asset hrefs and the `items.parquet` hrefs absolute HTTPS + `alternate` s3; `self` written by the publish step | 4 |
+| M-13 | Structural links, item asset hrefs and style asset hrefs relative; the other collection asset hrefs and the `items.parquet` hrefs absolute HTTPS + `alternate` s3; `self` written by finalization | 4 |
 | M-14 | The generated tree is published and never committed | 4 |
 | M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement | 5 |
 | M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 1 |
@@ -459,10 +458,10 @@ rather than struck through; git keeps them.
 | R-2 | pyrefly `strict` is the type checker, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link; `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7.1,<0.8` from PyPI, which provides `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint (UPSTREAM.md F-5) | 6 |
-| R-6 | No staging directory. Publication streams object to object from `GLACE_STORE_ROOT`, local or on the bucket, to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`, with no hand-built boto3 client. Each write is committed explicitly and discarded on failure, so a broken transfer publishes nothing | 4 |
+| R-6 | No staging directory. Publication streams object to object from `GLACE_STORE_ROOT`, local or on the bucket, to Source Cooperative through `tools/publish.py`, `UPath` to `UPath`, with no hand-built boto3 client. Each write is committed explicitly and discarded on failure, so a broken transfer publishes nothing | 4 |
 | R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account and the key starts with the product, so `write_prefix` is `s3://giuz/glace-alps` | 4 |
-| R-8 | The published tree is the **store**, not the tracked `catalog/`; `tools/sync_data.py` is the only uploader. Syncing the tracked tree would strip `finalize-catalog`'s patches | 4 |
+| R-8 | The published tree is the **store**, not the tracked `catalog/`; `tools/publish.py` is the only uploader. Uploading the tracked tree would strip `finalize-catalog`'s patches | 4 |
 | R-9 | Thumbnails render the latest year's mosaic and tile `32TMS24` `coh12_vv.tif` COGs as 1400 × 933 WebP (quality 90) over grayscale OSM, with the provider's credit. 3:2 is the Portolan browser card's shape (guidance, not a rashid rule), so other aspects are letterboxed or cropped; 1400 px is twice the widest card, so a 2x display does not upscale. The figure has a fixed width and the dpi sets the pixel size, so the credit keeps its proportion. Both thumbnails show the full footprint in its projected proportions with at least 5 % margins | 3 |
 | R-10 | The root catalog carries a `rel: "icon"` link to `_assets/glace-wordmark.svg` | 2 |
 | R-11 | No `.portolan/metadata.yaml`, since `portolan add` is not used here. Title, license and contact live in `metadata/catalog.yaml`, the only copy (R-18) | 4 |

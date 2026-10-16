@@ -1,22 +1,26 @@
-r"""Write the store's root catalog, collections and item indexes over every published year.
+r"""Write the store's root catalog, collections and item indexes over every built year.
 
-``publish-year.py`` writes one year at a time. This script reads the published
+``build-year.py`` writes one year at a time. This script reads the built
 years and writes what spans them:
 
-- the root ``catalog.json``, with an absolute ``self`` link under ``--base-url``;
+- the root ``catalog.json``, with an absolute ``self`` link under the public
+  address, ``public_base`` in ``catalog.publish.yaml``;
 - ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
   year and the temporal extent; the mosaics collection also lists one MapLibre
   style per year;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/items.parquet``, the per-year indexes combined, and
   ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
-  ``--base-url``.
+  the public address.
 
 It then validates the result against the STAC schemas.
 
+The documents come from the rendered ``catalog/`` and the store from
+``GLACE_STORE_ROOT``.
+
 Usage:
-    uv run --env-file .env scripts/finalize-catalog.py \\
-        --base-url https://<host>/glace-alps
+    make finalize
+    uv run --env-file .env scripts/finalize-catalog.py
 """
 
 from __future__ import annotations
@@ -37,7 +41,7 @@ from upath import UPath
 
 from glace_catalog import stac, webmap
 from glace_catalog.config import settings
-from glace_catalog.documents import stale_documents
+from glace_catalog.documents import load_public_bases, stale_documents
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
@@ -55,14 +59,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(Path(__file__).stem)
 
+SOURCE_DIR = Path(__file__).resolve().parent.parent / "catalog"
+"""The tracked documents, rendered from ``metadata/``."""
 
-def published_years(layout: stac.StoreLayout) -> list[int]:
+
+def built_years(layout: stac.StoreLayout) -> list[int]:
     """Years the store holds: the ``tiles/{year}/`` directories with an item index.
 
-    ``publish-year.py`` writes that index in its ``items`` step.
+    ``build-year.py`` writes that index in its ``items`` step.
     """
     if not layout.tiles.exists():
-        msg = f"No {TILES_DIR}/ under {layout.root}. Run publish-year.py first."
+        msg = f"No {TILES_DIR}/ under {layout.root}. Run build-year.py first."
         raise SystemExit(msg)
     years: list[int] = []
     entries = {entry.name: entry for entry in layout.tiles.iterdir()}
@@ -74,9 +81,9 @@ def published_years(layout: stac.StoreLayout) -> list[int]:
         else:
             logger.warning("%s has no %s; skipping", name, YEAR_INDEX_NAME)
     if not years:
-        msg = f"No published years under {layout.tiles}. Run publish-year.py first."
+        msg = f"No built years under {layout.tiles}. Run build-year.py first."
         raise SystemExit(msg)
-    logger.info("Found %d published year(s): %s", len(years), ", ".join(map(str, years)))
+    logger.info("Found %d built year(s): %s", len(years), ", ".join(map(str, years)))
     return years
 
 
@@ -127,7 +134,7 @@ def patch_collections(
     years: Sequence[int],
     mosaic_items: Sequence[pystac.Item],
 ) -> dict[str, Document]:
-    """Add the published years to the tracked collection documents.
+    """Add the built years to the tracked collection documents.
 
     ``scripts/render-catalog.py`` renders these documents from ``metadata/``,
     and they are reviewed in git. This function adds only what depends on the
@@ -515,7 +522,7 @@ def require_current_encodings(layout: stac.StoreLayout, years: Sequence[int]) ->
         if (mismatch := webmap.encoding_mismatch(key, detail))
     ]
     if stale:
-        hint = "re-tile those years with: publish-year.py YEAR --force-from pmtiles"
+        hint = "re-tile those years with: make build YEAR=... ARGS='--force-from pmtiles'"
         raise SystemExit("\n".join([*stale, hint]))
 
 
@@ -524,18 +531,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
-    parser.add_argument(
-        "--base-url",
-        required=True,
-        help="public URL of the store root, used in the root self link and items.parquet hrefs",
-    )
-    parser.add_argument(
-        "--source",
-        type=Path,
-        default=Path(__file__).resolve().parent.parent / "catalog",
-        help="tracked catalog/ directory rendered from metadata/",
     )
     parser.add_argument(
         "--skip-thumbnail",
@@ -561,14 +556,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Assemble the collection documents, indexes and thumbnails over every published year."""
+    """Assemble the collection documents, indexes and thumbnails over every built year."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    require_current_render(args.source)
+    require_current_render(SOURCE_DIR)
+    base_url = load_public_bases().https
 
-    root = settings.resolve_path(args.root) if args.root else settings.store_root
-    layout = stac.StoreLayout(root)
-    years = published_years(layout)
+    layout = stac.StoreLayout(settings.store_root)
+    years = built_years(layout)
     require_current_encodings(layout, years)
 
     tables = [read_year_index(layout, year) for year in years]
@@ -576,14 +571,14 @@ def main() -> None:
     if len(versions) > 1:
         msg = (
             f"the store's tile items carry editions {sorted(versions)}. A collection "
-            "describes one edition; republish every year with the same one."
+            "describes one edition; rebuild every year with the same one."
         )
         raise SystemExit(msg)
     logger.info("%d tile items across %d year(s)", tile_count, len(years))
 
     mosaic_items = read_mosaic_items(layout, years)
     documents = patch_collections(
-        args.source,
+        SOURCE_DIR,
         years,
         mosaic_items,
     )
@@ -593,10 +588,10 @@ def main() -> None:
     stac.concat_indexes(
         [layout.year_index(year) for year in years],
         layout.tiles_index,
-        base_url=args.base_url,
+        base_url=base_url,
     )
     if mosaic_items:
-        stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=args.base_url)
+        stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=base_url)
     if args.skip_thumbnail:
         require_existing_thumbnails(layout)
     else:
@@ -609,17 +604,17 @@ def main() -> None:
 
     stamp_collection_assets(documents, layout)
     write_documents(
-        args.source,
+        SOURCE_DIR,
         layout,
         documents,
-        base_url=args.base_url,
+        base_url=base_url,
         years=years,
     )
 
     if not args.skip_validate:
         validate(layout)
 
-    logger.info("Store finalized at %s (published as %s)", layout.root, args.base_url)
+    logger.info("Store finalized at %s (published as %s)", layout.root, base_url)
 
 
 if __name__ == "__main__":

@@ -8,15 +8,15 @@ describes: the next person will trust it. The design and its reasons are in
 
 | | state |
 | --- | --- |
-| repository | Scaffolded from `portolan-sdi/portolan-catalog-template` (Apache-2.0). Its three conformance gates remain, attributed in `THIRD_PARTY_NOTICES.md` with the license copy in `licenses/`; `tools/sync_data.py` replaces its publishers (R-8) |
+| repository | Scaffolded from `portolan-sdi/portolan-catalog-template` (Apache-2.0). Its three conformance gates remain, attributed in `THIRD_PARTY_NOTICES.md` with the license copy in `licenses/`; its publishers are unused, and `tools/publish.py` uploads (R-8) |
 | catalog documents | `glace-alps`, version 1.0, 2015–2026, rendered from `metadata/` (R-18) and committed, gated by `tests/test_render.py`. **0 rashid errors**; two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)). The collections carry the LaRS version DOI as `sci:doi`; it is registered once the dataset is listed |
-| gates | ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, sync, stac-check, rashid |
+| gates | ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, publishing, stac-check, rashid |
 | source composites | 2015–2026 at `/mnt/data/alps-total/{year}/s1-comp-mean`, written by s1bursts 0.6.0 with mean aggregation. Every manifest passes `load_and_verify_manifest` (2026-10-16): 2 210 tiles of 12 files a year, except 2015, whose gaps the `coverage_note` in `metadata/catalog.yaml` describes |
 | glacier fractions | `tiles/glacier-fractions.parquet`, derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
 | store | Built locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`). The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
-| publication | `tools/sync_data.py`, store to Source Cooperative, gated offline by `tests/test_sync_data.py`. `giuz/glace-alps` does not exist yet. The Swiss test catalog is still at `lqgentner/glace-ch` |
+| publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. `giuz/glace-alps` does not exist yet. The Swiss test catalog is still at `lqgentner/glace-ch` |
 
 ## Open
 
@@ -29,8 +29,8 @@ Ordered by what blocks what. Everything not listed here is done.
   is most of what it downloads. Do it before P-20, so the fractions table is
   never uploaded. *Verified when* the built tree's tiles collection registers
   `grid` with a `rel: "pmtiles"` link and rashid reports 0 errors.
-- **P-20 — Publish `glace-alps`.** Sync the store to `giuz/glace-alps`
-  (AGENTS.md, "Publish the store"). *Verified when* `rashid check --live`
+- **P-20 — Publish `glace-alps`.** Upload the store to `giuz/glace-alps`
+  (AGENTS.md, "Publish the store"). *Verified when* `make conformance-live`
   over the mirrored store reports 0 errors.
 - **P-2 — Remove the Swiss test publication.** `lqgentner/glace-ch` on Source
   Cooperative holds the old Swiss tree. Publishing never deletes, and the
@@ -50,7 +50,7 @@ Worth doing, blocking nothing:
 - **P-15 — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
   (raster styling).** This catalog is the first Portolan raster PMTiles case;
   the style files and the `renders` blocks may need changing when it settles.
-- **P-22 — Check every published href after a sync.** Send a HEAD request to
+- **P-22 — Check every published href after publishing.** Send a HEAD request to
   each asset href under `public_base`, as FIRMS does with
   `tests/test_links.py --remote`. `rashid check --live` tests range requests
   and CORS, not whether every object exists.

@@ -144,19 +144,19 @@ def _mosaic_item(
     )
 
 
-def _publisher() -> ModuleType:
-    """Load ``scripts/publish-year.py`` as a module.
+def _build_year() -> ModuleType:
+    """Load ``scripts/build-year.py`` as a module.
 
     The script resolves its store root on import, so the gate first points it
     at a local placeholder path.
     """
     os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
     spec = importlib.util.spec_from_file_location(
-        "publish_year",
-        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
+        "build_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "build-year.py",
     )
     if spec is None or spec.loader is None:
-        msg = "scripts/publish-year.py did not load"
+        msg = "scripts/build-year.py did not load"
         raise RuntimeError(msg)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -192,28 +192,28 @@ def _pmtiles_state() -> BuildState:
 
 def _staging_checks() -> dict[str, bool]:
     """Check the staging directories and the scratch estimate of the year script."""
-    publisher = _publisher()
+    build_year = _build_year()
     with tempfile.TemporaryDirectory() as tmp:
         args = SimpleNamespace(cache=Path(tmp), year=2023)
         killed = Path(tmp) / "glace-store" / "2023" / "pmtiles-killed"
         killed.mkdir(parents=True)
         (killed / "coh12_vv_viz.pmtiles").write_bytes(b"partial")
-        with publisher.staging(args, "pmtiles") as staged:
+        with build_year.staging(args, "pmtiles") as staged:
             leftover_cleared = not killed.exists()
             empty = not any(staged.iterdir())
             (staged / "coh12_vv_viz.pmtiles").write_bytes(b"built")
-        with publisher.staging(args, "pmtiles") as again:
+        with build_year.staging(args, "pmtiles") as again:
             fresh = again != staged and not any(again.iterdir())
         removed = not any((Path(tmp) / "glace-store" / "2023").iterdir())
         too_little = False
         try:
-            publisher.require_scratch_space(Path(tmp), 1 << 60)
+            build_year.require_scratch_space(Path(tmp), 1 << 60)
         except SystemExit as error:
             too_little = "FREEZEBASE_CACHE" in str(error)
     alps = get_scope("alps")
     every = SimpleNamespace(layers=None, concurrent_layers=12)
     one = SimpleNamespace(layers=["coh12_vv"], concurrent_layers=12)
-    pmtiles = publisher.scratch_needed(every, alps, ["pmtiles"])
+    pmtiles = build_year.scratch_needed(every, alps, ["pmtiles"])
     return {
         "a step stages into an empty directory": empty,
         "a killed run's staging is cleared": leftover_cleared,
@@ -222,9 +222,9 @@ def _staging_checks() -> dict[str, bool]:
         "too little scratch space stops the build": too_little,
         "the Alpine web maps need 15 to 40 GB of scratch": 15e9 < pmtiles < 40e9,
         "one layer needs less scratch than twelve": (
-            publisher.scratch_needed(one, alps, ["pmtiles"]) < pmtiles
+            build_year.scratch_needed(one, alps, ["pmtiles"]) < pmtiles
         ),
-        "an up-to-date year needs no scratch": publisher.scratch_needed(every, alps, []) == 0,
+        "an up-to-date year needs no scratch": build_year.scratch_needed(every, alps, []) == 0,
     }
 
 
@@ -300,7 +300,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     # The archives are reached through `visual` assets alone, a recorded
     # deviation from `PORTO-FMT-011` (docs/conformance.md). Check this on an
     # item that carries the renderings.
-    built = _publisher().visual_assets(_pmtiles_state())
+    built = _build_year().visual_assets(_pmtiles_state())
     rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()
     checks["the mosaic item links no PMTiles archive"] = not rendered.get_links("pmtiles")
@@ -388,7 +388,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     stale = _pmtiles_state()
     stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
     try:
-        _publisher().visual_assets(stale)
+        _build_year().visual_assets(stale)
         checks["an archive encoded over a stale range is refused"] = False
     except SystemExit:
         checks["an archive encoded over a stale range is refused"] = True

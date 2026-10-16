@@ -33,7 +33,7 @@ TESTS = [
     "test_webmap.py",
     "test_finalize.py",
     "test_links.py",
-    "test_sync_data.py",
+    "test_publish.py",
     "test_stac_valid.py",
     "test_conformance.py",
 ]

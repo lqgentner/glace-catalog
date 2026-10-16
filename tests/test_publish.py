@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks what publication would upload, before it uploads anything.
 
-``tools/sync_data.py`` copies the private store to the public bucket. It
+``tools/publish.py`` copies the private store to the public bucket. It
 decides which objects to upload, and with which content type, from object
 listings alone, so both decisions can be checked offline. This gate checks the
 change detection over a synthetic pair of listings, the content types, the
@@ -11,7 +11,7 @@ the dry-run summary a person reads before passing ``--confirm``.
 Both sides of a transfer are in-memory filesystems, since the tool only asks a
 root for a listing, a reader and a writer. Needs no network.
 
-Run: uv run tests/test_sync_data.py
+Run: uv run tests/test_publish.py
 """
 
 from __future__ import annotations
@@ -38,18 +38,18 @@ os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store")
 
 from botocore.exceptions import ProfileNotFound  # noqa: E402
 from fsspec.implementations.memory import MemoryFileSystem  # noqa: E402
-import sync_data  # noqa: E402
+import publish  # noqa: E402
 from upath import UPath  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-Entry = sync_data.Entry
+Entry = publish.Entry
 
 BUILT = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 """When the store was written, in the synthetic listings."""
 PUBLISHED_AT = BUILT + timedelta(hours=6)
-"""When it was last synced: after the build, the way publication always is."""
+"""When it was last published: after the build, the way publication always is."""
 
 # One year of one collection, cut down: a document, a raster, an archive, the
 # item index, and two dotfiles that hold build state.
@@ -108,8 +108,8 @@ class TwoRoots:
 
     def __init__(self, source_root: UPath, target_root: UPath) -> None:
         self.patches = (
-            patch.object(sync_data, "read_target", self._returning(target_root)),
-            patch.object(sync_data, "store_root", self._returning(source_root)),
+            patch.object(publish, "read_target", self._returning(target_root)),
+            patch.object(publish, "store_root", self._returning(source_root)),
         )
 
     @staticmethod
@@ -134,8 +134,8 @@ class TwoRoots:
 def check_change_detection() -> dict[str, bool]:
     """Classification of a listing against what is already published."""
     source, published = entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT)
-    plan = sync_data.plan_sync(source, published)
-    forced = sync_data.plan_sync(source, published, force=True)
+    plan = publish.plan_upload(source, published)
+    forced = publish.plan_upload(source, published, force=True)
     return {
         "an object the target lacks is new": plan.new
         == (
@@ -201,7 +201,7 @@ def check_same_size_detection() -> dict[str, bool]:
         "time/unknown-target.tif": Entry(SIZE, None, None),
         "time/quoted-etags.json": Entry(SIZE, f'"{MD5_A.upper()}"', PUBLISHED_AT),
     }
-    plan = sync_data.plan_sync(source, target)
+    plan = publish.plan_upload(source, target)
     return {
         "two equal MD5s are unchanged even when the source is newer": {
             "etag/equal.json",
@@ -251,9 +251,9 @@ def check_content_types() -> dict[str, bool]:
         "LICENSE": "application/octet-stream",
     }
     wrong = {
-        name: sync_data.content_type_for(name)
+        name: publish.content_type_for(name)
         for name, expected in cases.items()
-        if sync_data.content_type_for(name) != expected
+        if publish.content_type_for(name) != expected
     }
     for name, got in wrong.items():
         print(f"error  {name} is served as {got}")
@@ -266,7 +266,7 @@ def check_target_config() -> dict[str, bool]:
     Building the path is offline, so this reads the real file; the profile is
     needed only once a request is signed.
     """
-    target = sync_data.read_target()
+    target = publish.read_target()
     options = target.storage_options
     checks = {
         "the target is an S3 path": target.protocol == "s3",
@@ -286,7 +286,7 @@ def check_target_config() -> dict[str, bool]:
         config = Path(directory) / "catalog.publish.yaml"
         config.write_text("write_prefix: s3://lqgentner/glace-ch/\nprofile: source-coop\n")
         checks["a trailing slash is not part of the prefix"] = (
-            str(sync_data.read_target(config)) == "s3://lqgentner/glace-ch"
+            str(publish.read_target(config)) == "s3://lqgentner/glace-ch"
         )
         refused = {
             "a configuration without write_prefix": "public_base: https://x.invalid/\n",
@@ -299,7 +299,7 @@ def check_target_config() -> dict[str, bool]:
         for name, text in refused.items():
             config.write_text(text)
             try:
-                sync_data.read_target(config)
+                publish.read_target(config)
             except ValueError:
                 checks[f"{name} is refused"] = True
             else:
@@ -322,15 +322,15 @@ def check_local_root() -> dict[str, bool]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         (Path(tmp) / "tiles/2023/.build-state.json").write_text("{}")
-        locations = sync_data.settings.locations
+        locations = publish.settings.locations
         original = locations.store_root
         locations.store_root = tmp
         try:
             with (
-                patch.object(sync_data, "read_target", lambda: target_root),
+                patch.object(publish, "read_target", lambda: target_root),
                 redirect_stdout(StringIO()),
             ):
-                code = sync_data.main(["--confirm"])
+                code = publish.main(["--confirm"])
         finally:
             locations.store_root = original
     checks["a local store root publishes"] = code == 0
@@ -373,18 +373,18 @@ def check_listing_and_transfer() -> dict[str, bool]:
     """Check both listings and one transfer per object with its content type."""
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED, PUBLISHED_AT)
-    source = sync_data.list_subtree(source_root, "")
-    published = sync_data.list_subtree(target_root, "")
-    plan = sync_data.plan_sync(source, published)
+    source = publish.list_subtree(source_root, "")
+    published = publish.list_subtree(target_root, "")
+    plan = publish.plan_upload(source, published)
     # Listed before the transfer adds the year's objects under tiles/.
-    subtree = sync_data.list_subtree(target_root, "tiles")
+    subtree = publish.list_subtree(target_root, "tiles")
 
     with RecordingWrites() as writes:
-        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
+        failed = publish.transfer(source_root, target_root, plan.upload, workers=2)
     written = {
         path.removeprefix(f"{target_root.path}/"): kwargs for path, kwargs in writes.opened.items()
     }
-    after = sync_data.list_subtree(target_root, "")
+    after = publish.list_subtree(target_root, "")
     return {
         "the source listing comes back store-relative": sizes_of(source) == SOURCE,
         "the target listing comes back store-relative": sizes_of(published) == PUBLISHED,
@@ -396,7 +396,7 @@ def check_listing_and_transfer() -> dict[str, bool]:
         ),
         "a subtree lists only its own keys, still store-relative": sizes_of(subtree)
         == {"tiles/collection.json": 1_500},
-        "an unpublished target lists as empty": sync_data.list_subtree(
+        "an unpublished target lists as empty": publish.list_subtree(
             UPath(f"memory://{uuid4().hex}"),
             "",
         )
@@ -420,7 +420,7 @@ def check_failure_is_reported() -> dict[str, bool]:
     """One unreadable object is reported, not raised, and the rest still move."""
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED)
-    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
+    plan = publish.plan_upload(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     # Delete the raster from the source; to the tool this looks like a rejected
     # read.
     (source_root / "tiles/2024/32TMS24/coh12_vv.tif").unlink()
@@ -428,8 +428,8 @@ def check_failure_is_reported() -> dict[str, bool]:
     # checks.
     reported = StringIO()
     with redirect_stderr(reported):
-        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
-    after = sync_data.list_subtree(target_root, "")
+        failed = publish.transfer(source_root, target_root, plan.upload, workers=2)
+    after = publish.list_subtree(target_root, "")
     return {
         "the failed object is named": failed == ["tiles/2024/32TMS24/coh12_vv.tif"],
         "the reason reaches stderr": "coh12_vv.tif" in reported.getvalue(),
@@ -533,7 +533,7 @@ def check_commit_is_explicit() -> dict[str, bool]:
     checks: dict[str, bool] = {}
 
     with TwoPhaseTarget() as target:
-        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+        failed = publish.transfer(source_root, target_root, tuple(small), workers=1)
     good = target.writers[f"{target_root.path}/tiles/collection.json"]
     checks["a good transfer does not fail"] = not failed
     checks["the writer is opened without autocommit"] = good.kwargs.get("autocommit") is False
@@ -550,7 +550,7 @@ def check_commit_is_explicit() -> dict[str, bool]:
 
     reported = StringIO()
     with TwoPhaseTarget(failing_read="coh12_vv.tif") as target, redirect_stderr(reported):
-        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+        failed = publish.transfer(source_root, target_root, tuple(small), workers=1)
     broken = target.writers[f"{target_root.path}/tiles/2024/32TMS24/coh12_vv.tif"]
     checks["a read that breaks half-way is reported"] = failed == [
         "tiles/2024/32TMS24/coh12_vv.tif",
@@ -569,7 +569,7 @@ def check_commit_is_explicit() -> dict[str, bool]:
     return checks
 
 
-def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> UPath:
+def _no_profile(path: Path = publish.PUBLISH_CONFIG) -> UPath:
     """Fail the way an absent ``source-coop`` profile does."""
     del path
     raise ProfileNotFound(profile="source-coop")
@@ -583,14 +583,14 @@ def check_setup_failures_are_messages() -> dict[str, bool]:
     file needs fixing, so each is reported as a short message.
     """
     checks: dict[str, bool] = {}
-    original = sync_data.read_target
-    sync_data.read_target = _no_profile
+    original = publish.read_target
+    publish.read_target = _no_profile
     reported = StringIO()
     try:
         with redirect_stderr(reported):
-            code = sync_data.main([])
+            code = publish.main([])
     finally:
-        sync_data.read_target = original
+        publish.read_target = original
     message = reported.getvalue()
     checks["a botocore failure exits non-zero"] = code == 1
     checks["it prints one line naming the profile"] = (
@@ -604,12 +604,12 @@ def check_workers_floor() -> dict[str, bool]:
     checks: dict[str, bool] = {}
     for raw in ("0", "-4", "many"):
         try:
-            sync_data.positive_int(raw)
+            publish.positive_int(raw)
         except ArgumentTypeError:
             checks[f"--workers {raw} is refused"] = True
         else:
             checks[f"--workers {raw} is refused"] = False
-    checks["--workers 4 is a pool of four"] = sync_data.positive_int("4") == 4
+    checks["--workers 4 is a pool of four"] = publish.positive_int("4") == 4
     return checks
 
 
@@ -630,17 +630,17 @@ nothing is ever deleted; removing a file from the store leaves it published\
 
 def check_summary() -> dict[str, bool]:
     """Check the table a person reads before typing ``--confirm``."""
-    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
+    plan = publish.plan_upload(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     rendered = "\n".join(
-        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-alps", sync_data.read_target()),
+        publish.summary_lines(plan, "s3://s1-bursts/data/glace-alps", publish.read_target()),
     )
     if rendered != DRY_RUN:
         print("--- rendered ---")
         print(rendered)
     return {
         "the dry-run summary reads as recorded": rendered == DRY_RUN,
-        "byte counts are binary": sync_data.human_bytes(1536) == "1.5 KiB",
-        "small counts stay in bytes": sync_data.human_bytes(512) == "512 B",
+        "byte counts are binary": publish.human_bytes(1536) == "1.5 KiB",
+        "small counts stay in bytes": publish.human_bytes(512) == "512 B",
     }
 
 
@@ -657,7 +657,7 @@ def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
     touch(source_root, "tiles/collection.json", REBUILT)
     printed = StringIO()
     with TwoRoots(source_root, target_root), redirect_stdout(printed):
-        code = sync_data.main([])
+        code = publish.main([])
     lines = printed.getvalue().splitlines()
     return {
         "the dry run exits zero": code == 0,
@@ -692,9 +692,9 @@ def main() -> int:
     for name in failed:
         print(f"error  {name}")
     if failed:
-        print(f"FAILED: {len(failed)} of {len(checks)} sync check(s)")
+        print(f"FAILED: {len(failed)} of {len(checks)} publish check(s)")
         return 1
-    print(f"OK: {len(checks)} sync check(s)")
+    print(f"OK: {len(checks)} publish check(s)")
     return 0
 
 

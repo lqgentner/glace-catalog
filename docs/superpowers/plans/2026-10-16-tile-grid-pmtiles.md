@@ -4,7 +4,7 @@
 
 **Goal:** Publish one vector PMTiles of the MGRS tile grid, carrying each tile's glacier fractions, and stop publishing `glacier-fractions.parquet`.
 
-**Architecture:** `finalize-catalog.py` builds `tiles/grid.pmtiles` from the per-year item indexes it already reads, since every tile item carries its geometry and both fractions. GDAL's PMTiles driver writes it through pyogrio. The tiles collection registers the archive as a `visual` asset with a `rel: "pmtiles"` link and a grid style, the FIRMS pattern, which conforms to `PORTO-FMT-011`. The fractions table becomes a dot-prefixed build input that `publish-year.py` reads and `sync_data.py` never uploads.
+**Architecture:** `finalize-catalog.py` builds `tiles/grid.pmtiles` from the per-year item indexes it already reads, since every tile item carries its geometry and both fractions. GDAL's PMTiles driver writes it through pyogrio. The tiles collection registers the archive as a `visual` asset with a `rel: "pmtiles"` link and a grid style, the FIRMS pattern, which conforms to `PORTO-FMT-011`. The fractions table becomes a dot-prefixed build input that `build-year.py` reads and `publish.py` never uploads.
 
 **Tech Stack:** Python 3.13, GDAL 3.12 via pyogrio (bundled with geopandas, no new dependency), pyarrow, geopandas, the `pmtiles` reader for tests.
 
@@ -32,8 +32,8 @@
   rashid PTL-VIZ-002, -003 and -005 require this; `ACCEPTED` stays empty.
 - **Grid style:** a MapLibre vector style. Source `pmtiles://../grid.pmtiles`, a fill layer coloured by `glacier_fraction_buffered` over 0–1, and an outline layer.
 - **Removed:** the `glacier-fractions` collection asset. Items keep `glace:glacier_fraction` and `glace:glacier_fraction_buffered`.
-- **Build input:** `tiles/.glacier-fractions.parquet`, renamed from `tiles/glacier-fractions.parquet`. Dot-prefixed files stay in the store (`tools/sync_data.py`). Columns are unchanged (D-1).
-- **Inventory provenance:** each scope gets `glacier_inventory = "RGI7-C-11"` and `glacier_buffer_m = 250` (the values in the current table). `publish-year.py` fails when the table disagrees. The prose names both values.
+- **Build input:** `tiles/.glacier-fractions.parquet`, renamed from `tiles/glacier-fractions.parquet`. Dot-prefixed files stay in the store (`tools/publish.py`). Columns are unchanged (D-1).
+- **Inventory provenance:** each scope gets `glacier_inventory = "RGI7-C-11"` and `glacier_buffer_m = 250` (the values in the current table). `build-year.py` fails when the table disagrees. The prose names both values.
 
 ## Global Constraints
 
@@ -49,7 +49,7 @@
 1. **Small cells at low zoom.** GDAL's MVT encoder drops a polygon that collapses after quantisation, and a 10 km cell is about one unit at z0. Expect every tile at the archive's min zoom; Task 2 tests this.
 2. **One tile with different fractions in two years.** That means a rebuilt input, and the grid must not pick one silently. Raise instead; Task 2 tests this.
 3. **A tile present in only some years.** It must still appear in the grid; Task 2 tests this.
-4. **A store that still holds `tiles/glacier-fractions.parquet`.** The sync would publish it as an unregistered object. Finalization fails and names the rename; Task 4 tests this.
+4. **A store that still holds `tiles/glacier-fractions.parquet`.** Publishing would upload it as an unregistered object. Finalization fails and names the rename; Task 4 tests this.
 5. **A store on S3 (`UPath`).** GDAL writes PMTiles to a local file only. Write to a temporary directory, then copy. Task 2 takes a `Path | UPath` target, and the test writes through a local `UPath`.
 
 ---
@@ -61,7 +61,7 @@
 - Modify:
   - `src/glace_catalog/scopes.py`: add `glacier_inventory: str` and `glacier_buffer_m: float` to the scope dataclass, and set both scopes to `"RGI7-C-11"` and `250`.
   - `src/glace_catalog/stac/store.py:212-214`: `glacier_fractions` returns `self.tiles / ".glacier-fractions.parquet"`. Also update the layout docstring tree at line 130.
-  - `scripts/publish-year.py:303-330`: replace `load_glacier_fractions` with a call to `grid.read_glacier_fractions`.
+  - `scripts/build-year.py:303-330`: replace `load_glacier_fractions` with a call to `grid.read_glacier_fractions`.
 - Docs: in `AGENTS.md` step 1, `docs/UPSTREAM.md` D-1 and `docs/STATUS.md:15`, change the `--out` path to `.../tiles/.glacier-fractions.parquet`. D-1 also says the table is a build input that is not published.
 - Test: create `tests/test_grid.py`, following the `check_*` and `main()` pattern of `tests/test_finalize.py`, and add it to `tests/run_all.py` before `test_finalize.py`.
 
@@ -76,7 +76,7 @@
   - `buffer_m=500` raises `ValueError`;
   - a missing path raises `FileNotFoundError`.
 - [ ] **Step 2: Run** `uv run tests/test_grid.py`. Expected: fails on import of `glace_catalog.grid`.
-- [ ] **Step 3: Implement** the scope fields, `read_glacier_fractions`, the `store.py` path and the `publish-year.py` call.
+- [ ] **Step 3: Implement** the scope fields, `read_glacier_fractions`, the `store.py` path and the `build-year.py` call.
 - [ ] **Step 4: Run** `uv run tests/test_grid.py && uv run tests/run_all.py`. Expected: all pass. The tracked catalog does not change in this task.
 - [ ] **Step 5: Commit** with the message "Read glacier fractions from a dot-prefixed build input and check its inventory".
 
@@ -181,8 +181,8 @@ This is operational: no new code, and it runs only after the Alpine build has fi
 - [ ] **Step 1: Rename the build input in each store.**
   - Local store: `mv /mnt/data/glace-alps/tiles/glacier-fractions.parquet /mnt/data/glace-alps/tiles/.glacier-fractions.parquet`.
   - If `s3://s1-bursts/data/glace-alps/tiles/glacier-fractions.parquet` exists, copy it to the dot-prefixed key, then delete the original.
-- [ ] **Step 2: Check whether the rename invalidates the `items` step's fingerprint**, by running `publish-year.py <year> --steps items` for one year. If it rebuilds, it rebuilds every year's items (about 1 min each). Note this in the commit message of the run, not in the code.
-- [ ] **Step 3: Finalize locally:** `uv run --env-file .env scripts/finalize-catalog.py --base-url https://data.source.coop/giuz/glace-alps`. Expected: `tiles/grid.pmtiles` is written, and validation passes.
+- [ ] **Step 2: Check whether the rename invalidates the `items` step's fingerprint**, by running `build-year.py <year> --steps items` for one year. If it rebuilds, it rebuilds every year's items (about 1 min each). Note this in the commit message of the run, not in the code.
+- [ ] **Step 3: Finalize locally:** `make finalize`. Expected: `tiles/grid.pmtiles` is written, and validation passes.
 - [ ] **Step 4: Validate the built tree with rashid**, as `docs/conformance.md` describes. Expected: no new findings on the tiles collection. Then open `tiles/styles/grid.json` in a MapLibre/PMTiles viewer (or the Portolan browser after publication) and check that the cells draw at the archive's min zoom and at zoom 10.
 - [ ] **Step 5: Update the memory notes** with the grid's size, min zoom and feature count.
 - [ ] **Step 6: Hand over to the glace-viewer agent** through herdr (`herdr agent list`, then prompt the glace-viewer pane). Send:
@@ -190,4 +190,4 @@ This is operational: no new code, and it runs only after the Alpine build has fi
   - the local store path to test against.
 
   The viewer then drops `tile-grid.js` and hyparquet, as it proposed.
-- [ ] **Step 7: Before publishing, run** the `tools/sync_data.py` dry run. It must list `tiles/grid.pmtiles` and `tiles/styles/grid.json`, and must not list either fractions file. If an earlier upload left `tiles/glacier-fractions.parquet` on Source Coop, remove it there separately.
+- [ ] **Step 7: Before publishing, run** `make publish-plan`. It must list `tiles/grid.pmtiles` and `tiles/styles/grid.json`, and must not list either fractions file. If an earlier upload left `tiles/glacier-fractions.parquet` on Source Coop, remove it there separately.

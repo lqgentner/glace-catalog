@@ -2,7 +2,7 @@
 """Upload the built store to Source Cooperative.
 
 The store at ``GLACE_STORE_ROOT``, a local directory or an ``s3://`` prefix, is
-the complete published tree: ``publish-year.py`` writes the items and rasters,
+the complete published tree: ``build-year.py`` writes the items and rasters,
 and ``finalize-catalog.py`` writes the collection documents. This script copies
 that tree to the ``write_prefix`` in ``catalog.publish.yaml``, using the
 ``profile`` named there; the profile's AWS configuration supplies the endpoint.
@@ -21,9 +21,9 @@ listing per side:
 that has the right size. Publishing only adds and overwrites objects; removing
 one from the target is a separate, manual action.
 
-    uv run --env-file .env tools/sync_data.py                 # dry run
-    uv run --env-file .env tools/sync_data.py --confirm       # upload
-    uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
+    make publish-plan  # dry run
+    make publish       # upload
+    uv run --env-file .env tools/publish.py --prefix tiles/2024 --confirm
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ class Entry:
 
 @dataclass(frozen=True)
 class Plan:
-    """What one sync would do, before it does any of it.
+    """What one upload would do, before it does any of it.
 
     Every field holds store-relative paths, sorted. ``upload`` lists the paths
     to transfer: ``new`` and ``changed``, plus ``unchanged`` when forced.
@@ -178,7 +178,7 @@ def is_unchanged(source: Entry, target: Entry) -> bool:
     return source.modified <= target.modified
 
 
-def plan_sync(
+def plan_upload(
     source: Mapping[str, Entry],
     target: Mapping[str, Entry],
     *,
@@ -461,7 +461,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--prefix",
         default="",
-        help="sync only this subtree of the store, e.g. tiles/2024",
+        help="publish only this subtree of the store, e.g. tiles/2024",
     )
     parser.add_argument(
         "--workers",
@@ -473,7 +473,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Plan the sync, print it, and run it when confirmed."""
+    """Plan the upload, print it, and run it when confirmed."""
     args = parse_args(argv)
     subtree = args.prefix.strip("/")
 
@@ -489,7 +489,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     listing_root = root / subtree if subtree else root
-    plan = plan_sync(source, published, force=args.force)
+    plan = plan_upload(source, published, force=args.force)
     for line in summary_lines(plan, str(listing_root), target):
         print(line)
     if not source:

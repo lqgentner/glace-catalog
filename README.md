@@ -39,7 +39,8 @@ metadata/           the source: catalog.yaml, assets.yaml, the markdown template
 catalog/            the published tree, rendered from metadata/ and committed
 src/glace_catalog/  the library that builds it
 scripts/            the build commands, incl. render-catalog.py
-tools/              sync_data.py, which publishes the built store
+tools/              publish.py, which uploads the built store; mirror_docs.py
+Makefile            the commands: make lists them
 tests/              the gates, incl. rashid conformance
 docs/               DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 ```

@@ -1,6 +1,6 @@
 # Where the built store is published.
 #
-# tools/sync_data.py uploads every object under GLACE_STORE_ROOT to
+# tools/publish.py uploads every object under GLACE_STORE_ROOT to
 # write_prefix. The tracked catalog/ directory is never uploaded directly.
 
 # Upload target. The profile's endpoint is the Source Cooperative S3 proxy

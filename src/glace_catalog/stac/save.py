@@ -202,8 +202,8 @@ def concat_indexes(
 
     The per-year files hold root-relative hrefs, so they stay valid when the
     store moves. The store-level index holds absolute hrefs, because its
-    readers have no root to resolve against. Only ``finalize-catalog`` takes
-    ``--base-url``, so moving the store takes one finalize run.
+    readers have no root to resolve against. Only ``finalize-catalog`` writes
+    them, from ``public_base``, so moving the store takes one finalize run.
 
     Returns
     -------

@@ -20,15 +20,18 @@ The gate runs against the **tracked tree**: the root catalog and the two
 collections. The generated items are not in it.
 
 Conformance is really a claim about the **published** tree, which adds every
-generated item. Check the built store before every publication. rashid takes a
-local catalog directory only, so mirror the store's documents first; the asset
-hrefs are absolute public URLs, so the bytes checked are the published ones:
+generated item. rashid takes a local catalog directory only, so both targets
+mirror the store's documents first (`tools/mirror_docs.py`):
 
 ```bash
-uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
-uv run rashid check /tmp/glace-docs --schema --data --live \
-    --live-base-url https://data.source.coop/giuz/glace-alps
+make conformance        # before publication: documents and schema, no asset bytes
+make conformance-live   # after publication: also the collection assets' bytes and the server
 ```
+
+The collection asset hrefs are absolute public URLs, so `make conformance-live`
+reads the published collection assets and probes the server's range and CORS
+support. Item asset hrefs are relative and do not resolve in the mirror, so
+neither target reads the COGs or archives.
 
 The last full run, on 2026-09-08 over the four published Swiss years, gave
 0 errors and only the `PTL-CAT-001` warnings accepted below.
@@ -153,7 +156,7 @@ what satisfies it; open work is tracked in [`STATUS.md`](STATUS.md).
 | Rule | Requirement | State |
 |---|---|---|
 | `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **Satisfied for both writers.** The 2015–2026 composites, written by s1bursts 0.6.0, carry the five `STATISTICS_*` tags on float32 data bands and uint16 QA-NUM bands, and in every manifest row (verified 2026-10-16). The exception is a raster with no valid pixel, such as the 2015 backscatter of `32TNT24`, which has no statistics to carry. The annual mosaics are written here: `build_mosaic_cog` computes the statistics in one streaming pass over the source VRT and writes them onto the band before the COG copy; `tests/test_mosaic_stats.py` reads them back with PAM disabled |
-| `PTL-DAT-010` | a COG band with nodata declares its valid percent | **Satisfied for both writers**, from the same headers and the same pass. The publisher keys the QA-NUM count to the data asset it counts for; every mosaic band is float32 with NaN nodata |
+| `PTL-DAT-010` | a COG band with nodata declares its valid percent | **Satisfied for both writers**, from the same headers and the same pass. The build keys the QA-NUM count to the data asset it counts for; every mosaic band is float32 with NaN nodata |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **Implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **Implemented and gated** through rashid's `_check_mirror`, over in-memory catalogs of 400 and 800 items |
 | `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `rashid check --live` over the Swiss test catalog, 2026-09-08, 0 errors |

@@ -2,13 +2,12 @@
 
 Three locations are kept separate on purpose:
 
-- **source**: the composite archive of an upstream run, on the private UZH
-  bucket. It is only ever read, and is passed per run as
-  ``publish-year.py --src``.
+- **source**: the composite archives of an upstream run, one per year
+  (``GLACE_SOURCE``, a pattern with ``{year}``). They are only ever read.
 - **store**: where the published tree is built, an ``s3://`` prefix or a local
-  directory (``GLACE_STORE_ROOT``). ``tools/sync_data.py`` uploads it as is.
+  directory (``GLACE_STORE_ROOT``). ``tools/publish.py`` uploads it as is.
 - **publish target**: Source Cooperative, configured in ``catalog.publish.yaml``
-  and read only by ``tools/sync_data.py``. Only the upload therefore holds
+  and read only by ``tools/publish.py``. Only the upload therefore holds
   credentials for the public bucket.
 
 Settings come from the environment only, so run commands with
@@ -38,6 +37,9 @@ class StoreSettings(BaseSettings):
 
     store_root: str
     """Root the published tree is assembled under. ``s3://...`` or a local path."""
+
+    source: str | None = None
+    """Composite archive of one year, with ``{year}`` in place of the year."""
 
 
 class Settings:
@@ -82,6 +84,23 @@ class Settings:
     def store_root(self) -> AnyDir:
         """Root the published tree is assembled under."""
         return self.resolve_path(self.locations.store_root)
+
+    def source(self, year: int) -> AnyDir:
+        """Composite archive of ``year``, from the ``GLACE_SOURCE`` pattern.
+
+        Raises
+        ------
+        SystemExit
+            If ``GLACE_SOURCE`` is unset or names no ``{year}``.
+        """
+        pattern = self.locations.source
+        if not pattern or "{year}" not in pattern:
+            msg = (
+                "set GLACE_SOURCE to the composite archive of a year, with {year} in "
+                "place of the year, e.g. s3://s1-bursts/data/alps-total/{year}/s1-comp"
+            )
+            raise SystemExit(msg)
+        return self.resolve_path(pattern.replace("{year}", str(year)))
 
     @property
     def cache_dir(self) -> Path:

@@ -11,7 +11,7 @@ opaque.
 
 The test writes a synthetic float32 mosaic on the display grid (a linear ramp
 across the transport range, with one NaN tile) and builds two layers from it at
-once, as ``publish-year`` does with a local source. It reads the archive back,
+once, as ``build-year`` does with a local source. It reads the archive back,
 compares the max-zoom codes with the ramp encoded by hand, and inspects the
 intermediate raster along the way.
 

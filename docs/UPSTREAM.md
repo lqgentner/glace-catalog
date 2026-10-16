@@ -61,14 +61,14 @@ beside the data; nothing validates it.
 
 ## D-4 — `manifest.parquet` beside the composites
 
-One row per written file, so the publisher reads one file instead of opening
+One row per written file, so the build reads one file instead of opening
 every composite: an Alpine year has about 26 500 files. `run_composite` writes it at the end, beside its `config.yaml`. This is
 driver work, not writer work (M-31): the bytes' own properties are already in
 the header and in `ResolutionWeighter.checksums`, while arranging rows in this
 catalog's vocabulary and describing a *resumed* run belong to the run loop.
 
 `read_manifest` checks the required columns and `survey_tags` the required
-tags, so a manifest that drifts fails loudly at the publisher.
+tags, so a manifest that drifts fails loudly in the build.
 `tests/test_manifest_contract.py` holds the producer's column list verbatim.
 One row per file, then one column per GeoTIFF tag in SCREAMING_CASE:
 
@@ -79,7 +79,7 @@ One row per file, then one column per GeoTIFF tag in SCREAMING_CASE:
 | `sha256` | `ResolutionWeighter.checksums`, already multihash-encoded, keyed by output path, for files this run wrote; otherwise the file is read once and hashed. Never absent, never fabricated |
 | `valid_percent` | the QA-NUM raster's own `STATISTICS_VALID_PERCENT`, keyed by the *data* asset it counts for; QA rows carry `None` |
 | `band_name`, `band_unit`, `data_type`, `nodata`, `spatial_resolution`, `bits_per_sample`, `byte_order` | the raster header. A NaN in `nodata` **is** the declared nodata: every float composite declares NaN, and parquet has no other way to say "none declared" |
-| `stat_minimum`, `stat_maximum`, `stat_mean`, `stat_stddev`, `stat_valid_percent` | the band's own `STATISTICS_*` tags, so the publisher can fill `bands[].statistics` without a second header read |
+| `stat_minimum`, `stat_maximum`, `stat_mean`, `stat_stddev`, `stat_valid_percent` | the band's own `STATISTICS_*` tags, so the build can fill `bands[].statistics` without a second header read |
 
 Parquet metadata: `manifest_version = 2`. Bump it when a column changes
 meaning, not when one is added. In version 2, `composite_start` /
@@ -103,7 +103,7 @@ Three constraints:
   itself. To give an archive a manifest, rerun its year: the run skips every
   complete tile and describes and hashes every file.
 
-*Verified when* `publish-year.py --steps copy` on an Alpine year reports zero
+*Verified when* `build-year.py --steps copy` on an Alpine year reports zero
 mismatches and the `file:checksum` of a published item verifies under
 `rashid check --data`.
 
@@ -128,7 +128,7 @@ from the item that describes it.
   that `rasterio` and a STAC client agree on what they opened.
 
 *Verified when* a regenerated year's `coh12_vv.tif` opens in rasterio with
-`descriptions == ("coh12_vv",)`, and `publish-year.py` publishes it without
+`descriptions == ("coh12_vv",)`, and `build-year.py` writes it without
 the item builder overriding the name.
 
 ---

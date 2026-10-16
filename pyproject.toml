@@ -84,7 +84,7 @@ src = ["src/glace_catalog"]
 # schedule.
 #
 # They are not unchecked: upstream's own pyflakes pass runs over them in CI
-# (.github/workflows/ci.yml). Everything this repository writes, tools/sync_data.py
+# (.github/workflows/ci.yml). Everything this repository writes, tools/publish.py
 # included, is held to the full rule set below.
 extend-exclude = [
     "tests/test_links.py",

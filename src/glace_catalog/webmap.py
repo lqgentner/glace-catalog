@@ -4,7 +4,7 @@ Each layer's display-grid mosaic is encoded into 8-bit value codes over the
 layer's fixed transport range (:mod:`glace_catalog.encoding`) and tiled into
 one archive, ``{layer}_viz.pmtiles``, beside the COG it shows. The archive
 header and the year item's ``visual`` asset declare how to decode the codes,
-and the MapLibre style decodes and colours them. ``publish-year`` writes the
+and the MapLibre style decodes and colours them. ``build-year`` writes the
 item asset from the :class:`LayerInfo` this module returns.
 
 The source is the VRT chain's display mosaic, which is already on the
@@ -99,7 +99,7 @@ layers finish a year faster; raise the number when the disk has room.
 class LayerInfo:
     """One built PMTiles archive, as the build reports it.
 
-    ``publish-year`` stores this record in the year's build state, so a later
+    ``build-year`` stores this record in the year's build state, so a later
     run can tell what changed. Readers of the store see the archive header,
     the year item's ``visual`` asset and the year style.
     """
@@ -381,7 +381,7 @@ def build_layers(
     out_dir
         Local directory the archives are written to.
     year, start_date, end_date
-        The year being published and the composite window it covers.
+        The year being built and the composite window it covers.
     styles
         Display record per layer, whose transport range the archive is
         encoded over. Defaults to the vocabulary's, from

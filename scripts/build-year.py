@@ -1,4 +1,4 @@
-r"""Publish one year of GLACE composites into the store.
+r"""Build one year of GLACE composites into the store.
 
 The year is built in five steps, run in this order:
 
@@ -23,9 +23,13 @@ The collections and the root catalog span all years, so
 ``finalize-catalog.py`` writes them. Adding a year therefore leaves the other
 years untouched.
 
+The scope comes from ``metadata/catalog.yaml``; the source archive
+(``GLACE_SOURCE``), the store (``GLACE_STORE_ROOT``) and the scratch cache
+(``FREEZEBASE_CACHE``) come from the environment.
+
 Usage:
-    uv run --env-file .env scripts/publish-year.py 2023 \\
-        --src s3://s1-bursts/data/alps-total/2023/s1-comp --scope alps
+    make build YEAR=2023
+    uv run --env-file .env scripts/build-year.py 2023
 """
 
 from __future__ import annotations
@@ -46,7 +50,6 @@ from glace_catalog import mosaics, stac, tiler, webmap
 from glace_catalog.config import settings
 from glace_catalog.documents import render_year_prose
 from glace_catalog.metadata import vocabulary
-from glace_catalog.scopes import get_scope
 from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.naming import ASSET_KEYS, published_name
 from glace_catalog.stac.save import write_year_items
@@ -513,7 +516,7 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     assets: dict[str, stac.MosaicAsset] = {}
     for key, detail in sorted(written.items()):
         if mismatch := webmap.encoding_mismatch(key, detail):
-            msg = f"{mismatch}; rebuild it with --force-from pmtiles"
+            msg = f"{mismatch}; rebuild the year with --force-from pmtiles"
             raise SystemExit(msg)
         entry = vocabulary().viz_asset(
             key,
@@ -543,15 +546,12 @@ def positive_int(text: str) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    """Command-line arguments of the per-year publisher."""
+    """Command-line arguments of the year build."""
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("year", type=int)
-    parser.add_argument("--src", required=True, help="local path or s3:// URI of one year")
-    parser.add_argument("--scope", required=True, choices=["ch", "alps"])
-    parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     parser.add_argument(
         "--steps",
         default=",".join(STEPS),
@@ -602,24 +602,22 @@ def parse_args() -> argparse.Namespace:
             "first if the build runs out of memory"
         ),
     )
-    parser.add_argument("--cache", type=Path, default=None, help="local scratch directory")
     return parser.parse_args()
 
 
 def main() -> None:
-    """Publish one year into the store, resuming from whatever the build state already recorded."""
+    """Build one year into the store, resuming from whatever the build state already recorded."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    scope = get_scope(args.scope)
-    args.cache = args.cache or settings.cache_dir
+    scope = vocabulary().catalog.scope
+    args.cache = settings.cache_dir
     args.layers = args.layers.split(",") if args.layers else None
     steps = stac.resolve_steps(args.steps.split(","))
 
-    src = settings.resolve_path(args.src)
-    root = settings.resolve_path(args.root) if args.root else settings.store_root
-    layout = stac.StoreLayout(root)
-    logger.info("Publishing %s %d from %s to %s", scope.key, args.year, src, layout.root)
+    src = settings.source(args.year)
+    layout = stac.StoreLayout(settings.store_root)
+    logger.info("Building %s %d from %s into %s", scope.key, args.year, src, layout.root)
 
     frame, files = load_and_verify_manifest(src, args.year)
 

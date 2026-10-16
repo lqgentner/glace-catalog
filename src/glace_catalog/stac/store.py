@@ -69,7 +69,7 @@ STATISTICS_COLUMNS: dict[str, str] = {
 }
 """Manifest column of each embedded band statistic, by :class:`BandStatistics` field.
 
-The upstream writer copies them from the COG's band tags, so the publisher
+The upstream writer copies them from the COG's band tags, so the build
 fills ``bands[].statistics`` from the manifest alone.
 """
 
@@ -160,7 +160,7 @@ class StoreLayout:
 
     @property
     def catalog(self) -> Path | UPath:
-        """Root catalog. The publish step stamps its absolute ``self`` link."""
+        """Root catalog. Finalization stamps its absolute ``self`` link."""
         return self.root / "catalog.json"
 
     @property
@@ -288,7 +288,7 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If columns the publisher depends on are absent.
+        If columns the build depends on are absent.
     """
     with UPath(path).open("rb") as handle:
         frame = pd.read_parquet(handle)
