@@ -58,7 +58,7 @@ const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 new maplibregl.Map({
   container: "map",
-  style: "https://data.source.coop/giuz/glace-alps/mosaics/styles/2025.json",
+  style: "https://data.source.coop/giuz/glace-alps/mosaics/styles/2026.json",
 });
 ```
 

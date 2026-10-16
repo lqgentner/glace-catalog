@@ -88,8 +88,8 @@ def read_year_index(layout: stac.StoreLayout, year: int) -> pa.Table:
 def tiles_summary(tables: Sequence[pa.Table]) -> tuple[int, set[str]]:
     """Count the tile items and collect their editions from the item indexes.
 
-    The indexes are fast to read; an eleven-year Alpine store holds about
-    24 000 item documents.
+    The indexes are fast to read; the Alpine store holds about 26 500 item
+    documents.
     """
     count = 0
     versions: set[str] = set()

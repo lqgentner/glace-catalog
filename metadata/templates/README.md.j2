@@ -28,6 +28,10 @@ Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 > **Preliminary release.** {{ preliminary_notice }}
 
 {% endif %}
+{% if coverage_note %}
+> **Coverage.** {{ coverage_note }}
+
+{% endif %}
 ## Collections
 
 | Collection | One item per | Grid | Use it for |
@@ -117,9 +121,16 @@ See the [production pipeline]({{ catalog.links.via.href }}) for processing detai
 
 **{{ catalog.license }}.** Contains modified Copernicus Sentinel data.
 
-A dataset citation will be added with the preprint. Until then, cite the
-specific [metadata repository release]({{ catalog.links.vcs.href }}/releases)
-you used; catalog URLs can change.
+{% if citation %}
+Cite this version of the dataset as:
+
+> {{ citation }}
+
+{% endif %}
+{% if catalog.canonical_doi %}
+To refer to the dataset across versions, use
+https://doi.org/{{ catalog.canonical_doi }}.
+{% endif %}
 
 ## Feedback and contributions
 

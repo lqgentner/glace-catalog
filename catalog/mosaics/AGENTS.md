@@ -21,7 +21,7 @@ cube = odc.stac.load(
     bands=["coh12_vv", "coh12_vh"],
     chunks={},
 )
-change = cube.sel(time="2025") - cube.sel(time="2015")
+change = cube.sel(time="2026") - cube.sel(time="2015")
 ```
 
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation

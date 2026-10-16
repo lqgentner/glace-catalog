@@ -1,17 +1,17 @@
 {
   "version": 8,
-  "name": "GLACE – Sentinel-1 composites (2025)",
+  "name": "GLACE – Sentinel-1 composites (2026)",
   "metadata": {
     "description": "Every published web-map layer of one year. The first is visible and the rest ship hidden, so a client switches by visibility rather than by loading another style. Each archive holds value codes, decoded by its raster-dem source's custom encoding and drawn by a color-relief layer over a default ramp a client may replace. Rendered from metadata/assets.yaml."
   },
   "sources": {
     "src-coh12_vv": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vv_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.003921629170755188,
       "greenFactor": 1.5318863948262453e-05,
@@ -20,11 +20,11 @@
     },
     "src-coh12_vh": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vh_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.003921629170755188,
       "greenFactor": 1.5318863948262453e-05,
@@ -33,11 +33,11 @@
     },
     "src-rtc_vv": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vv_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vv_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.11764887512265564,
       "greenFactor": 0.0004595659184478736,
@@ -46,11 +46,11 @@
     },
     "src-rtc_vh": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vh_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vh_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.11764887512265564,
       "greenFactor": 0.0004595659184478736,
@@ -59,11 +59,11 @@
     },
     "src-coh12_vv_qa_num": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vv_qa_num_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.9921721802010625,
       "greenFactor": 0.0038756725789104002,
@@ -72,11 +72,11 @@
     },
     "src-coh12_vh_qa_num": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vh_qa_num_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.9921721802010625,
       "greenFactor": 0.0038756725789104002,
@@ -85,11 +85,11 @@
     },
     "src-rtc_vv_qa_num": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vv_qa_num_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vv_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.9921721802010625,
       "greenFactor": 0.0038756725789104002,
@@ -98,11 +98,11 @@
     },
     "src-rtc_vh_qa_num": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vh_qa_num_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vh_qa_num_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.9921721802010625,
       "greenFactor": 0.0038756725789104002,
@@ -111,11 +111,11 @@
     },
     "src-coh12_vv_qa_cqm": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vv_qa_cqm_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.12549213346416602,
       "greenFactor": 0.0004902036463443985,
@@ -124,11 +124,11 @@
     },
     "src-coh12_vh_qa_cqm": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/coh12_vh_qa_cqm_viz.pmtiles",
+      "url": "pmtiles://../2026/coh12_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.12549213346416602,
       "greenFactor": 0.0004902036463443985,
@@ -137,11 +137,11 @@
     },
     "src-rtc_vv_qa_cqm": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vv_qa_cqm_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vv_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.0980407292688797,
       "greenFactor": 0.00038297159870656134,
@@ -150,11 +150,11 @@
     },
     "src-rtc_vh_qa_cqm": {
       "type": "raster-dem",
-      "url": "pmtiles://../2025/rtc_vh_qa_cqm_viz.pmtiles",
+      "url": "pmtiles://../2026/rtc_vh_qa_cqm_viz.pmtiles",
       "tileSize": 256,
       "minzoom": 5,
       "maxzoom": 13,
-      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2025",
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
       "encoding": "custom",
       "redFactor": 0.0980407292688797,
       "greenFactor": 0.00038297159870656134,
@@ -164,7 +164,7 @@
   },
   "layers": [
     {
-      "id": "glace-coh12_vv-2025",
+      "id": "glace-coh12_vv-2026",
       "type": "color-relief",
       "source": "src-coh12_vv",
       "paint": {
@@ -220,7 +220,7 @@
       }
     },
     {
-      "id": "glace-coh12_vh-2025",
+      "id": "glace-coh12_vh-2026",
       "type": "color-relief",
       "source": "src-coh12_vh",
       "layout": {
@@ -279,7 +279,7 @@
       }
     },
     {
-      "id": "glace-rtc_vv-2025",
+      "id": "glace-rtc_vv-2026",
       "type": "color-relief",
       "source": "src-rtc_vv",
       "layout": {
@@ -338,7 +338,7 @@
       }
     },
     {
-      "id": "glace-rtc_vh-2025",
+      "id": "glace-rtc_vh-2026",
       "type": "color-relief",
       "source": "src-rtc_vh",
       "layout": {
@@ -397,7 +397,7 @@
       }
     },
     {
-      "id": "glace-coh12_vv_qa_num-2025",
+      "id": "glace-coh12_vv_qa_num-2026",
       "type": "color-relief",
       "source": "src-coh12_vv_qa_num",
       "layout": {
@@ -456,7 +456,7 @@
       }
     },
     {
-      "id": "glace-coh12_vh_qa_num-2025",
+      "id": "glace-coh12_vh_qa_num-2026",
       "type": "color-relief",
       "source": "src-coh12_vh_qa_num",
       "layout": {
@@ -515,7 +515,7 @@
       }
     },
     {
-      "id": "glace-rtc_vv_qa_num-2025",
+      "id": "glace-rtc_vv_qa_num-2026",
       "type": "color-relief",
       "source": "src-rtc_vv_qa_num",
       "layout": {
@@ -574,7 +574,7 @@
       }
     },
     {
-      "id": "glace-rtc_vh_qa_num-2025",
+      "id": "glace-rtc_vh_qa_num-2026",
       "type": "color-relief",
       "source": "src-rtc_vh_qa_num",
       "layout": {
@@ -633,7 +633,7 @@
       }
     },
     {
-      "id": "glace-coh12_vv_qa_cqm-2025",
+      "id": "glace-coh12_vv_qa_cqm-2026",
       "type": "color-relief",
       "source": "src-coh12_vv_qa_cqm",
       "layout": {
@@ -692,7 +692,7 @@
       }
     },
     {
-      "id": "glace-coh12_vh_qa_cqm-2025",
+      "id": "glace-coh12_vh_qa_cqm-2026",
       "type": "color-relief",
       "source": "src-coh12_vh_qa_cqm",
       "layout": {
@@ -751,7 +751,7 @@
       }
     },
     {
-      "id": "glace-rtc_vv_qa_cqm-2025",
+      "id": "glace-rtc_vv_qa_cqm-2026",
       "type": "color-relief",
       "source": "src-rtc_vv_qa_cqm",
       "layout": {
@@ -810,7 +810,7 @@
       }
     },
     {
-      "id": "glace-rtc_vh_qa_cqm-2025",
+      "id": "glace-rtc_vh_qa_cqm-2026",
       "type": "color-relief",
       "source": "src-rtc_vh_qa_cqm",
       "layout": {

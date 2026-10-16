@@ -625,7 +625,7 @@ def main() -> None:
             tiler.WRITER,
         ),
     }
-    prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION)
+    prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION, stac.DATASET_VERSION)
 
     analysis_chain: mosaics.YearVrts | None = None
     display_chain: mosaics.YearVrts | None = None

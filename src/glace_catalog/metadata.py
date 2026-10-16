@@ -134,8 +134,12 @@ class CatalogConfig:
     subtitle: str
     tagline: str
     preliminary_notice: str
+    coverage_note: str
     description: str
     license: str
+    canonical_doi: str
+    version_dois: Mapping[str, str]
+    citation: str
     keywords: tuple[str, ...]
     providers: tuple[dict[str, Any], ...]
     links: Mapping[str, Mapping[str, str]]
@@ -188,8 +192,15 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
         subtitle=str(document["subtitle"]),
         tagline=str(document["tagline"]),
         preliminary_notice=str(document["preliminary_notice"]),
+        coverage_note=str(document.get("coverage_note", "")),
         description=str(document["description"]),
         license=str(document["license"]),
+        canonical_doi=str(document.get("doi", {}).get("canonical", "")),
+        version_dois={
+            str(version): str(doi)
+            for version, doi in document.get("doi", {}).get("versions", {}).items()
+        },
+        citation=str(document.get("citation", "")),
         keywords=tuple(document["keywords"]),
         providers=tuple(document["providers"]),
         links=document["links"],
@@ -380,6 +391,7 @@ class Vocabulary:
             "preliminary_notice": self._env.from_string(self.catalog.preliminary_notice).render(
                 region=self.catalog.region,
             ),
+            "coverage_note": self.catalog.coverage_note,
         }
 
     def prose(self, template: str, **context: Any) -> str:

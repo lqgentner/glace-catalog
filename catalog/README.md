@@ -21,8 +21,10 @@
 
 Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
 coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
-the Alpine Convention perimeter, 2015–2025. The data is available as
+the Alpine Convention perimeter, 2015–2026. The data is available as
 Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
+
+> **Coverage.** In 2015, coherence is missing on 91 MGRS squares in the south-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them lack backscatter as well: 32TNT14 has no 2015 item, and the 2015 backscatter of 32TNT24 holds no valid pixels. Every other year covers all squares.
 
 ## Collections
 
@@ -57,7 +59,7 @@ import rustac
 items = rustac.search_sync(
     "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
     bbox=[7.9, 46.4, 8.2, 46.6],
-    datetime="2025-01-01/2026-01-01",
+    datetime="2026-01-01/2027-01-01",
 )
 if not items:
     raise ValueError("No tiles found for this area and year")
@@ -113,9 +115,12 @@ See the [production pipeline](https://github.com/lqgentner/glace-production) for
 
 **CC-BY-4.0.** Contains modified Copernicus Sentinel data.
 
-A dataset citation will be added with the preprint. Until then, cite the
-specific [metadata repository release](https://github.com/lqgentner/glace-catalog/releases)
-you used; catalog URLs can change.
+Cite this version of the dataset as:
+
+> Gentner, L. Q. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
+
+To refer to the dataset across versions, use
+https://doi.org/10.48656/d4r9-fj97.
 
 ## Feedback and contributions
 

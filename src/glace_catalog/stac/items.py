@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 GEOMETRY_SIMPLIFY_DEG = 1e-4  # ~11 m at the equator
 
-DATASET_VERSION = "0.1"
+DATASET_VERSION = "1.0"
 """Published edition of the GLACE dataset, as the STAC version extension's ``version``.
 
 Bump the major part when the pixels change meaning, so a value is always read

@@ -59,7 +59,7 @@ published one, which is worse than a finding whose cause is written down.
 *"A PMTiles file … MUST be registered through a collection-level
 `rel: "pmtiles"` link."* The rule is written for a vector collection, which has
 one archive. This catalog uses PMTiles the way it uses COGs: one archive per
-product and year, twelve a year, 132 across the Alpine years. As collection
+product and year, twelve a year, 144 across 2015–2026. As collection
 links they would form a list that long on the collection page.
 
 rashid does not report the omission: `PTL-VIZ-003` checks only a collection
@@ -81,13 +81,12 @@ mistaken for an empty one.
 
 *"a catalog or collection with twenty or more ungrouped children should use
 subcatalogs."* Each `tiles/{year}/catalog.json` links that year's items
-directly: 143 for Switzerland, 2 210 for the Alps. The rule counts non-catalog
-children, so one warning fires per year.
+directly, up to 2 210. The rule counts non-catalog children, so one warning
+fires per year.
 
 Grouping them would take a third level. UTM zone does not split them finely
-enough (every Swiss tile is in 32T; the Alps span about three zones). The
-MGRS 100 km square gives Switzerland 9 groups of 1 to 56 tiles, so the largest
-still warn and a fourth level would be needed. Each level is a directory that
+enough (five grid zones), and the MGRS 100 km square gives 55 groups of 1 to
+100 tiles, so most groups still warn and a fourth level would be needed. Each level is a directory that
 Portolan requires to carry its own `catalog.json`, `README.md` and `AGENTS.md`
 (`PTL-FIL-001`, `PTL-FIL-002`, `PTL-FIL-003`): for the Alps, hundreds of
 generated Markdown files that would only restate their path.
@@ -153,8 +152,8 @@ what satisfies it; open work is tracked in [`STATUS.md`](STATUS.md).
 
 | Rule | Requirement | State |
 |---|---|---|
-| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **Satisfied for both writers.** The Swiss 2021–2024 composites, regenerated with s1bursts 0.5.0, carry the five `STATISTICS_*` tags on float32 data bands and uint16 QA-NUM bands, and in every manifest row (verified 2026-09-08). The annual mosaics are written here: `build_mosaic_cog` computes the statistics in one streaming pass over the source VRT and writes them onto the band before the COG copy; `tests/test_mosaic_stats.py` reads them back with PAM disabled |
+| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **Satisfied for both writers.** The 2015–2026 composites, written by s1bursts 0.6.0, carry the five `STATISTICS_*` tags on float32 data bands and uint16 QA-NUM bands, and in every manifest row (verified 2026-10-16). The exception is a raster with no valid pixel, such as the 2015 backscatter of `32TNT24`, which has no statistics to carry. The annual mosaics are written here: `build_mosaic_cog` computes the statistics in one streaming pass over the source VRT and writes them onto the band before the COG copy; `tests/test_mosaic_stats.py` reads them back with PAM disabled |
 | `PTL-DAT-010` | a COG band with nodata declares its valid percent | **Satisfied for both writers**, from the same headers and the same pass. The publisher keys the QA-NUM count to the data asset it counts for; every mosaic band is float32 with NaN nodata |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **Implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **Implemented and gated** through rashid's `_check_mirror`, over in-memory catalogs of 400 and 800 items |
-| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `rashid check --live` over the published Swiss catalog, 2026-09-08, 0 errors |
+| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `rashid check --live` over the Swiss test catalog, 2026-09-08, 0 errors |

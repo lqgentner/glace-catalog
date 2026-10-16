@@ -3,9 +3,10 @@
 
 ``DATASET_VERSION`` in ``src/glace_catalog/stac/items.py`` is the source of
 truth. The ``version`` field of both tracked ``collection.json`` files and of
-``CITATION.cff`` repeat it, because STAC clients and the Zenodo record each
-read only their own copy. This gate reads all four and, on a mismatch, lists
-each place and its value.
+``CITATION.cff`` repeat it, because STAC clients and GitHub each read only
+their own copy. This gate reads all four and, on a mismatch, lists each place
+and its value. It also checks that the ``doi`` of ``CITATION.cff`` is the one
+``metadata/catalog.yaml`` lists for this version.
 
 The string must be ``MAJOR.MINOR`` with an optional patch, so that the release
 tag ``v{version}`` is well formed.
@@ -54,13 +55,19 @@ def tracked_collections() -> list[Path]:
     return [ROOT / name for name in found]
 
 
-def citation_version(path: Path) -> object:
-    """Read the ``version`` value of ``CITATION.cff``, or None when it is absent."""
+def read_citation(path: Path) -> dict[str, object]:
+    """Read ``CITATION.cff`` as a mapping."""
     parsed = yaml.safe_load(path.read_text())
     if not isinstance(parsed, dict):
         print(f"error  {path.relative_to(ROOT)}: does not parse as a CFF mapping")
         raise SystemExit(1)
-    return parsed.get("version")
+    return parsed
+
+
+def listed_version_doi() -> object:
+    """Read the DOI ``metadata/catalog.yaml`` lists for ``DATASET_VERSION``, or None."""
+    catalog = yaml.safe_load((ROOT / "metadata" / "catalog.yaml").read_text())
+    return (catalog.get("doi") or {}).get("versions", {}).get(DATASET_VERSION)
 
 
 places: list[tuple[str, object]] = [
@@ -79,9 +86,16 @@ citation = ROOT / "CITATION.cff"
 if not citation.exists():
     print("error  CITATION.cff is missing; the release metadata lives there")
     raise SystemExit(1)
-places.append(("CITATION.cff version", citation_version(citation)))
+cff = read_citation(citation)
+places.append(("CITATION.cff version", cff.get("version")))
 
 problems: list[str] = []
+
+if cff.get("doi") != listed_version_doi():
+    problems.append(
+        f"CITATION.cff doi {cff.get('doi')!r} is not the DOI metadata/catalog.yaml lists "
+        f"for version {DATASET_VERSION}, {listed_version_doi()!r}"
+    )
 
 # Compare reprs, so that a YAML list or mapping under `version:` (unhashable)
 # fails with this gate's message.

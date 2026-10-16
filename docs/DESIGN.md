@@ -56,13 +56,12 @@ and the year sub-catalogs fit naturally.
 
 **One collection per product, not one per year.** Per-year collections (as in
 Fields of the World, FTW) make each year independently publishable. Here they
-would mean eleven copies of the same providers, license and prose, and a
+would mean twelve copies of the same providers, license and prose, and a
 cross-year query would become a concatenation. A dataloader wants one
 collection with year sub-catalogs and one mirror covering the series.
 
-**Year sub-catalogs only, no third grouping level.** A year holds 143 tiles
-for Switzerland and 2 210 for the Alps, so `PTL-CAT-001` (twenty children)
-warns on each year. A further level does not fix this and costs three
+**Year sub-catalogs only, no third grouping level.** A year holds up to 2 210
+tiles, so `PTL-CAT-001` (twenty children) warns on each year. A further level does not fix this and costs three
 generated files per directory; [`conformance.md`](conformance.md) gives the
 full reasoning. `items.parquet` serves the browse path the rule protects.
 
@@ -84,7 +83,7 @@ A client lists the archives from the year items and draws them through the
 year's style, as layer `glace-{stem}-{year}`. The collection carries no
 `rel: "pmtiles"` links, a recorded deviation from `PORTO-FMT-011` (M-36,
 [`conformance.md`](conformance.md)). Registering the archives as *collection*
-assets would put over 130 cards on one page for the Alps.
+assets would put 144 cards on one page.
 
 **Per-year run records are not published.** The manifest is the publisher's
 cache and the configuration is pipeline state. Both stay beside the source
@@ -110,7 +109,7 @@ with a dot so the publish sync skips them.
 **Published: twelve float32 LERC analysis COGs per year on the equal-area
 grid, drawn client-side through the `renders` block, plus PMTiles archives
 with MapLibre styles as the web-map product.** The mosaics collection links its
-eleven items directly, below the twenty-child threshold for sub-catalogs.
+twelve items directly, below the twenty-child threshold for sub-catalogs.
 
 **PMTiles, not COGs, for the web map.** Served to the web map as COGs, the
 mosaics cost about **four times the bytes** on the wire, measured in
@@ -230,7 +229,7 @@ description and display number is written once, in `metadata/assets.yaml` or
 documents from them, and `tests/test_render.py` fails when the tracked tree
 differs from a fresh render. The rendered tree stays in git for three
 reasons: a reviewer reads the rendered diff, rashid and the Portolan browser
-read a tree, and a release archived on Zenodo then carries the STAC metadata.
+read a tree, and a tagged release then carries the STAC metadata.
 The build uses the same vocabulary (`glace_catalog.metadata`) for every asset
 title it writes, so an item and its collection's `item_assets` always name a
 file the same way.
@@ -289,9 +288,9 @@ under the `alternate` extension. The publish step writes the root `self`
 link; it is not tracked, because its correct value depends on the deployment
 target.
 
-**Generated files are not committed.** Switzerland has 143 items a year, the
-Alps about 2 200 a year over eleven years. Some 24 000 generated JSON files
-would weigh on every clone and every diff. FTW does the same at 45 000 items.
+**Generated files are not committed.** The Alps have about 2 200 items a year
+over twelve years. Some 26 500 generated JSON files would weigh on every clone
+and every diff. FTW does the same at 45 000 items.
 
 ---
 
@@ -359,12 +358,11 @@ with the wrong rule set proves nothing.
 
 ## 7. Releases and citation
 
-Source Cooperative is not immutable, so a citation must name a release, and a
-reader must be able to check their bytes against it. The catalog is versioned
-by **git tags and GitHub releases, each archived on Zenodo for a DOI**. Zenodo
-archives the repository snapshot (the metadata, described by `CITATION.cff`),
-not the data. `file:checksum` on every item asset lets a reader check
-downloaded bytes against a cited release.
+Source Cooperative is not immutable, so a citation must name a version, and a
+reader must be able to check their bytes against it. **Each version has a DOI
+at LaRS**, and this repository marks it with a git tag and a GitHub release.
+`file:checksum` on every item asset lets a reader check downloaded bytes
+against a cited version.
 
 Each release has one version string. `DATASET_VERSION` in
 `src/glace_catalog/stac/items.py` is the source of truth; the STAC `version`
@@ -374,10 +372,10 @@ same string by construction: `build_tile_item` and `build_mosaic_item` default
 their `version` argument to `DATASET_VERSION`. The tag `v{DATASET_VERSION}` is
 a manual step of the release, outside the gate's view.
 
-The release procedure, run by hand. The repository owner must first enable
-Zenodo's GitHub integration for this repository on zenodo.org.
+The release procedure, run by hand:
 
-1. Bump `DATASET_VERSION`, the two `collection.json` and `CITATION.cff`.
+1. Bump `DATASET_VERSION` and `CITATION.cff`, set the new version DOI in
+   `metadata/catalog.yaml`, and re-render.
 2. Build and finalize the store.
 3. `uv run --env-file .env tools/sync_data.py --confirm`.
 4. `uv run rashid check "$GLACE_STORE_ROOT" --live --live-base-url` the
@@ -385,49 +383,34 @@ Zenodo's GitHub integration for this repository on zenodo.org.
 5. Commit `date-released` in `CITATION.cff`.
 6. `git tag v{version}` and push the tag.
 7. Create the GitHub release with the rashid summary in its notes.
-8. Zenodo mints the version DOI.
-9. After the first release, add `sci:doi` (the concept DOI) and
-   `sci:citation` to the root catalog and both collections in the next commit.
 
-The `sci:doi` / `sci:citation` fields wait for the first release on purpose:
-a published placeholder DOI is worse than none. STATUS.md tracks them as P-9.
+**The dataset DOIs come from LaRS**, set in `metadata/catalog.yaml`. The
+version DOI (`10.48656/60er-3j55` for 1.0) names the bytes one
+`DATASET_VERSION` describes, so it is the collections' `sci:doi` and the
+target of their `rel: "cite-as"` link, beside `sci:citation`, and the `doi`
+of `CITATION.cff`. The canonical DOI (`10.48656/d4r9-fj97`) names every
+version: a `rel: "related"` link and an identifier in `CITATION.cff`. A new
+version needs its DOI in `metadata/catalog.yaml` and `CITATION.cff` in the
+same commit as the version bump; rendering and `tests/test_version.py` fail
+without it.
 
 ---
 
-## 8. `glace-ch` is a rehearsal; the dataset is `glace-alps`
+## 8. Scopes
 
-The Swiss scope, `glace-ch`, was published to prove the layout, the gates and
-the Source Cooperative upload end to end while the Alpine composites were
-produced: the Swiss composites were complete and small enough to iterate on.
-**Nothing published under `glace-ch` is the GLACE dataset.** The dataset is
-`glace-alps`, over the Alpine Convention perimeter, 2015–2025, and is the
-scope `metadata/catalog.yaml` names. `src/glace_catalog/scopes.py` is the
-boundary: everything below it takes the scope as an argument.
+The dataset is `glace-alps`: the 2 210 MGRS tiles of the Alpine Convention
+perimeter (2025 edition), 2015–2026. It is the scope `metadata/catalog.yaml`
+names. `src/glace_catalog/scopes.py` also defines `glace-ch`, 143 tiles over the
+glacierised Swiss Alps, which is small enough to test the pipeline on; nothing
+built under it is the GLACE dataset. Everything below `scopes.py` takes the
+scope as an argument.
 
-A scope switch touches:
-
-| what | where | how it changes |
-| --- | --- | --- |
-| scope constants | `src/glace_catalog/scopes.py` | `SCOPES["alps"]`, both grids, 2 210 perimeter tiles (2025 perimeter edition; the grids hold every tile of both editions), 45.4 % coverage. The store root is `GLACE_STORE_ROOT`, not a scope constant |
-| collection ids | derived from the scope | `glace-ch-tiles` → `glace-alps-tiles`, automatic |
-| publication target | `catalog.publish.yaml` | `write_prefix` and `public_base` name `giuz/glace-alps`; the rehearsal is at `lqgentner/glace-ch` |
-| absolute asset hrefs | both `collection.json` | built from `public_base`, including every `alternate` `s3://` href |
-| root catalog identity and every document's prose | `metadata/catalog.yaml` | `scope`, `region`, `years`, `title`, the preliminary notice; the prose takes the region and years as variables, so nothing else is retyped |
-| the rendered tree | `catalog/` | `uv run scripts/render-catalog.py` after the edit above |
-| the years | `metadata/catalog.yaml` | 2015–2025; publication sets the exact extent from the compositing windows |
-| measured numbers | `docs/`, `metadata/assets.yaml` | The default stretches and transport ranges are measured on the scope's own display mosaics |
-
-STATUS.md has the search command that finds the remaining Swiss references.
-
-**One catalog or two is not yet final.** Two catalogs would keep `glace-ch`
-published beside `glace-alps`: honest about their different status, but pure
-duplication, since the Swiss data is a strict subset. **The default is one
-catalog**: `glace-alps` at its own prefix, with `glace-ch` retired once the
-Alpine years are published, unless someone already cites the Swiss URLs. The
-rehearsal exercised the pipeline rather than serving an audience, and two
-catalogs that give the same pixels different item ids invite wrong joins.
-Either way, `DATASET_VERSION` identifies the edition of the pixels, not the
-scope.
+A switch of scope changes `scope`, `region`, `years`, `title` and the
+preliminary notice in `metadata/catalog.yaml`, and `write_prefix` and
+`public_base` in `catalog.publish.yaml`; `uv run scripts/render-catalog.py`
+then rewrites `catalog/`. Collection ids and absolute hrefs follow
+automatically. The default stretches and transport ranges in
+`metadata/assets.yaml` are measured on the scope's own display mosaics.
 
 ---
 
@@ -450,7 +433,7 @@ rather than struck through; git keeps them.
 | M-12 | License `CC-BY-4.0` | 1 |
 | M-13 | Structural links, item asset hrefs and style asset hrefs relative; the other collection asset hrefs and the `items.parquet` hrefs absolute HTTPS + `alternate` s3; `self` written by the publish step | 4 |
 | M-14 | The generated tree is published and never committed | 4 |
-| M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement, for the Swiss rehearsal as well as the Alps | 5 |
+| M-15 | `PTL-DAT-009` makes upstream band statistics a **blocking** requirement | 5 |
 | M-16 | ESA / Copernicus is a second producer with the `licensor` role; UZH keeps producer + processor + licensor + host | 1 |
 | M-17 | No ETag in the manifest; `sha256` alone, multihash-encoded | 5 |
 | M-18 | Lint, type and data-format gates run in `tests/run_all.py`; files vendored from the catalog template are excluded from ruff and pyrefly and covered by upstream's pyflakes pass | 6 |
@@ -469,14 +452,13 @@ rather than struck through; git keeps them.
 | M-32 | **The run manifest and configuration are not published.** Both live beside the source archive; the items carry every value a reader needs | 2 |
 | M-33 | **One time range per year**, from the committed compositing window; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 2 |
 | M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders; the suffix keeps the stems apart | 2, 3 |
-| M-35 | **One published style per year**, `styles/{year}.json`, written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy twelve layers per year and let them drift; one file for all years would hold 132 sources with one visible | 3 |
-| M-36 | **The collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 132 links on one collection page serve nobody. The year items list the archives, the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
+| M-35 | **One published style per year**, `styles/{year}.json`, written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy twelve layers per year and let them drift; one file for all years would hold 144 sources with one visible | 3 |
+| M-36 | **The collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 144 links on one collection page serve nobody. The year items list the archives, the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
 | M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | R-1 | `src/glace_catalog/__init__.py` exists: a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` is the type checker, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link; `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |
 | R-4 | No `[tool.uv.sources]` overrides. `freezebase[s3]>=0.7.1,<0.8` from PyPI, which provides `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and the profile-configured endpoint (UPSTREAM.md F-5) | 6 |
-| R-5 | The `ch` store is rebuilt at `s3://s1-bursts/data/glace-ch` once the old flat tree there is deleted | 4 |
 | R-6 | No staging directory. Publication streams object to object from `GLACE_STORE_ROOT`, local or on the bucket, to Source Cooperative through `tools/sync_data.py`, `UPath` to `UPath`, with no hand-built boto3 client. Each write is committed explicitly and discarded on failure, so a broken transfer publishes nothing | 4 |
 | R-17 | The S3 settings class, the one-listing size map, the atomic write, the streamed sha256 and the content-type table live in `freezebase`, shared with `deep-glacier-mapping`; this repository keeps only the `1220` multihash prefix and the `GLACE_S3_` prefix | 8 |
 | R-7 | Source Cooperative is addressed through its S3 proxy: the bucket is the account and the key starts with the product, so `write_prefix` is `s3://giuz/glace-alps` | 4 |
@@ -489,5 +471,5 @@ rather than struck through; git keeps them.
 | R-13 | `RasterInfo.statistics` is a typed `BandStatistics` record; a missing field is a `ValueError` at manifest read, not a `KeyError` at publication | 5 |
 | R-14 | The docs are split: `DESIGN.md` for decisions, `STATUS.md` for state and open work, `UPSTREAM.md` for the on-disk contracts with other repositories | — |
 | R-15 | `uv.lock` is tracked, so a fresh clone resolves to the dependency set CI ran | 6 |
-| R-16 | **The catalog is versioned by git tags and GitHub releases, each archived on Zenodo for a DOI.** One version string per release, `DATASET_VERSION`; `sci:doi` / `sci:citation` are added after the first release mints the concept DOI | 7 |
+| R-16 | **The catalog is versioned by git tags and GitHub releases, with a LaRS DOI per version.** One version string per release, `DATASET_VERSION`. The LaRS version DOI is `sci:doi`, with `sci:citation`, a `cite-as` link and the `CITATION.cff` DOI; the canonical DOI is a `related` link | 7 |
 | R-18 | **`catalog/` is rendered from `metadata/` and committed under a regeneration gate.** `assets.yaml` names and describes every asset once and holds every range and ramp; `catalog.yaml` holds identity and prose; `templates/` the markdown. The build reads the same vocabulary for item titles, archive descriptions and link titles. Neither collection declares the projection extension: the tiles use no `proj:*` field and the mosaics' `proj:code` is on the items | 4 |

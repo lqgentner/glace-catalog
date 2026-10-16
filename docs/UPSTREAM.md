@@ -62,8 +62,7 @@ beside the data; nothing validates it.
 ## D-4 — `manifest.parquet` beside the composites
 
 One row per written file, so the publisher reads one file instead of opening
-every composite: a Swiss year has about 1 700 files, an Alpine year about
-26 500. `run_composite` writes it at the end, beside its `config.yaml`. This is
+every composite: an Alpine year has about 26 500 files. `run_composite` writes it at the end, beside its `config.yaml`. This is
 driver work, not writer work (M-31): the bytes' own properties are already in
 the header and in `ResolutionWeighter.checksums`, while arranging rows in this
 catalog's vocabulary and describing a *resumed* run belong to the run loop.
@@ -141,7 +140,7 @@ the item builder overriding the name.
 | **S-1** embedded band statistics (`PTL-DAT-009/010`) | `s1bursts.product_tags.band_statistics` writes them at creation, inside the `MemoryFile` the COG is copied from, so the tags reach the header block. s1bursts 0.5.0, 2026-09-07 |
 | **S-2** `sha256` at write time | `freezebase.write_cog(checksum=True)` hashes the encoded bytes it uploads and returns the multihash digest; `ResolutionWeighter.checksums` carries them. freezebase 0.7.0, 2026-09-04 |
 | **S-3** who writes the manifest | The composite driver, not the writer (M-31); see D-4. 2026-09-07 |
-| statistics for old composites | The Swiss 2021–2024 archives were **regenerated** with s1bursts 0.5.0 rather than retrofitted, because 0.4.0 had already changed median aggregation and QA-CQM. Verified 2026-09-08 |
+| the Alpine composites | 2015–2026, written by s1bursts 0.6.0 (`aggregation=mean`), each year with a manifest that passes `load_and_verify_manifest`. Verified 2026-10-16 |
 | the pass-direction tag | `PASS_DIRECTION` (CEOS-ARD PFS SAR wording), published as `glace:pass_direction`. 2026-09-04 |
 | **F-2** `subprocess_s3_env` | In `freezebase/s3.py`, beside `s3_env`. 2026-09-04 |
 | **F-3** the VRT helpers | `freezebase/vrt.py`, released in freezebase 0.7.0 on 2026-09-04 and used by the mosaic chain |

@@ -38,7 +38,7 @@ import rustac
 items = rustac.search_sync(
     "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
     bbox=[7.9, 46.4, 8.2, 46.6],
-    datetime="2025-01-01/2026-01-01",
+    datetime="2026-01-01/2027-01-01",
 )
 for item in items:
     print(item["id"], item["assets"]["coh12_vv"]["href"])
@@ -67,7 +67,7 @@ cube = odc.stac.load(
     bbox=bbox,
     chunks={},
 )
-change = cube.coh12_vv.sel(time="2025") - cube.coh12_vv.sel(time="2015")
+change = cube.coh12_vv.sel(time="2026") - cube.coh12_vv.sel(time="2015")
 ```
 
 ## Open the tiles in QGIS
@@ -82,9 +82,9 @@ import rustac
 tiles = "https://data.source.coop/giuz/glace-alps/tiles/items.parquet"
 bbox = [7.9, 46.4, 8.2, 46.6]
 
-items = rustac.search_sync(tiles, bbox=bbox, datetime="2025-01-01/2026-01-01")
+items = rustac.search_sync(tiles, bbox=bbox, datetime="2026-01-01/2027-01-01")
 gdal.BuildVRT(
-    "coh12_vv_2025.vrt",
+    "coh12_vv_2026.vrt",
     ["/vsicurl/" + item["assets"]["coh12_vv"]["href"] for item in items],
 )
 ```

@@ -40,10 +40,9 @@ before publication.
 ## Scope and layout
 
 `glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names;
-`glace-ch` is the Swiss rehearsal. `src/glace_catalog/scopes.py` defines both
-scopes and their grids. To switch scope, also update `scope`, `region`,
-`years`, `title` and the preliminary notice in `metadata/catalog.yaml`. See
-`docs/DESIGN.md` §8 and the checklist in `docs/STATUS.md`.
+`glace-ch`, a small Swiss scope, serves for testing. `src/glace_catalog/scopes.py`
+defines both scopes and their grids; `docs/DESIGN.md` §8 lists what a switch
+changes.
 
 Preserve these rules:
 

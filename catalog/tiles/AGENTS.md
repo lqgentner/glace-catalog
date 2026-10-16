@@ -14,7 +14,7 @@ INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
 SELECT id, "glace:glacier_fraction_buffered" AS frac,
        "proj:code", bbox
 FROM read_parquet('https://data.source.coop/giuz/glace-alps/tiles/items.parquet')
-WHERE datetime BETWEEN '2025-01-01' AND '2025-12-31'
+WHERE datetime BETWEEN '2026-01-01' AND '2026-12-31'
   AND "glace:glacier_fraction_buffered" > 0.1
 ORDER BY frac DESC;
 ```

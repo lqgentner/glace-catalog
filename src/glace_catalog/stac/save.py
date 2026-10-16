@@ -290,9 +290,8 @@ MIRROR_ROW_GROUP_SIZE = 2048
 
 Readers skip row groups by their min/max statistics, which helps only when a
 file has several groups; rashid's ordering metrics need at least five. At 2 048 rows,
-the Alpine store-level mirror (about 2 200 tiles over eleven years, about
-24 000 rows) has about twelve groups, and one Swiss year (143 tiles) fits in
-one.
+the store-level mirror (about 2 200 tiles over twelve years, about 26 500
+rows) has thirteen groups.
 """
 
 _BBOX_CORNERS = ("xmin", "ymin", "xmax", "ymax")

@@ -28,10 +28,8 @@ This repository holds the metadata of the **GLACE** STAC catalog on
 that builds and publishes it. The catalog follows the
 [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
-> **The Alpine store is being built.** The metadata here describes
-> **`glace-alps`**, ahead of its publication. The Swiss rehearsal, `glace-ch`,
-> remains at `lqgentner/glace-ch` on Source Cooperative for now.
-> [`docs/STATUS.md`](docs/STATUS.md) lists the open work.
+> **Not yet published.** The metadata here describes **`glace-alps`**, ahead
+> of its publication. [`docs/STATUS.md`](docs/STATUS.md) lists the open work.
 
 Keeping the metadata on GitHub lets anyone review its history, cite a release
 and report errors as issues.
@@ -58,8 +56,14 @@ To edit the metadata, or to build and publish the store, see [AGENTS.md](AGENTS.
 
 ## Citing
 
-Each release of the metadata will be archived on Zenodo with a DOI, starting
-with the first release. Until then, please contact the author.
+Cite version 1.0 of the dataset as:
+
+> Gentner, L. Q. (2026). *GLACE Alps* (Version 1.0) [Data set]. LaRS –
+> Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
+
+To refer to the dataset across versions, use its canonical DOI,
+https://doi.org/10.48656/d4r9-fj97. Both DOIs are registered once the dataset
+is listed at LaRS.
 
 ## License
 

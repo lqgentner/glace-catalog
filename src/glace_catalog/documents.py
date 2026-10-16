@@ -58,6 +58,8 @@ ALTERNATE_ASSETS_EXTENSION_URI = (
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
 )
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
+SCIENTIFIC_EXTENSION_URI = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+DOI_RESOLVER = "https://doi.org/"
 
 PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
 """Portolan browser base URL; append a public catalog's https URL without the scheme."""
@@ -147,6 +149,44 @@ def _json(document: Document) -> str:
 # --- the documents ------------------------------------------------------------
 
 
+def version_doi(vocabulary: Vocabulary) -> str:
+    """Return the DOI of ``DATASET_VERSION``, or an empty string if the catalog has none.
+
+    Raises
+    ------
+    ValueError
+        If the catalog lists version DOIs but none for ``DATASET_VERSION``, so
+        a version bump cannot keep the previous version's DOI.
+    """
+    dois = vocabulary.catalog.version_dois
+    if dois and DATASET_VERSION not in dois:
+        msg = f"metadata/catalog.yaml lists no DOI for version {DATASET_VERSION}"
+        raise ValueError(msg)
+    return dois.get(DATASET_VERSION, "")
+
+
+def citation(vocabulary: Vocabulary) -> str:
+    """Render the recommended citation of this version, or an empty string without a DOI."""
+    doi = version_doi(vocabulary)
+    if not doi:
+        return ""
+    return vocabulary.prose(vocabulary.catalog.citation, version=DATASET_VERSION, doi=doi)
+
+
+def _doi_links(vocabulary: Vocabulary) -> list[Document]:
+    """Link the version DOI as ``cite-as`` and the canonical DOI as ``related``."""
+    links = []
+    if doi := version_doi(vocabulary):
+        links.append(
+            _link("cite-as", DOI_RESOLVER + doi, f"DOI of version {DATASET_VERSION}", "text/html")
+        )
+    if canonical := vocabulary.catalog.canonical_doi:
+        links.append(
+            _link("related", DOI_RESOLVER + canonical, "Canonical DOI, every version", "text/html")
+        )
+    return links
+
+
 def catalog_document(vocabulary: Vocabulary) -> Document:
     """Build the root ``catalog.json``.
 
@@ -169,6 +209,7 @@ def catalog_document(vocabulary: Vocabulary) -> Document:
             {"rel": rel, "href": link["href"], "title": link["title"]}
             for rel, link in catalog.links.items()
         ],
+        *_doi_links(vocabulary),
     ]
     return {
         "type": "Catalog",
@@ -252,6 +293,10 @@ def collection_document(
         ALTERNATE_ASSETS_EXTENSION_URI,
         VERSION_EXTENSION_URI,
     ]
+    scientific: Document = {}
+    if doi := version_doi(vocabulary):
+        extensions.append(SCIENTIFIC_EXTENSION_URI)
+        scientific = {"sci:doi": doi, "sci:citation": citation(vocabulary)}
     item_assets: Document = {key: vocabulary.item_asset(key, collection) for key in ASSET_KEYS}
     if collection == MOSAICS_DIR:
         for key in ASSET_KEYS:
@@ -266,6 +311,7 @@ def collection_document(
         "license": catalog.license,
         "keywords": [*catalog.keywords, *config.keywords],
         "version": DATASET_VERSION,
+        **scientific,
         "providers": [dict(provider) for provider in catalog.providers],
         "extent": {
             "spatial": {"bbox": [wgs84_bbox(scope.display_grid)]},
@@ -297,6 +343,7 @@ def collection_document(
                 catalog.license,
                 "text/html",
             ),
+            *_doi_links(vocabulary),
         ],
     }
 
@@ -394,6 +441,7 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "max_zoom": MOSAIC_ZOOM,
         "pmtiles_media_type": PMTILES_MEDIA_TYPE,
         "version": DATASET_VERSION,
+        "citation": citation(vocabulary),
     }
 
 

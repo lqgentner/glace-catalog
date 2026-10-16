@@ -7,7 +7,8 @@
     "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
-    "https://stac-extensions.github.io/version/v1.2.0/schema.json"
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-mosaics",
   "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)",
@@ -23,7 +24,9 @@
     "Alps",
     "mosaic"
   ],
-  "version": "0.1",
+  "version": "1.0",
+  "sci:doi": "10.48656/60er-3j55",
+  "sci:citation": "Gentner, L. Q. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55",
   "providers": [
     {
       "name": "European Space Agency / Copernicus",
@@ -61,7 +64,7 @@
       "interval": [
         [
           "2015-01-01T00:00:00Z",
-          "2026-01-01T00:00:00Z"
+          "2027-01-01T00:00:00Z"
         ]
       ]
     }
@@ -723,6 +726,18 @@
       "href": "https://creativecommons.org/licenses/by/4.0/",
       "type": "text/html",
       "title": "CC-BY-4.0"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.48656/60er-3j55",
+      "type": "text/html",
+      "title": "DOI of version 1.0"
+    },
+    {
+      "rel": "related",
+      "href": "https://doi.org/10.48656/d4r9-fj97",
+      "type": "text/html",
+      "title": "Canonical DOI, every version"
     }
   ]
 }
