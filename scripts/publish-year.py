@@ -31,9 +31,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import replace
 import logging
 from pathlib import Path
+import shutil
 import tempfile
 from typing import TYPE_CHECKING, Any
 
@@ -51,7 +53,7 @@ from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
     from datetime import date
 
     import pystac
@@ -235,41 +237,49 @@ def mosaic_tags(frame: pd.DataFrame, asset_key: str) -> dict[str, str]:
     return tags
 
 
+@contextmanager
+def staging(args: argparse.Namespace, step: str) -> Iterator[Path]:
+    """Yield an empty local directory for one step's outputs; remove it afterwards.
+
+    The step uploads the whole directory, so a new one per run uploads only
+    this run's files. Removing it after the upload keeps the cache from
+    growing by a year of mosaics and archives with every build.
+    """
+    parent = args.cache / "glace-store" / str(args.year)
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=parent, prefix=f"{step}-") as tmp:
+        yield Path(tmp)
+
+
 def step_mosaics(
     args: argparse.Namespace,
+    scope: Scope,
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
     frame: pd.DataFrame,
-) -> dict[str, mosaics.MosaicWrite]:
-    """Write and upload the year's twelve mosaic COGs."""
+) -> dict[str, dict[str, Any]]:
+    """Write and upload the year's twelve mosaic COGs; return their build-state details."""
     band_names = {key: mosaics.mosaic_band_name(key) for key in chain.linear}
     tags = {key: mosaic_tags(frame, key) for key in chain.linear}
-    staged = args.cache / "glace-store" / str(args.year) / "mosaics"
-    staged.mkdir(parents=True, exist_ok=True)
-    written = mosaics.build_mosaic_cogs(
-        chain,
-        staged,
-        band_names=band_names,
-        tags=tags,
-        layers=args.layers,
-        workers=args.mosaic_workers,
-    )
-    stac.store.upload_tree(staged, layout.mosaic_year(args.year))
-    return written
-
-
-def clear_stale_archives(staged: Path) -> int:
-    """Delete the archives a previous run left in the staging directory.
-
-    Everything under ``staged`` is uploaded, so clearing it first means only
-    this run's archives are published.
-    """
-    stale = sorted(path for path in staged.iterdir() if path.suffix == ".pmtiles")
-    for path in stale:
-        path.unlink()
-    if stale:
-        logger.info("Removed %d stale archive(s) from %s", len(stale), staged)
-    return len(stale)
+    with staging(args, "mosaics") as staged:
+        written = mosaics.build_mosaic_cogs(
+            chain,
+            staged,
+            band_names=band_names,
+            tags=tags,
+            layers=args.layers,
+            workers=args.mosaic_workers,
+        )
+        stac.store.upload_tree(staged, layout.mosaic_year(args.year))
+        return {
+            key: {
+                "size": write.path.stat().st_size,
+                "resolution": scope.analysis_grid.resolution,
+                "checksum": write.checksum,
+                "statistics": write.statistics.to_dict(),
+            }
+            for key, write in written.items()
+        }
 
 
 def step_pmtiles(
@@ -279,25 +289,62 @@ def step_pmtiles(
     window: tuple[date, date],
 ) -> list[webmap.LayerInfo]:
     """Render and upload the year's web-map archives."""
-    staged = args.cache / "glace-store" / str(args.year) / "pmtiles"
-    staged.mkdir(parents=True, exist_ok=True)
-    clear_stale_archives(staged)
-    layers = webmap.build_layers(
-        chain,
-        staged,
-        year=args.year,
-        start_date=window[0].isoformat(),
-        end_date=window[1].isoformat(),
-        layers=args.layers,
-        workers=args.tiler_workers,
-        concurrent_layers=args.concurrent_layers,
-        # Outside `staged`, which is uploaded whole.
-        scratch=args.cache / "glace-store" / str(args.year) / "rgba",
-    )
-    # The archives are assets of the year's mosaic item, so they go beside its
-    # COGs. `upload_tree` adds and overwrites files and leaves the rest.
-    stac.store.upload_tree(staged, layout.mosaic_year(args.year))
+    with staging(args, "pmtiles") as staged, staging(args, "rgba") as scratch:
+        layers = webmap.build_layers(
+            chain,
+            staged,
+            year=args.year,
+            start_date=window[0].isoformat(),
+            end_date=window[1].isoformat(),
+            layers=args.layers,
+            workers=args.tiler_workers,
+            concurrent_layers=args.concurrent_layers,
+            # Outside `staged`, which is uploaded whole.
+            scratch=scratch,
+        )
+        # The archives are assets of the year's mosaic item, so they go beside
+        # its COGs. `upload_tree` adds and overwrites files and leaves the rest.
+        stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return layers
+
+
+def scratch_needed(args: argparse.Namespace, scope: Scope, steps: Sequence[str]) -> int:
+    """Estimate the local scratch, in bytes, that ``steps`` need at their peak.
+
+    Measured on the Alps in 2026: a year's staged mosaics take about 7 bytes
+    per analysis-grid pixel; while tiling, each concurrently warped RGBA raster
+    takes about 0.4 bytes and the staged archives together about 0.6 bytes per
+    display-grid pixel. The estimate adds half again as a margin.
+    """
+    layers = len(args.layers) if args.layers else len(ASSET_KEYS)
+    share = layers / len(ASSET_KEYS)
+    analysis = scope.analysis_grid.width * scope.analysis_grid.height
+    display = scope.display_grid.width * scope.display_grid.height
+    need = 0.0
+    if "mosaics" in steps:
+        need = max(need, 7 * share * analysis)
+    if "pmtiles" in steps:
+        warps = min(max(1, args.concurrent_layers), layers)
+        need = max(need, (0.4 * warps + 0.6 * share) * display)
+    return int(1.5 * need)
+
+
+def require_scratch_space(cache: Path, needed: int) -> None:
+    """Stop before any work if ``cache`` has less free space than ``needed`` bytes.
+
+    Raises
+    ------
+    SystemExit
+        Naming the cache, its free space and the estimate.
+    """
+    cache.mkdir(parents=True, exist_ok=True)
+    free = shutil.disk_usage(cache).free
+    if free < needed:
+        msg = (
+            f"the cache {cache} has {free / 1e9:.1f} GB free, but this run needs about "
+            f"{needed / 1e9:.1f} GB; set FREEZEBASE_CACHE to a volume with more room"
+        )
+        raise SystemExit(msg)
 
 
 def load_glacier_fractions(layout: stac.StoreLayout) -> dict[str, tuple[float, float]]:
@@ -627,6 +674,10 @@ def main() -> None:
     }
     prints["items"] = stac.fingerprint(prints, CATALOGUE_SCHEMA_VERSION, stac.DATASET_VERSION)
 
+    pending = [step for step in steps if not state.is_current(step, prints[step])]
+    logger.info("Scratch: %s", args.cache)
+    require_scratch_space(args.cache, scratch_needed(args, scope, pending))
+
     analysis_chain: mosaics.YearVrts | None = None
     display_chain: mosaics.YearVrts | None = None
     for step in steps:
@@ -641,19 +692,8 @@ def main() -> None:
             analysis_chain = step_vrt(args, scope, layout, files)
         elif step == "mosaics":
             analysis_chain = analysis_chain or step_vrt(args, scope, layout, files)
-            written = step_mosaics(args, layout, analysis_chain, frame)
             state.record(
-                step,
-                prints[step],
-                {
-                    key: {
-                        "size": write.path.stat().st_size,
-                        "resolution": scope.analysis_grid.resolution,
-                        "checksum": write.checksum,
-                        "statistics": write.statistics.to_dict(),
-                    }
-                    for key, write in written.items()
-                },
+                step, prints[step], step_mosaics(args, scope, layout, analysis_chain, frame)
             )
         elif step == "pmtiles":
             display_chain = display_chain or step_vrt(

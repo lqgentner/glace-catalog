@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from freezebase.mgrs import MGRSGeoBox
@@ -189,15 +190,37 @@ def _pmtiles_state() -> BuildState:
     return state
 
 
-def _staging_is_cleared() -> bool:
-    """Check that an earlier build's archives leave staging and other files stay."""
+def _staging_checks() -> dict[str, bool]:
+    """Check the staging directories and the scratch estimate of the year script."""
+    publisher = _publisher()
     with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp)
-        (staged / "coh12_vv.pmtiles").write_bytes(b"old")
-        (staged / "coh12_vv_viz.pmtiles").write_bytes(b"old too")
-        (staged / "notes.txt").write_bytes(b"keep")
-        removed = _publisher().clear_stale_archives(staged)
-        return removed == 2 and sorted(p.name for p in staged.iterdir()) == ["notes.txt"]
+        args = SimpleNamespace(cache=Path(tmp), year=2023)
+        with publisher.staging(args, "pmtiles") as staged:
+            empty = not any(staged.iterdir())
+            (staged / "coh12_vv_viz.pmtiles").write_bytes(b"built")
+        with publisher.staging(args, "pmtiles") as again:
+            fresh = again != staged and not any(again.iterdir())
+        removed = not any((Path(tmp) / "glace-store" / "2023").iterdir())
+        too_little = False
+        try:
+            publisher.require_scratch_space(Path(tmp), 1 << 60)
+        except SystemExit as error:
+            too_little = "FREEZEBASE_CACHE" in str(error)
+    alps = get_scope("alps")
+    every = SimpleNamespace(layers=None, concurrent_layers=12)
+    one = SimpleNamespace(layers=["coh12_vv"], concurrent_layers=12)
+    pmtiles = publisher.scratch_needed(every, alps, ["pmtiles"])
+    return {
+        "a step stages into an empty directory": empty,
+        "a rerun stages into a new directory": fresh,
+        "staging is removed after the step": removed,
+        "too little scratch space stops the build": too_little,
+        "the Alpine web maps need 15 to 40 GB of scratch": 15e9 < pmtiles < 40e9,
+        "one layer needs less scratch than twelve": (
+            publisher.scratch_needed(one, alps, ["pmtiles"]) < pmtiles
+        ),
+        "an up-to-date year needs no scratch": publisher.scratch_needed(every, alps, []) == 0,
+    }
 
 
 def _footprint_checks() -> dict[str, bool]:
@@ -353,7 +376,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering's description carries the tiled zoom range"] = "z5-z12" in (
         viz.description or ""
     )
-    checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
+    checks.update(_staging_checks())
     checks.update(_footprint_checks())
     # A build state recorded before the transport range changed describes an
     # archive encoded with the old range, so publishing it must fail.

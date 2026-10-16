@@ -81,10 +81,18 @@ Building reads `.env` through `freezebase.settings.S3Settings`:
 GLACE_S3_PROFILE=        # named profile in ~/.aws/credentials
 GLACE_S3_ENDPOINT_URL=   # UZH gateway, unless set in the profile
 GLACE_STORE_ROOT=        # built store: s3:// prefix, or a local directory
+FREEZEBASE_CACHE=        # local scratch: VRT chains, staged mosaics, RGBA rasters
 ```
 
 `publish-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`
 unless `--root` is given. A local root works offline and publishes the same way.
+
+Set `FREEZEBASE_CACHE` to a volume with room for an Alpine year: about 2.5 GB
+of staged mosaics, or 1.1 GB per concurrently warped web-map layer plus 1.8 GB
+of staged archives. Unset, the cache falls back to `~/.cache/freezebase`, which
+is usually the system disk. `publish-year.py` stops before any work when the
+cache has less room than its estimate, and removes each step's staged files
+after the upload.
 
 Use named profiles only; do not pass access keys through the environment.
 Publication uses the separate profile in `catalog.publish.yaml`.
