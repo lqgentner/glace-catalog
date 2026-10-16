@@ -33,8 +33,9 @@ reads the published collection assets and probes the server's range and CORS
 support. Item asset hrefs are relative and do not resolve in the mirror, so
 neither target reads the COGs or archives.
 
-The last full run, on 2026-09-08 over the four published Swiss years, gave
-0 errors and only the `PTL-CAT-001` warnings accepted below.
+The last run over a built store, on 2026-10-16 over the Alpine years
+2015–2026 before publication (`make conformance`, 26 546 files), gave 0 errors
+and only the twelve `PTL-CAT-001` warnings accepted below.
 
 ## Accepted Deviations
 

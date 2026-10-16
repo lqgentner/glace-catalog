@@ -13,7 +13,8 @@ describes: the next person will trust it. The design and its reasons are in
 | gates | ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, publishing, stac-check, rashid |
 | source composites | 2015–2026 at `/mnt/data/alps-total/{year}/s1-comp-mean`, written by s1bursts 0.6.0 with mean aggregation. Every manifest passes `load_and_verify_manifest` (2026-10-16): 2 210 tiles of 12 files a year, except 2015, whose gaps the `coverage_note` in `metadata/catalog.yaml` describes |
 | glacier fractions | `tiles/glacier-fractions.parquet`, derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
-| store | Built locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`). The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents |
+| store | Built and finalized locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`), 2026-10-16: 26 519 tile items, twelve mosaic items, 144 mosaic COGs and 144 web-map archives. The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents. `make conformance` gives 0 errors and twelve `PTL-CAT-001` warnings, one per year catalog ([`conformance.md`](conformance.md)) |
+| web maps | Twelve value-encoded archives a year, over the transport ranges remeasured on the mean composites (`metadata/assets.yaml`); finalization refuses archives whose recorded encoding differs. A year takes 54 min on 15 cores (AGENTS.md) |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
 | publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. `giuz/glace-alps` does not exist yet. The Swiss test catalog is still at `lqgentner/glace-ch` |
@@ -37,8 +38,9 @@ Ordered by what blocks what. Everything not listed here is done.
   proxy deletes one object at a time (it answers the bulk `DeleteObjects` call
   with `NoSuchBucket`). *Verified when* listing that prefix returns nothing.
 - **P-5 — Overview depth at Alpine size.** `PTL-DAT-011` wants overviews down
-  to one tile. *Verified when* the mosaic writer asserts the level count and
-  `rashid check --data` passes on an Alpine mosaic.
+  to one tile. `rashid check --data` passes on the 2026 Alpine mosaics
+  (2026-10-16); the writer does not assert the level count yet. *Verified
+  when* the mosaic writer asserts the level count.
 - **P-10 — Register in the Portolan registry** once published
   (`portolan:register-catalog`). *Verified when* the catalog appears in the
   registry.
@@ -81,6 +83,11 @@ Worth doing, blocking nothing:
 - **P-27 — Year styles as item assets.** FIRMS keeps each year's styles beside
   its archives (`pmtiles://./…`), so the collection holds only the default
   style. Check first that the Portolan browser reads a style from an item.
+- **P-29 — Archive header bounds.** `rashid check --data` warns
+  (`PTL-DAT-005`) on every web-map archive: its header bounds are the
+  tile-aligned display grid, about 1 km wider than the mosaic item's bbox.
+  *Verified when* the archives' header bounds match the item bbox and the
+  warning is gone.
 - **P-28 — Root and collection links.** A `rel: "preview"` link (`text/html`)
   to the viewer, `via` to the Source Cooperative page, `providers` on the
   root, and `updated` on the root and the collections at finalization.
