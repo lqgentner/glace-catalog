@@ -37,6 +37,7 @@ from upath import UPath
 
 from glace_catalog import stac
 from glace_catalog.config import settings
+from glace_catalog.documents import stale_documents
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
@@ -477,6 +478,23 @@ def validate(layout: stac.StoreLayout) -> None:
         logger.info("%s: valid, %d item link(s)", child.id, len(child.get_links("item")))
 
 
+def require_current_render(source_dir: Path) -> None:
+    """Stop if ``source_dir`` differs from a fresh render of ``metadata/``.
+
+    The year builds read the transport ranges from ``metadata/assets.yaml``,
+    but the year styles are copied from the rendered template. A stale render
+    would decode every archive with the old ranges.
+
+    Raises
+    ------
+    SystemExit
+        Listing each stale document and the command that renders them.
+    """
+    stale = stale_documents(vocabulary(), source_dir)
+    if stale:
+        raise SystemExit("\n".join([*stale, "render them with: uv run scripts/render-catalog.py"]))
+
+
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the catalog finalizer."""
     parser = argparse.ArgumentParser(
@@ -522,6 +540,7 @@ def main() -> None:
     """Assemble the collection documents, indexes and thumbnails over every published year."""
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    require_current_render(args.source)
 
     root = settings.resolve_path(args.root) if args.root else settings.store_root
     layout = stac.StoreLayout(root)

@@ -186,6 +186,7 @@ uv run --env-file .env scripts/finalize-catalog.py \
 
 Finalization:
 
+- refuses to start if `catalog/` differs from a fresh render of `metadata/`;
 - updates the collections' year links and temporal extent;
 - combines the item-index slices into `items.parquet`;
 - draws the thumbnails;

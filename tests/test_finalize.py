@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks what ``finalize-catalog`` writes for the published years.
 
-Three steps belong to this script alone, and a mistake in any of them is easy
+Four steps belong to this script alone, and a mistake in any of them is easy
 to miss:
 
 - it writes one style per year from the tracked template, so each year's
@@ -10,6 +10,9 @@ to miss:
   year as the default;
 - it checks that every archive in the store appears in its year's style, so the
   run fails on an archive that no style draws.
+- it refuses to start from a ``catalog/`` that differs from a fresh render of
+  ``metadata/``, since the styles it copies must decode the archives with the
+  ranges the build used.
 
 Runs the script's own functions against a temporary store of empty files.
 Writes only into the temporary directory, reads no data and needs no network.
@@ -182,6 +185,24 @@ def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) 
         checks["--skip-thumbnail accepts thumbnails already written"] = False
 
 
+def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+    """Check that finalization accepts the tracked render and refuses a stale one."""
+    rendered = work / "rendered"
+    shutil.copytree(SOURCE, rendered)
+    try:
+        fin.require_current_render(rendered)
+        checks["the tracked render is accepted"] = True
+    except SystemExit:
+        checks["the tracked render is accepted"] = False
+    style = rendered / "mosaics" / "styles" / "default.json"
+    style.write_text(style.read_text().replace('"color-relief"', '"hillshade"', 1))
+    try:
+        fin.require_current_render(rendered)
+        checks["a stale render stops finalization"] = False
+    except SystemExit as error:
+        checks["a stale render stops finalization"] = "default.json" in str(error)
+
+
 def main() -> int:
     """Run every check; print the failures."""
     fin = _finalizer()
@@ -197,6 +218,7 @@ def main() -> int:
         check_registration(checks, fin, document)
         check_coverage(checks, fin, store, written)
         check_skip_thumbnail(checks, fin, store)
+        check_render(checks, fin, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
