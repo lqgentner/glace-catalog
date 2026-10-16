@@ -252,6 +252,7 @@ def step_mosaics(
         band_names=band_names,
         tags=tags,
         layers=args.layers,
+        workers=args.mosaic_workers,
     )
     stac.store.upload_tree(staged, layout.mosaic_year(args.year))
     return written
@@ -504,6 +505,15 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     return assets
 
 
+def positive_int(text: str) -> int:
+    """Parse a command-line count that must be at least one."""
+    value = int(text)
+    if value < 1:
+        msg = f"must be at least 1, not {value}"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the per-year publisher."""
     parser = argparse.ArgumentParser(
@@ -535,6 +545,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=16,
         help="threads for the copy; network-bound, so more than the core count is fine",
+    )
+    parser.add_argument(
+        "--mosaic-workers",
+        type=positive_int,
+        default=mosaics.MOSAIC_WORKERS,
+        help=(
+            "mosaic layers written at the same time, one process each; each peaks at "
+            "about 2.7 GB of memory for alps"
+        ),
     )
     parser.add_argument(
         "--tiler-workers",

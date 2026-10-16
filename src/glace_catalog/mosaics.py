@@ -28,6 +28,7 @@ The published record of a run is its manifest, configuration and products.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 import logging
@@ -52,9 +53,11 @@ from glace_catalog.stac.items import GEOMETRY_SIMPLIFY_DEG
 from glace_catalog.stac.naming import published_name
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.stac.tags import BandStatistics
+from glace_catalog.tiler import spawn_pool
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
+    from contextlib import AbstractContextManager
 
     from rasterio.io import DatasetReader
 
@@ -112,6 +115,25 @@ COG_CREATION = {
 """COG creation options of an annual mosaic.
 
 ``AVERAGE`` overviews make each reduced level the mean of the level above.
+"""
+
+MOSAIC_WORKERS = 4
+"""Mosaic layers written at the same time by default.
+
+A worker peaks at about 2.7 GB on the Alps, so four suit a 16 GB machine.
+"""
+
+MOSAIC_GDAL_CACHE_MB = 512
+"""GDAL block cache of one mosaic worker, in megabytes.
+
+A worker warps one layer block by block, reading a few composites per block.
+"""
+
+VRT_WORKERS = 12
+"""Layers whose VRT chain is built at the same time, one process each.
+
+Building a layer's chain reads the header of every composite of that layer,
+which is mostly Python work, so threads would not run it in parallel.
 """
 
 
@@ -190,6 +212,39 @@ class YearVrts:
     sources_at: Path | UPath | None = None
 
 
+def _build_band_vrt(
+    asset_key: str,
+    zones: Mapping[str, Sequence[CompositeFile]],
+    vrt_dir: Path,
+    grid: Grid,
+    extents: Mapping[str, tuple[float, float, float, float]],
+) -> Path:
+    """Build one layer's chain: a VRT per UTM zone, warped onto the grid, then mosaicked."""
+    # QA-NUM is a uint16 count on the tiles, with 0 as nodata. The mosaic
+    # holds the float32 average of the source pixels, with NaN as nodata.
+    promote = asset_key.endswith("_qa_num")
+    warped: list[Path] = []
+    for zone, zone_files in sorted(zones.items()):
+        zone_vrt = vrt_dir / f"{asset_key}_{zone}.vrt"
+        build_vrt_mosaic(sorted(f.path for f in zone_files), zone_vrt)
+        web_vrt = vrt_dir / f"{asset_key}_{zone}_webm{MOSAIC_ZOOM}.vrt"
+        create_warped_vrt(
+            zone_vrt,
+            web_vrt,
+            crs=grid.crs,
+            resolution=grid.resolution,
+            bounds=extents[zone],
+            resampling=Resampling.average,
+            dtype="float32" if promote else None,
+            nodata=float("nan") if promote else None,
+        )
+        warped.append(web_vrt)
+    mosaic_vrt = vrt_dir / f"{asset_key}_webm{MOSAIC_ZOOM}.vrt"
+    # The scope's fixed extent, so every year shares one grid.
+    build_vrt_mosaic(warped, mosaic_vrt, bounds=grid.bounds)
+    return mosaic_vrt
+
+
 def build_year_vrts(
     files: Sequence[CompositeFile],
     scope: Scope,
@@ -234,32 +289,19 @@ def build_year_vrts(
     # One extent per (year, zone), shared by every band.
     extents = {zone: zone_bounds(sorted(tiles), grid) for zone, tiles in tiles_per_zone.items()}
 
-    linear: dict[str, Path | UPath] = {}
-    for asset_key, zones in sorted(by_band.items()):
-        # QA-NUM is a uint16 count on the tiles, with 0 as nodata. The mosaic
-        # holds the float32 average of the source pixels, with NaN as nodata.
-        promote = asset_key.endswith("_qa_num")
-        warped: list[Path] = []
-        for zone, zone_files in sorted(zones.items()):
-            zone_vrt = vrt_dir / f"{asset_key}_{zone}.vrt"
-            build_vrt_mosaic(sorted(f.path for f in zone_files), zone_vrt)
-            web_vrt = vrt_dir / f"{asset_key}_{zone}_webm{MOSAIC_ZOOM}.vrt"
-            create_warped_vrt(
-                zone_vrt,
-                web_vrt,
-                crs=grid.crs,
-                resolution=grid.resolution,
-                bounds=extents[zone],
-                resampling=Resampling.average,
-                dtype="float32" if promote else None,
-                nodata=float("nan") if promote else None,
-            )
-            warped.append(web_vrt)
-        mosaic_vrt = vrt_dir / f"{asset_key}_webm{MOSAIC_ZOOM}.vrt"
-        # The scope's fixed extent, so every year shares one grid.
-        build_vrt_mosaic(warped, mosaic_vrt, bounds=grid.bounds)
-        linear[asset_key] = mosaic_vrt
-        logger.info("Built %s from %d zone(s)", mosaic_vrt.name, len(warped))
+    keys = sorted(by_band)
+    with spawn_pool(min(VRT_WORKERS, len(keys)) or 1) as pool:
+        built = pool.map(
+            _build_band_vrt,
+            keys,
+            [dict(by_band[key]) for key in keys],
+            [vrt_dir] * len(keys),
+            [grid] * len(keys),
+            [extents] * len(keys),
+        )
+        linear: dict[str, Path | UPath] = dict(zip(keys, built, strict=True))
+    for path in linear.values():
+        logger.info("Built %s", Path(str(path)).name)
 
     decibels: dict[str, Path] = {}
     if decibel:
@@ -276,17 +318,22 @@ def build_year_vrts(
 
 
 @contextmanager
-def chain_env(vrts: YearVrts) -> Generator[None]:
+def sources_env(sources_at: Path | UPath | None) -> Generator[None]:
+    """Enter the environment that reading ``sources_at`` needs, if it is remote."""
+    if sources_at is not None and UPath(sources_at).protocol == "s3":
+        with s3_env(UPath(sources_at)):
+            yield
+    else:
+        yield
+
+
+def chain_env(vrts: YearVrts) -> AbstractContextManager[None]:
     """Enter the environment the chain's sources need, if they are remote.
 
     A local VRT path says nothing about where its sources live, so the
     credentials are set around the read.
     """
-    if vrts.sources_at is not None and UPath(vrts.sources_at).protocol == "s3":
-        with s3_env(UPath(vrts.sources_at)):
-            yield
-    else:
-        yield
+    return sources_env(vrts.sources_at)
 
 
 def _parse_vrt(text: str) -> ET.Element:
@@ -483,6 +530,26 @@ def build_mosaic_cog(
     )
 
 
+def _write_mosaic_in_worker(
+    sources_at: Path | UPath | None,
+    src_vrt: Path | UPath,
+    out_path: Path,
+    *,
+    asset_key: str,
+    band_name: str,
+    tags: Mapping[str, str] | None,
+) -> MosaicWrite:
+    """Run :func:`build_mosaic_cog` in a pool worker, with the sources' credentials."""
+    with sources_env(sources_at):
+        return build_mosaic_cog(
+            src_vrt,
+            out_path,
+            asset_key=asset_key,
+            band_name=band_name,
+            tags=tags,
+        )
+
+
 def build_mosaic_cogs(
     vrts: YearVrts,
     out_dir: Path,
@@ -490,8 +557,13 @@ def build_mosaic_cogs(
     band_names: Mapping[str, str],
     tags: Mapping[str, Mapping[str, str]] | None = None,
     layers: Sequence[str] | None = None,
+    workers: int = MOSAIC_WORKERS,
 ) -> dict[str, MosaicWrite]:
     """Write one mosaic COG per band from the chain's linear step.
+
+    Each layer's warp runs on one core, so the layers are written in parallel,
+    one process each. Each still compresses with every core: a layer whose
+    warp finishes early leaves its cores to the others.
 
     Parameters
     ----------
@@ -506,6 +578,8 @@ def build_mosaic_cogs(
     layers
         Restrict to these asset keys. ``None``, the default, writes all twelve,
         including the QA layers.
+    workers
+        Layers written at the same time, one process each.
 
     Returns
     -------
@@ -514,17 +588,33 @@ def build_mosaic_cogs(
     """
     tags = tags or {}
     selected = sorted(vrts.linear if layers is None else set(layers) & set(vrts.linear))
-    written: dict[str, MosaicWrite] = {}
-    with chain_env(vrts):
-        for asset_key in selected:
-            written[asset_key] = build_mosaic_cog(
+    if not selected:
+        return {}
+    workers = min(workers, len(selected))
+    logger.info("Writing %d mosaic(s), %d at a time", len(selected), workers)
+    with spawn_pool(workers, cache_mb=MOSAIC_GDAL_CACHE_MB) as pool:
+        futures = {
+            pool.submit(
+                _write_mosaic_in_worker,
+                vrts.sources_at,
                 vrts.linear[asset_key],
                 out_dir / published_name(asset_key),
                 asset_key=asset_key,
                 band_name=band_names.get(asset_key, asset_key),
                 tags=tags.get(asset_key),
-            )
-    return written
+            ): asset_key
+            for asset_key in selected
+        }
+        written: dict[str, MosaicWrite] = {}
+        try:
+            for future in as_completed(futures):
+                written[futures[future]] = future.result()
+                logger.info("Wrote %s", written[futures[future]].path.name)
+        except BaseException:
+            # Stop at the first failure rather than writing the queued layers.
+            pool.shutdown(cancel_futures=True)
+            raise
+    return {key: written[key] for key in selected}
 
 
 def mosaic_band_name(asset_key: str) -> str:

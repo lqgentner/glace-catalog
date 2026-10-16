@@ -267,14 +267,16 @@ def _close_datasets() -> None:
     _datasets.clear()
 
 
-def _configure_worker(cache_mb: int) -> None:
-    """Bound GDAL's cache before the worker touches a raster.
+def _configure_worker(cache_mb: int, log_level: int) -> None:
+    """Bound GDAL's cache and set up logging before the worker touches a raster.
 
     Runs in the spawned process before the first GDAL call, which reads the
-    environment variable. An exit handler closes the worker's open sources
-    while GDAL is still loaded.
+    environment variable. A spawned process starts without the parent's
+    logging setup, so it logs to stderr at the parent's level. An exit handler
+    closes the worker's open sources while GDAL is still loaded.
     """
     os.environ.setdefault("GDAL_CACHEMAX", str(cache_mb))
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
     atexit.register(_close_datasets)
 
 
@@ -298,7 +300,7 @@ def spawn_pool(
         max_workers=workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=_configure_worker,
-        initargs=(cache_mb,),
+        initargs=(cache_mb, logging.getLogger().getEffectiveLevel()),
     )
 
 

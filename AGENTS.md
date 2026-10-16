@@ -119,7 +119,7 @@ uv run --env-file .env scripts/publish-year.py 2023 \
 
 | Step | Result |
 | --- | --- |
-| `copy` | Validates the manifest and supported assets, then copies composites server-side without re-encoding. |
+| `copy` | Validates the manifest and supported assets, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
 | `vrt` | Builds temporary regional VRTs for the next two steps. |
 | `mosaics` | Writes twelve annual analysis mosaics. |
 | `pmtiles` | Writes twelve value-encoded web-map archives. |
@@ -128,6 +128,10 @@ uv run --env-file .env scripts/publish-year.py 2023 \
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
 source composites, grids or settings change.
 
+A hard-linked store shares its composites' bytes with the source archive, so
+never rewrite an archive file in place: the store copy would change with it,
+unseen by the fingerprints. Replace a composite by writing a new file.
+
 | Option | Purpose |
 | --- | --- |
 | `--steps copy,mosaics` | Run selected steps. |
@@ -135,6 +139,7 @@ source composites, grids or settings change.
 | `--layers coh12_vv,rtc_vv` | Select layers. |
 | `--root` | Use another store prefix, such as a scratch location. |
 | `--max-workers` | Set copy threads; transfers are network-bound. |
+| `--mosaic-workers` | Set mosaic processes, one layer each; defaults to four. |
 | `--tiler-workers` | Set tiler processes; defaults to one per core, each with a 256 MB GDAL cache. |
 | `--concurrent-layers` | Set simultaneous layer warps; defaults to four. |
 

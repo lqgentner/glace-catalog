@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from freezebase.s3 import atomic_write_text, list_object_sizes
@@ -30,7 +31,6 @@ from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -482,7 +482,9 @@ def copy_composites(
 
     Each file is copied to ``{root}/tiles/{year}/{tile}/{asset_key}.tif`` with
     a server-side ``CopyObject``, so no data passes through this machine and
-    the bytes and compression stay exactly as the run wrote them.
+    the bytes and compression stay exactly as the run wrote them. When the
+    archive and the store are on the same local disk, each file is hard-linked
+    instead, so the store takes no extra space.
 
     Parameters
     ----------
@@ -506,8 +508,9 @@ def copy_composites(
     destinations = list_object_sizes(layout.tile_year(year), recursive=True)
     # A local store needs its directories; create them once, before the copy
     # pool starts.
-    for tile in sorted({file.tile for file in files}):
-        layout.tile(year, tile).mkdir(parents=True, exist_ok=True)
+    if isinstance(layout.root, Path):
+        for tile in sorted({file.tile for file in files}):
+            layout.tile(year, tile).mkdir(parents=True, exist_ok=True)
 
     def copy_one(file: CompositeFile) -> bool:
         target = layout.tile(year, file.tile) / file.published_name
@@ -519,7 +522,13 @@ def copy_composites(
         # (see BuildState).
         if found is not None and found == listing[file.path.name]:
             return False
-        root.fs.cp(str(UPath(file.path).path), str(UPath(target).path))
+        linked = (
+            isinstance(file.path, Path)
+            and isinstance(target, Path)
+            and hard_link(file.path, target)
+        )
+        if not linked:
+            root.fs.cp_file(str(file.path), str(target))
         return True
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -527,6 +536,28 @@ def copy_composites(
     result = CopyResult(copied=copied, skipped=len(files) - copied)
     logger.info("Copied %d composites into %s: %s", len(files), layout.tile_year(year), result)
     return result
+
+
+def hard_link(source: Path, target: Path) -> bool:
+    """Hard-link ``target`` to ``source``, replacing whatever is there.
+
+    The link is made under a temporary name and moved into place, so a failed
+    or interrupted link leaves the previous file untouched.
+
+    Returns
+    -------
+    bool
+        False if the two paths cannot share a link, for example because they
+        are on different disks; the caller then copies the file.
+    """
+    staged = target.with_name(f".{target.name}.link")
+    staged.unlink(missing_ok=True)
+    try:
+        staged.hardlink_to(source)
+    except OSError:
+        return False
+    staged.replace(target)
+    return True
 
 
 def upload_tree(local: Path, destination: Path | UPath) -> int:

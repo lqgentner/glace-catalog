@@ -30,8 +30,11 @@ import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
 
+from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.store import (
     MANIFEST_COLUMNS,
+    StoreLayout,
+    copy_composites,
     manifest_composites,
     manifest_raster_info,
     manifest_valid_percents,
@@ -200,6 +203,29 @@ def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
     return tags.get("COMPOSITING_METHOD") == "LRW" and "PASS_DIRECTION" not in tags
 
 
+def local_copy_links(tmp: Path) -> dict[str, bool]:
+    """Check a local archive is hard-linked into a local store, and a rerun skips it."""
+    source = tmp / "archive" / "S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif"
+    source.parent.mkdir()
+    source.write_bytes(b"x" * 64)
+    file = parse_composite_name(source)
+    if file is None:
+        return {"the test composite name parses": False}
+    layout = StoreLayout(tmp / "store")
+    listing = {source.name: 64}
+    first = copy_composites([file], layout, 2024, listing)
+    target = layout.tile(2024, file.tile) / file.published_name
+    second = copy_composites([file], layout, 2024, listing)
+    return {
+        "a local composite is linked, not duplicated": (
+            first.copied == 1
+            and isinstance(target, Path)
+            and target.stat().st_ino == source.stat().st_ino
+        ),
+        "a rerun skips a linked composite": second.copied == 0 and second.skipped == 1,
+    }
+
+
 def main() -> int:
     """Run the gate."""
     missing = set(MANIFEST_COLUMNS) - set(PRODUCER_COLUMNS)
@@ -240,6 +266,8 @@ def main() -> int:
         ),
     }
     checks.update(header)
+    with tempfile.TemporaryDirectory() as tmp:
+        checks.update(local_copy_links(Path(tmp)))
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")
