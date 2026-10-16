@@ -22,6 +22,13 @@ describes: the next person will trust it. The design and its reasons are in
 
 Ordered by what blocks what. Everything not listed here is done.
 
+- **P-21 — Publish the tile grid as PMTiles; stop publishing the fractions
+  table.** Plan:
+  [`2026-10-16-tile-grid-pmtiles.md`](superpowers/plans/2026-10-16-tile-grid-pmtiles.md).
+  The viewer then draws the grid without reading `items.parquet`, whose footer
+  is most of what it downloads. Do it before P-20, so the fractions table is
+  never uploaded. *Verified when* the built tree's tiles collection registers
+  `grid` with a `rel: "pmtiles"` link and rashid reports 0 errors.
 - **P-20 — Publish `glace-alps`.** Sync the store to `giuz/glace-alps`
   (AGENTS.md, "Publish the store"). *Verified when* `rashid check --live`
   over the mirrored store reports 0 errors.
@@ -38,19 +45,45 @@ Ordered by what blocks what. Everything not listed here is done.
 
 Worth doing, blocking nothing:
 
-- **P-11 — `llms.txt` per collection**, linked `rel: "llms"`. FTW ships one per
-  collection and per item, at 1–7 kB.
 - **P-12 — `grid:code`** (`MGRS-32TLS`) on tile items: one line, for interop
   with Planetary Computer and Earth Search.
-- **P-13 — Per-item thumbnails on mosaic items.** About twelve renders a year
-  would make the catalog legible in any browser.
-- **P-14 — Test `@developmentseed/deck.gl-geotiff`** on a LERC_ZSTD mosaic
-  with NaN nodata. The Portolan browser uses it, and it depends on `lerc`
-  directly. If it keeps LERC's validity mask, the viewer's workaround of
-  treating 0 as nodata can go.
 - **P-15 — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
   (raster styling).** This catalog is the first Portolan raster PMTiles case;
   the style files and the `renders` blocks may need changing when it settles.
+- **P-22 — Check every published href after a sync.** Send a HEAD request to
+  each asset href under `public_base`, as FIRMS does with
+  `tests/test_links.py --remote`. `rashid check --live` tests range requests
+  and CORS, not whether every object exists.
+- **P-23 — Align the READMEs and agent guides with the paper's Usage Notes**
+  (`../glace-paper/main.tex`, "Usage Notes"). The guides already cover linear
+  backscatter and its decibel conversion, NaN nodata, the lossy PMTiles and
+  the 2015 gaps. They lack three of its notes:
+  - CQM: separability drops where it is below 0.5. Mask or weight those
+    pixels, or use the CQM as a model input.
+  - Interpreting coherence:
+    - lakes reach about 0.09 with the 35 × 7 window, so values are not
+      comparable with products that use larger windows, and thresholds should
+      come from GLACE itself;
+    - persistent snow, unstable slopes and lakes look glacier-like.
+  - Validated scope: glacier mapping in Switzerland, within 250 m of the
+    outlines.
+
+  Use the paper's numbers and wording so the two stay consistent, and put the
+  notes in a section on quirks that give silently wrong answers, as FIRMS
+  does in `detections/AGENTS.md`.
+- **P-24 — `table` extension on the `items` assets.** `table:columns` and
+  `table:row_count`, generated from the code that writes the mirror, with the
+  AGENTS.md column table rendered from the same source. Seen in the
+  Sentinel-2 mirror.
+- **P-25 — A gate that every URL in the repository names `public_base`.**
+  A stale prefix keeps resolving while its old objects exist. The Sentinel-2
+  mirror added `test_location.py` after it moved.
+- **P-27 — Year styles as item assets.** FIRMS keeps each year's styles beside
+  its archives (`pmtiles://./…`), so the collection holds only the default
+  style. Check first that the Portolan browser reads a style from an item.
+- **P-28 — Root and collection links.** A `rel: "preview"` link (`text/html`)
+  to the viewer, `via` to the Source Cooperative page, `providers` on the
+  root, and `updated` on the root and the collections at finalization.
 - **P-19 — Repoint to the production repository once it has the code.** The
   composite pipeline is moving from `deep-glacier-mapping` to
   [`glace-production`](https://github.com/lqgentner/glace-production), which
