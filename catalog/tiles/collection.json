@@ -78,7 +78,7 @@
       "rescale": [
         [
           0.1,
-          0.75
+          0.7
         ]
       ],
       "colormap_name": "magma",
@@ -93,7 +93,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -109,7 +109,7 @@
       "rescale": [
         [
           -2.5,
-          8.0
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -139,7 +139,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -155,7 +155,7 @@
       "rescale": [
         [
           -2.5,
-          8.0
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -171,7 +171,7 @@
       "rescale": [
         [
           -14.5,
-          -4.5
+          -3.5
         ]
       ],
       "colormap_name": "gray",
@@ -186,7 +186,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -201,8 +201,8 @@
       "expression": "10*log10(rtc_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -2.5,
-          7.5
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -217,8 +217,8 @@
       "expression": "10*log10(rtc_vh_b1)",
       "rescale": [
         [
-          -21.0,
-          -11.0
+          -22.5,
+          -10.5
         ]
       ],
       "colormap_name": "gray",
@@ -233,7 +233,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -248,8 +248,8 @@
       "expression": "10*log10(rtc_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -2.5,
-          7.5
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",

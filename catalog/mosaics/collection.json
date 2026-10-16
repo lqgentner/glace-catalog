@@ -78,7 +78,7 @@
       "rescale": [
         [
           0.1,
-          0.75
+          0.7
         ]
       ],
       "colormap_name": "magma",
@@ -93,7 +93,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -109,7 +109,7 @@
       "rescale": [
         [
           -2.5,
-          8.0
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -139,7 +139,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -155,7 +155,7 @@
       "rescale": [
         [
           -2.5,
-          8.0
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -171,7 +171,7 @@
       "rescale": [
         [
           -14.5,
-          -4.5
+          -3.5
         ]
       ],
       "colormap_name": "gray",
@@ -186,7 +186,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -201,8 +201,8 @@
       "expression": "10*log10(rtc_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -2.5,
-          7.5
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -217,8 +217,8 @@
       "expression": "10*log10(rtc_vh_b1)",
       "rescale": [
         [
-          -21.0,
-          -11.0
+          -22.5,
+          -10.5
         ]
       ],
       "colormap_name": "gray",
@@ -233,7 +233,7 @@
       "rescale": [
         [
           0.0,
-          80.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -248,8 +248,8 @@
       "expression": "10*log10(rtc_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -2.5,
-          7.5
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -497,7 +497,7 @@
     "coh12_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VV – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VV – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -13 to 19 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Coherence VV – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -20 to 14 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -505,8 +505,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.12598425196850394,
-          "raster:offset": -13.125984251968504,
+          "raster:scale": 0.13385826771653545,
+          "raster:offset": -20.133858267716537,
           "unit": "dB"
         }
       ]
@@ -546,7 +546,7 @@
     "coh12_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VH – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VH – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -13 to 19 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Coherence VH – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -20 to 14 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -554,8 +554,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.12598425196850394,
-          "raster:offset": -13.125984251968504,
+          "raster:scale": 0.13385826771653545,
+          "raster:offset": -20.133858267716537,
           "unit": "dB"
         }
       ]
@@ -563,7 +563,7 @@
     "rtc_vv_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VV – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VV on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -25 to 5 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Backscatter VV on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -25 to 10 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -571,8 +571,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.11811023622047244,
-          "raster:offset": -25.118110236220474,
+          "raster:scale": 0.1377952755905512,
+          "raster:offset": -25.137795275590552,
           "unit": "dB"
         }
       ]
@@ -596,7 +596,7 @@
     "rtc_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VV – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VV – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -13 to 12 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Backscatter VV – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -20 to 12 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -604,8 +604,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.0984251968503937,
-          "raster:offset": -13.098425196850394,
+          "raster:scale": 0.12598425196850394,
+          "raster:offset": -20.125984251968504,
           "unit": "dB"
         }
       ]
@@ -613,7 +613,7 @@
     "rtc_vh_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VH – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VH on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -31 to -1 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Backscatter VH on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -31 to 2 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -621,8 +621,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.11811023622047244,
-          "raster:offset": -31.118110236220474,
+          "raster:scale": 0.12992125984251968,
+          "raster:offset": -31.12992125984252,
           "unit": "dB"
         }
       ]
@@ -646,7 +646,7 @@
     "rtc_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VH – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VH – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -13 to 12 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Value-encoded WebP tiles of Backscatter VH – Composite Quality Map on WebMercatorQuad z5-z13: an 8-bit code in all three channels, linear over -20 to 12 dB and clipped to it, with code 0 as nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colours it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
       "roles": [
         "visual"
       ],
@@ -654,8 +654,8 @@
         {
           "data_type": "uint8",
           "nodata": 0,
-          "raster:scale": 0.0984251968503937,
-          "raster:offset": -13.098425196850394,
+          "raster:scale": 0.12598425196850394,
+          "raster:offset": -20.125984251968504,
           "unit": "dB"
         }
       ]

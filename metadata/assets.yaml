@@ -22,14 +22,14 @@ products:
     portable_cmap: magma
     decibel: false
     stretch:
-      vv: [0.1, 0.75]
+      vv: [0.1, 0.7]
       vh: [0.1, 0.55]
     transport:
       vv: [0.0, 1.0]
       vh: [0.0, 1.0]
     cqm:
-      stretch: [-2.5, 8.0]
-      transport: [-13.0, 19.0]
+      stretch: [-2.5, 4.0]
+      transport: [-20.0, 14.0]
   rtc:
     name: Backscatter
     long: Radiometrically terrain-corrected gamma-nought backscatter
@@ -41,14 +41,14 @@ products:
     portable_cmap: gray
     decibel: true
     stretch:
-      vv: [-14.5, -4.5]
-      vh: [-21.0, -11.0]
+      vv: [-14.5, -3.5]
+      vh: [-22.5, -10.5]
     transport:
-      vv: [-25.0, 5.0]
-      vh: [-31.0, -1.0]
+      vv: [-25.0, 10.0]
+      vh: [-31.0, 2.0]
     cqm:
-      stretch: [-2.5, 7.5]
-      transport: [-13.0, 12.0]
+      stretch: [-3.0, 4.0]
+      transport: [-20.0, 12.0]
 
 polarizations:
   vv: co-polarized
@@ -60,7 +60,7 @@ qa:
     # The same ranges for coherence and backscatter.
     cmap: cmc.glasgow
     portable_cmap: viridis
-    stretch: [0.0, 80.0]
+    stretch: [0.0, 70.0]
     transport: [0.0, 253.0]
     decibel: false
     # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen

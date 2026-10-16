@@ -89,8 +89,8 @@ for key in ASSET_KEYS:
         if vocabulary.item_asset(key, collection)["bands"][0]["name"] != key:
             problems.append(f"{collection}/{key}: the band is not named by its asset key")
 coh12_vv = vocabulary.display("coh12_vv")
-if coh12_vv.vmax != 0.75:
-    problems.append("coh12_vv default vmax is not 0.75")
+if coh12_vv.vmax != 0.7:
+    problems.append("coh12_vv default vmax is not 0.7")
 
 # --- catalog/ matches a fresh render ---------------------------------------
 stale = stale_documents(vocabulary, CATALOG)
