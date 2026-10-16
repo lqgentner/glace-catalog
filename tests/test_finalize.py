@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks what ``finalize-catalog`` writes for the published years.
 
-Four steps belong to this script alone, and a mistake in any of them is easy
+Five steps belong to this script alone, and a mistake in any of them is easy
 to miss:
 
 - it writes one style per year from the tracked template, so each year's
@@ -9,7 +9,9 @@ to miss:
 - it registers those styles on the collection, one per year, with the latest
   year as the default;
 - it checks that every archive in the store appears in its year's style, so the
-  run fails on an archive that no style draws.
+  run fails on an archive that no style draws;
+- it refuses to finalize archives encoded over a range other than the
+  metadata's, since every year style decodes with the current ranges;
 - it refuses to start from a ``catalog/`` that differs from a fresh render of
   ``metadata/``, since the styles it copies must decode the archives with the
   ranges the build used.
@@ -32,6 +34,7 @@ import tempfile
 from typing import TYPE_CHECKING, Any
 
 from glace_catalog import stac
+from glace_catalog.metadata import vocabulary
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -185,6 +188,35 @@ def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) 
         checks["--skip-thumbnail accepts thumbnails already written"] = False
 
 
+def check_encodings(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+    """Check that an archive encoded over an old range stops finalization."""
+    layout = stac.StoreLayout(store)
+    for year in (2023, 2024):
+        encoding = vocabulary().display("coh12_vv").encoding
+        state = stac.BuildState(path=Path(str(layout.build_state(year))))
+        Path(str(state.path)).parent.mkdir(parents=True, exist_ok=True)
+        state.record(
+            "pmtiles",
+            "print",
+            {"coh12_vv_viz": {"scale": encoding.scale, "offset": encoding.offset}},
+        )
+    try:
+        fin.require_current_encodings(layout, [2023, 2024])
+        checks["archives over the current ranges are accepted"] = True
+    except SystemExit:
+        checks["archives over the current ranges are accepted"] = False
+    stale = stac.BuildState.load(layout.build_state(2023))
+    stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
+    stale.save()
+    try:
+        fin.require_current_encodings(layout, [2023, 2024])
+        checks["an archive over an old range stops finalization"] = False
+    except SystemExit as error:
+        checks["an archive over an old range stops finalization"] = "2023 coh12_vv_viz" in str(
+            error
+        )
+
+
 def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
     """Check that finalization accepts the tracked render and refuses a stale one."""
     rendered = work / "rendered"
@@ -219,6 +251,7 @@ def main() -> int:
         check_coverage(checks, fin, store, written)
         check_skip_thumbnail(checks, fin, store)
         check_render(checks, fin, work)
+        check_encodings(checks, fin, store)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

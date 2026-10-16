@@ -53,7 +53,7 @@ from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterator, Sequence
     from datetime import date
 
     import pystac
@@ -247,6 +247,9 @@ def staging(args: argparse.Namespace, step: str) -> Iterator[Path]:
     """
     parent = args.cache / "glace-store" / str(args.year)
     parent.mkdir(parents=True, exist_ok=True)
+    # A killed run cannot remove its directory; one year has one build at a time.
+    for leftover in parent.glob(f"{step}-*"):
+        shutil.rmtree(leftover)
     with tempfile.TemporaryDirectory(dir=parent, prefix=f"{step}-") as tmp:
         yield Path(tmp)
 
@@ -498,30 +501,6 @@ def mosaic_assets(
     return assets
 
 
-def _require_current_encoding(key: str, detail: Mapping[str, Any]) -> None:
-    """Refuse an archive encoded with a different scale and offset than the metadata.
-
-    The asset declares the scale and offset from ``metadata/assets.yaml``; the
-    build state records the ones the tiler used. If they differ, the range in
-    the metadata changed after the archive was built, and clients would decode
-    it wrongly.
-
-    Raises
-    ------
-    SystemExit
-        Naming the archive and both encodings.
-    """
-    encoding = vocabulary().display(stac.data_key(key)).encoding
-    built = (float(detail["scale"]), float(detail["offset"]))
-    expected = (encoding.scale, encoding.offset)
-    if built != expected:
-        msg = (
-            f"{key}: the archive was encoded with scale and offset {built} but "
-            f"metadata/assets.yaml now says {expected}; rebuild it with --force-from pmtiles"
-        )
-        raise SystemExit(msg)
-
-
 def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     """Build the mosaic item's web-map assets from what the ``pmtiles`` step recorded.
 
@@ -533,7 +512,9 @@ def visual_assets(state: stac.BuildState) -> dict[str, stac.MosaicAsset]:
     written = state.details.get("pmtiles", {})
     assets: dict[str, stac.MosaicAsset] = {}
     for key, detail in sorted(written.items()):
-        _require_current_encoding(key, detail)
+        if mismatch := webmap.encoding_mismatch(key, detail):
+            msg = f"{mismatch}; rebuild it with --force-from pmtiles"
+            raise SystemExit(msg)
         entry = vocabulary().viz_asset(
             key,
             min_zoom=int(detail["min_zoom"]),

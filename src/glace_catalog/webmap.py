@@ -39,7 +39,7 @@ from rasterio.warp import transform_bounds
 from glace_catalog.metadata import vocabulary
 from glace_catalog.mosaics import chain_env
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM
-from glace_catalog.stac.naming import ASSET_KEYS, viz_filename
+from glace_catalog.stac.naming import ASSET_KEYS, data_key, viz_filename
 from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.styles import ATTRIBUTION
 from glace_catalog.tiler import TileSpec, spawn_pool, write_archive
@@ -47,6 +47,7 @@ from glace_catalog.tiler import TileSpec, spawn_pool, write_archive
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
     from concurrent.futures import ProcessPoolExecutor
+    from typing import Any
 
     from upath import UPath
 
@@ -119,6 +120,26 @@ class LayerInfo:
     start_date: str
     end_date: str
     checksum: str = ""
+
+
+def encoding_mismatch(key: str, detail: Mapping[str, Any]) -> str | None:
+    """Describe an archive whose encoding differs from the metadata; ``None`` if it matches.
+
+    ``key`` names the archive as the build state does, e.g. ``coh12_vv_viz``,
+    and ``detail`` is its build-state record, which holds the scale and offset
+    the tiler used. The styles and the item assets decode with the ones from
+    ``metadata/assets.yaml``, so a difference means the archive predates a
+    change of its transport range.
+    """
+    encoding = vocabulary().display(data_key(key)).encoding
+    built = (float(detail["scale"]), float(detail["offset"]))
+    expected = (encoding.scale, encoding.offset)
+    if built == expected:
+        return None
+    return (
+        f"{key}: the archive was encoded with scale and offset {built}, "
+        f"but metadata/assets.yaml says {expected}"
+    )
 
 
 def native_max_zoom(res_m: float, lat_deg: float) -> int:

@@ -195,7 +195,11 @@ def _staging_checks() -> dict[str, bool]:
     publisher = _publisher()
     with tempfile.TemporaryDirectory() as tmp:
         args = SimpleNamespace(cache=Path(tmp), year=2023)
+        killed = Path(tmp) / "glace-store" / "2023" / "pmtiles-killed"
+        killed.mkdir(parents=True)
+        (killed / "coh12_vv_viz.pmtiles").write_bytes(b"partial")
         with publisher.staging(args, "pmtiles") as staged:
+            leftover_cleared = not killed.exists()
             empty = not any(staged.iterdir())
             (staged / "coh12_vv_viz.pmtiles").write_bytes(b"built")
         with publisher.staging(args, "pmtiles") as again:
@@ -212,6 +216,7 @@ def _staging_checks() -> dict[str, bool]:
     pmtiles = publisher.scratch_needed(every, alps, ["pmtiles"])
     return {
         "a step stages into an empty directory": empty,
+        "a killed run's staging is cleared": leftover_cleared,
         "a rerun stages into a new directory": fresh,
         "staging is removed after the step": removed,
         "too little scratch space stops the build": too_little,

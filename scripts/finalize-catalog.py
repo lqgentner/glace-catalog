@@ -35,7 +35,7 @@ import pyarrow.parquet as pq
 import pystac
 from upath import UPath
 
-from glace_catalog import stac
+from glace_catalog import stac, webmap
 from glace_catalog.config import settings
 from glace_catalog.documents import stale_documents
 from glace_catalog.metadata import vocabulary
@@ -495,6 +495,30 @@ def require_current_render(source_dir: Path) -> None:
         raise SystemExit("\n".join([*stale, "render them with: uv run scripts/render-catalog.py"]))
 
 
+def require_current_encodings(layout: stac.StoreLayout, years: Sequence[int]) -> None:
+    """Stop if any year holds an archive encoded over a range other than the metadata's.
+
+    Every year style decodes with the current ranges, so a year tiled before a
+    range changed must be tiled again first.
+
+    Raises
+    ------
+    SystemExit
+        Listing each stale archive and the command that re-tiles its year.
+    """
+    stale = [
+        f"{year} {mismatch}"
+        for year in years
+        for key, detail in sorted(
+            stac.BuildState.load(layout.build_state(year)).details.get("pmtiles", {}).items()
+        )
+        if (mismatch := webmap.encoding_mismatch(key, detail))
+    ]
+    if stale:
+        hint = "re-tile those years with: publish-year.py YEAR --force-from pmtiles"
+        raise SystemExit("\n".join([*stale, hint]))
+
+
 def parse_args() -> argparse.Namespace:
     """Command-line arguments of the catalog finalizer."""
     parser = argparse.ArgumentParser(
@@ -545,6 +569,7 @@ def main() -> None:
     root = settings.resolve_path(args.root) if args.root else settings.store_root
     layout = stac.StoreLayout(root)
     years = published_years(layout)
+    require_current_encodings(layout, years)
 
     tables = [read_year_index(layout, year) for year in years]
     tile_count, versions = tiles_summary(tables)
