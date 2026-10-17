@@ -77,6 +77,26 @@ assets, with size and checksum. Each year's style draws the archive
 `{stem}_viz.pmtiles` as the layer `glace-{stem}-{year}`, and `finalize-catalog`
 refuses a store holding an archive its year's style does not draw.
 
+### `PORTO-CORE-069` — year styles on the mosaic items
+
+| Requirement | Where | Why accepted | Tracking |
+|---|---|---|---|
+| `PORTO-CORE-069` | mosaics collection and its items, built tree | Each year's style is an asset of that year's mosaic item; the collection registers one style, the latest year's. | spec issue drafted, not raised |
+
+*"Style files are STAC assets: each style MUST be registered as a
+collection-level asset carrying the `style` role."* A year style draws only
+that year's archives, which are assets of the year's mosaic item. Registered on
+the collection, the twelve styles crowded its asset list and its style picker.
+Each item now carries `style-default` at `./styles/default.json`, beside its
+archives, with the `style` and `default` roles, as the year items of the FIRMS
+mirror do. The Portolan browser reads a style from the entity that owns the
+data it draws, an item included.
+
+rashid does not report it: `PTL-VIZ-002` asks only that a collection with a
+visual derivative register some style, and the mosaics collection keeps one.
+The `ACCEPTED` list in `tests/test_conformance.py` therefore does not include
+it.
+
 ## Warnings Carried Deliberately
 
 Neither of these fails the build; both are recorded so that a clean run is not

@@ -289,7 +289,7 @@ def _collection_assets(
         assets[f"style-{GRID_STYLE_NAME}"] = {
             "href": f"./styles/{GRID_STYLE_NAME}.json",
             "type": STYLE_MEDIA_TYPE,
-            "title": "GLACE tile grid style",
+            "title": "Map style – tile grid",
             "description": (
                 "Draws the tile grid, each tile filled by its buffered glacier fraction."
             ),
@@ -299,7 +299,7 @@ def _collection_assets(
         assets[f"style-{STYLE_TEMPLATE_NAME}"] = {
             "href": f"./styles/{STYLE_TEMPLATE_NAME}.json",
             "type": STYLE_MEDIA_TYPE,
-            "title": "GLACE web-map style",
+            "title": "Map style – latest year",
             "description": vocabulary.style_description(),
             "roles": ["style", "default"],
         }
@@ -350,6 +350,12 @@ def collection_document(
     if collection == MOSAICS_DIR:
         for key in ASSET_KEYS:
             item_assets[f"{key}_viz"] = vocabulary.viz_asset(f"{key}_viz")
+        # Finalization writes each year's copy beside its archives.
+        item_assets[f"style-{STYLE_TEMPLATE_NAME}"] = {
+            "type": STYLE_MEDIA_TYPE,
+            "title": "Map style",
+            "roles": ["style", "default"],
+        }
     return {
         "type": "Collection",
         "stac_version": "1.1.0",

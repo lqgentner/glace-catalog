@@ -19,8 +19,8 @@ catalog.json
 │   └── {year}/catalog.json → {tile}/item.json
 └── mosaics/collection.json    one item per year, {{ n_assets_digits }} COGs + {{ n_viz_digits }} PMTiles
     ├── items.parquet
-    ├── styles/{year}.json     MapLibre styles
-    └── {year}/item.json
+    ├── styles/default.json    MapLibre style of the latest year
+    └── {year}/item.json → styles/default.json, that year's style
 ```
 
 Use each collection's `items.parquet` to search multiple items. This

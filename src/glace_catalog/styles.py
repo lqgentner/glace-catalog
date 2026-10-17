@@ -37,7 +37,7 @@ YEAR_IN_TEXT = re.compile(r"\b(?:19|20)\d{2}\b")
 """A four-digit year anywhere in a credit line.
 
 The committed style credits the latest published year, as its ``pmtiles://``
-URLs do. ``finalize-catalog`` replaces the year in each per-year style.
+URLs do. ``finalize-catalog`` replaces the year in each year's copy.
 """
 
 

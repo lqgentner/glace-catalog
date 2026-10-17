@@ -51,8 +51,9 @@ and the year sub-catalogs fit naturally.
 └── mosaics/
     ├── collection.json  README.md  AGENTS.md
     ├── items.parquet  thumbnail.webp
-    ├── styles/{year}.json           # MapLibre GL, one per year, from the committed template
+    ├── styles/default.json          # MapLibre GL, the latest year's style
     └── {year}/item.json + 12 analysis COGs + 12 {stem}_viz.pmtiles
+        └── styles/default.json      # the year's style, an item asset
 ```
 
 **One collection per product, not one per year.** Per-year collections (as in
@@ -81,7 +82,7 @@ The `_viz` suffix separates the measurement from the picture in the one
 listing where both appear: `coh12_vv.tif` is linear float32, while
 `coh12_vv_viz.pmtiles` holds lossy 8-bit codes, in decibels for backscatter.
 A client lists the archives from the year items and draws them through the
-year's style, as layer `glace-{stem}-{year}`. The mosaics collection carries
+year's style, also an item asset, as layer `glace-{stem}-{year}`. The mosaics collection carries
 no `rel: "pmtiles"` links, a recorded deviation from `PORTO-FMT-011` (M-36,
 [`conformance.md`](conformance.md)). Registering the archives as *collection*
 assets would put 144 cards on one page.
@@ -188,10 +189,10 @@ repository owns the warp of each tile.
 ramps and stretches come from `metadata/assets.yaml`, and
 `scripts/render-catalog.py` writes the file (R-18). Decisions are reviewed in
 the source; the rendered file is what a client downloads. `finalize-catalog`
-writes one copy per year, `styles/{year}.json`, registered as `style-{year}`.
-The newest also carries the `default` role, which Portolan requires on the
-style a client should load. One style per year gives every archive a layer
-that draws it. The encoding and default ramp are per product and fixed across
+writes one copy per year beside the year's archives, `{year}/styles/default.json`,
+registered on the mosaic item as `style-default`, and publishes the latest
+year's copy as the collection's style. One style per year gives every archive
+a layer that draws it. The encoding and default ramp are per product and fixed across
 years, so the copies differ only in the year. Ranges, ramps and units are
 written once, in `metadata/assets.yaml`, and reach the build, the styles, the
 `renders` blocks, the item assets and the prose tables through one
@@ -250,8 +251,8 @@ file the same way.
 `GLACE_SOURCE` names for the year and write to `GLACE_STORE_ROOT`: a prefix
 on the private UZH gateway, or a local directory. `finalize-catalog` copies the
 tracked documents into the store and *patches* those copies with what
-depends on the build: year links, temporal extent, the per-year style
-entries, `file:size` and `file:checksum` on the collection assets it
+depends on the build: year links, temporal extent, the latest year's
+style, `file:size` and `file:checksum` on the collection assets it
 wrote, the column types and row count of each item mirror, and `updated`.
 It leaves prose, providers, license, `item_assets` and `renders`
 alone. Rendering happens at commit time, with a reviewable diff; publication
@@ -463,7 +464,7 @@ rather than struck through; git keeps them.
 | M-32 | **The run manifest and configuration are not published.** Both live beside the source archive; the items carry every value a reader needs | 2 |
 | M-33 | **One time range per year**, from the committed compositing window; the observed span is `glace:*_first_acquisition` / `_last_acquisition` | 2 |
 | M-34 | **A web-map archive is an item asset with the `visual` role**, `{stem}_viz.pmtiles` beside the COG it renders; the suffix keeps the stems apart | 2, 3 |
-| M-35 | **One published style per year**, `styles/{year}.json`, written from the one committed template and registered as `style-{year}`; the latest year also carries the `default` role. One tracked file per year would copy twelve layers per year and let them drift; one file for all years would hold 144 sources with one visible | 3 |
+| M-35 | **One published style per year, beside its archives**: `{year}/styles/default.json`, written from the one committed template and registered on the year's mosaic item as `style-default`. The collection's one style is the latest year's copy, a recorded deviation from `PORTO-CORE-069`. A style draws the archives of the item it belongs to, as the Portolan browser reads them; twelve collection styles crowded the collection page. One tracked file per year would copy twelve layers per year and let them drift; one file for all years would hold 144 sources with one visible | 3 |
 | M-36 | **The mosaics collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 144 links on one collection page serve nobody. The year items list the archives, the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
 | M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | M-38 | **The tile grid is one vector PMTiles on the tiles collection**, `tiles/grid.pmtiles`, layer `mgrs`, properties `mgrs_tile`, `glacier_fraction`, `glacier_fraction_buffered`, zooms 0–10, written by `finalize-catalog` from the item indexes and registered per `PORTO-FMT-011` (`grid` asset, `rel: "pmtiles"` link, style `style-grid`). The glacier-fraction table is a build input (`tiles/.glacier-fractions.parquet`), not a published asset | 2, 3 |

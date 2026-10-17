@@ -4,10 +4,10 @@
 Five steps belong to this script alone, and a mistake in any of them is easy
 to miss:
 
-- it writes one style per year from the tracked template, so each year's
-  archives have a style that names their layers;
-- it registers those styles on the collection, one per year, with the latest
-  year as the default;
+- it writes one style per year from the tracked template, beside the year's
+  archives, so each year has a style that names their layers;
+- it registers each year's style on that year's mosaic item, and gives the
+  collection the latest year's copy;
 - it checks that every archive in the store appears in its year's style, so the
   run fails on an archive that no style draws;
 - it refuses to finalize archives encoded over a range other than the
@@ -91,13 +91,18 @@ def check_styles(
     fin: ModuleType,
     source: Path,
     staged: Path,
-) -> dict[str, Path]:
-    """Check the published styles: one per year, each pointing at its own archives."""
-    written = fin.repoint_styles(source, staged, [2023, 2024])
-    checks["one published style per year"] = sorted(written) == ["style-2023", "style-2024"]
-    style_2023 = json.loads(written["style-2023"].read_text())
-    checks["the 2023 style points at 2023 archives"] = all(
-        "/2023/" in source_entry["url"] and source_entry["url"].endswith("_viz.pmtiles")
+) -> dict[int, dict[str, Path]]:
+    """Check the published styles: one per year beside its archives, and the collection's."""
+    written = fin.stage_item_styles(source, staged, [2023, 2024])
+    beside = staged / "mosaics" / "2023" / "styles" / "default.json"
+    checks["one style per year, beside its archives"] = sorted(written) == [2023, 2024] and (
+        written[2023] == {"style-default": beside}
+    )
+    style_2023 = json.loads(written[2023]["style-default"].read_text())
+    checks["the 2023 style points at the archives beside it"] = all(
+        source_entry["url"].startswith("pmtiles://../")
+        and source_entry["url"].count("/") == 3
+        and source_entry["url"].endswith("_viz.pmtiles")
         for source_entry in style_2023["sources"].values()
     )
     checks["the 2023 style's layer ids end in 2023"] = all(
@@ -107,35 +112,64 @@ def check_styles(
     checks["the credit line carries its year"] = all(
         "2023" in source_entry["attribution"] for source_entry in style_2023["sources"].values()
     )
+
+    collection = fin.stage_collection_styles(source, staged, 2024)
+    checks["the collection's style keeps its tracked path"] = collection == {
+        "style-default": staged / "mosaics" / "styles" / "default.json"
+    }
+    latest = json.loads(collection["style-default"].read_text())
+    checks["the collection's style draws the latest year's archives"] = all(
+        source_entry["url"].startswith("pmtiles://../2024/")
+        for source_entry in latest["sources"].values()
+    ) and all(layer["id"].endswith("-2024") for layer in latest["layers"])
     return written
 
 
 def check_registration(
     checks: dict[str, bool],
     fin: ModuleType,
-    document: dict[str, Any],
+    written: dict[int, dict[str, Path]],
+    collection: dict[str, Any],
 ) -> None:
-    """Check the collection's style assets: one per year, the latest the default."""
-    fin.register_style_assets(document, [2023, 2024], latest=2024)
-    assets = document["assets"]
-    styles = {key: value for key, value in assets.items() if "style" in value["roles"]}
-    checks["the collection registers one style per year"] = sorted(styles) == [
-        "style-2023",
-        "style-2024",
-    ]
-    checks["only the latest year is the default"] = (
-        "default" in styles["style-2024"]["roles"]
-        and "default" not in styles["style-2023"]["roles"]
+    """Check a year's style asset on its mosaic item, and the collection's one style."""
+    item: dict[str, Any] = {"assets": {"coh12_vv": {"href": "./coh12_vv.tif"}}}
+    fin.register_item_styles(item, 2023, written[2023], collection["item_assets"])
+    asset = item["assets"].get("style-default", {})
+    checks["the item registers its year's style beside it"] = (
+        asset.get("href") == "./styles/default.json" and "coh12_vv" in item["assets"]
     )
-    checks["the tracked template entry is gone from the published document"] = (
-        "style-default" not in assets
+    checks["the item's style is its default"] = asset.get("roles") == ["style", "default"]
+    checks["the item's style records its size and checksum"] = asset.get("file:size") == len(
+        written[2023]["style-default"].read_bytes()
+    ) and str(asset.get("file:checksum", "")).startswith("1220")
+    checks["the item's style title carries its year"] = str(asset.get("title", "")).endswith(
+        "– 2023"
     )
-    checks["the href is the year's file under styles/"] = (
-        styles["style-2023"]["href"] == "./styles/2023.json"
+    # The item's style describes its own year, not the collection's latest.
+    checks["the item's style has the year's wording"] = "2023" in asset.get(
+        "description", ""
+    ) and "latest" not in asset.get("description", "")
+    styles = [key for key, value in collection["assets"].items() if "style" in value["roles"]]
+    checks["the collection keeps one style, the default"] = styles == ["style-default"] and (
+        "default" in collection["assets"]["style-default"]["roles"]
     )
-    # A published entry describes one year's style, so it has its own wording.
-    checks["a published style does not describe itself as the template"] = (
-        "template" not in styles["style-2023"]["description"]
+
+
+def check_item_styles_published(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+    """Check that each year's style reaches the store and its mosaic item."""
+    store = _store(work / "item-style-store")
+    layout = stac.StoreLayout(store)
+    item = Path(str(layout.mosaic_item(2023)))
+    item.write_text(json.dumps({"type": "Feature", "id": "glace-mosaic-2023", "assets": {}}))
+    collection = json.loads((SOURCE / "mosaics" / "collection.json").read_text())
+    fin.publish_item_styles(SOURCE, layout, [2023, 2024], collection["item_assets"])
+    checks["each year's style is written beside its archives"] = all(
+        (store / "mosaics" / str(year) / "styles" / "default.json").is_file()
+        for year in (2023, 2024)
+    )
+    assets = json.loads(item.read_text())["assets"]
+    checks["the mosaic item in the store lists its style"] = (
+        assets.get("style-default", {}).get("href") == "./styles/default.json"
     )
 
 
@@ -143,7 +177,7 @@ def check_coverage(
     checks: dict[str, bool],
     fin: ModuleType,
     store: Path,
-    written: dict[str, Path],
+    written: dict[int, dict[str, Path]],
 ) -> None:
     """Check that an archive no published style draws stops the run."""
     layout = stac.StoreLayout(store)
@@ -158,7 +192,7 @@ def check_coverage(
     except SystemExit:
         checks["a year with no archives in the store passes"] = False
     try:
-        fin.check_style_coverage(layout, [2024], {"style-2023": written["style-2023"]})
+        fin.check_style_coverage(layout, [2024], {2023: written[2023]})
         checks["an archive whose year has no style is refused"] = False
     except SystemExit:
         checks["an archive whose year has no style is refused"] = True
@@ -411,7 +445,8 @@ def main() -> int:
 
         written = check_styles(checks, fin, source, staged)
         document = json.loads((source / "mosaics" / "collection.json").read_text())
-        check_registration(checks, fin, document)
+        check_registration(checks, fin, written, document)
+        check_item_styles_published(checks, fin, work)
         check_coverage(checks, fin, store, written)
         check_skip_thumbnail(checks, fin, store)
         check_render(checks, fin, work)

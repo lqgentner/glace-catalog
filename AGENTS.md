@@ -65,9 +65,11 @@ Preserve these rules:
   changing a transport range means re-tiling every year.
 - `{stem}_viz.pmtiles` belongs in its year's item directory, as an item asset
   with the `visual` role. Item assets are the archives' only registration, a
-  recorded deviation from `PORTO-FMT-011` (`docs/conformance.md`). Annual
-  MapLibre styles are collection assets under `styles/` with the `style` role.
-  The `data` role is for the COGs alone.
+  recorded deviation from `PORTO-FMT-011` (`docs/conformance.md`). Each year's
+  MapLibre style, `{year}/styles/default.json`, is an asset of its mosaic item
+  with the `style` and `default` roles; the collection's one style asset is the
+  latest year's copy, a recorded deviation from `PORTO-CORE-069`. The `data`
+  role is for the COGs alone.
 
 ## Build a store
 
@@ -199,7 +201,8 @@ Finalization:
 - records asset sizes and checksums, and the item indexes' column types
   and row counts;
 - sets `updated` on the root catalog and the collections;
-- points the default style to the latest year;
+- writes each year's style beside its archives and registers it on the
+  mosaic item, and points the collection's style to the latest year;
 - validates the store.
 
 Prose, providers, license and `item_assets` come from the tracked metadata.

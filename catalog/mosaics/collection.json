@@ -660,6 +660,14 @@
           "unit": "dB"
         }
       ]
+    },
+    "style-default": {
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Map style",
+      "roles": [
+        "style",
+        "default"
+      ]
     }
   },
   "assets": {
@@ -784,8 +792,8 @@
     "style-default": {
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
-      "title": "GLACE web-map style",
-      "description": "The template every published year's style is written from, one copy per year as styles/{year}.json. Every web-map layer of one year, the first visible and the rest hidden. Each archive is a raster-dem source whose custom encoding decodes its values, drawn by a color-relief layer with a default color ramp that a client can change.",
+      "title": "Map style – latest year",
+      "description": "Every web-map layer of the latest published year, the first visible and the rest hidden. Each year's mosaic item carries the style of its own year, as styles/default.json beside its archives. Each archive is a raster-dem source whose custom encoding decodes its values, drawn by a color-relief layer with a default color ramp that a client can change.",
       "roles": [
         "style",
         "default"

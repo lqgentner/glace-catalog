@@ -137,8 +137,10 @@ class StoreLayout:
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
-            |-- items.parquet  thumbnail.webp  styles/
+            |-- items.parquet  thumbnail.webp
+            |-- styles/default.json    # the latest year's style
             `-- {year}/item.json + 12 analysis COGs + 12 web-map archives
+                `-- styles/default.json  # the year's style, an item asset
 
     Each web-map archive is an asset of its year's mosaic item, so it sits in
     that item's directory beside the raster it shows. The ``_viz`` suffix tells

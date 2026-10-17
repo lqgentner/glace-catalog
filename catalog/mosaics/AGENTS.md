@@ -68,11 +68,12 @@ coherence remains linear. The tiles are lossy and values outside the range are
 clipped, so read the COGs for measurements.
 
 Archives are listed as `visual` assets of their year's item, under the key
-`{stem}_viz` with an href relative to the item. Each year has a MapLibre style at
-`styles/{year}.json`, registered as a `style-{year}` collection asset. It
-declares each archive `{stem}_viz.pmtiles` as a `raster-dem` source with a
-custom encoding and draws it as the `color-relief` layer `glace-{stem}-{year}`.
-The latest style also has the `default` role.
+`{stem}_viz` with an href relative to the item. Each year's item also lists
+its MapLibre style, `{year}/styles/default.json`, as the `style-default` asset
+with the `style` and `default` roles. The style declares each archive
+`{stem}_viz.pmtiles` as a `raster-dem` source with a custom encoding and draws
+it as the `color-relief` layer `glace-{stem}-{year}`. The collection's
+`style-default` asset, `styles/default.json`, is the latest year's style.
 
 Each layer's transport range is the same every year, so years compare like
 with like. The styles draw a default ramp over a default range, which a client

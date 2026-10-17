@@ -175,16 +175,16 @@ collections:
     title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
-    # Description of the style assets: with `year` for each published year's
-    # style, without it for the tracked template.
+    # Description of the style assets: with `year` for the style on that
+    # year's mosaic item, without it for the collection's style.
     style_description: >-
       {% if year is defined %}Every published web-map layer of {{ year }}, the
-      first visible and the rest hidden.{% else %}The template every published
-      year's style is written from, one copy per year as styles/{year}.json.
-      Every web-map layer of one year, the first visible and the rest
-      hidden.{% endif %} Each archive is a raster-dem source whose custom
-      encoding decodes its values, drawn by a color-relief layer with a default
-      color ramp that a client can change.
+      first visible and the rest hidden.{% else %}Every web-map layer of the
+      latest published year, the first visible and the rest hidden. Each
+      year's mosaic item carries the style of its own year, as
+      styles/default.json beside its archives.{% endif %} Each archive is a
+      raster-dem source whose custom encoding decodes its values, drawn by a
+      color-relief layer with a default color ramp that a client can change.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.

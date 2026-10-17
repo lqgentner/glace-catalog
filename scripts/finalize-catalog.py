@@ -5,9 +5,11 @@ years and writes what spans them:
 
 - the root ``catalog.json``, with an absolute ``self`` link under the public
   address, ``public_base`` in ``catalog.publish.yaml``;
+- each year's MapLibre styles, ``mosaics/{year}/styles/``, registered on its
+  mosaic item;
 - ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
-  year and the temporal extent; the mosaics collection also lists one MapLibre
-  style per year;
+  year and the temporal extent; the mosaics collection's style draws the
+  latest year;
 - the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
@@ -222,131 +224,181 @@ def patch_collections(
     return patched
 
 
-def style_asset(stem: str, year: int) -> tuple[str, str]:
-    """Asset key and filename of the published style of one template and year.
-
-    Styles from the ``default`` template are named by year alone:
-    ``styles/2024.json`` under the key ``style-2024``. Other templates keep
-    their name: ``styles/{stem}-2024.json`` under ``style-{stem}-2024``.
-    """
-    if stem == "default":
-        return f"style-{year}", f"{year}.json"
-    return f"style-{stem}-{year}", f"{stem}-{year}.json"
-
-
-def repoint_styles(source_dir: Path, staged: Path, years: Sequence[int]) -> dict[str, Path]:
-    """Write one MapLibre style per year from each tracked style template.
+def year_style(template: Document, year: int, archives: str) -> Document:
+    """Copy a tracked style template for one year.
 
     The templates are rendered from ``metadata/assets.yaml`` and reviewed in
-    git. Encoding and colour ramp are the same every year, so each copy changes
-    only the year: in the source URLs, the attribution, the style name and the
-    layer ids. Every published year thus has a style that draws its archives.
+    git. Encoding and colour ramp are the same every year, so a copy changes
+    only the year, in the attribution, the style name and the layer ids, and
+    points each source at the year's archive under ``archives``, a path
+    relative to the style file.
+    """
+    style = deepcopy(template)
+    # A style has one source per layer; clients switch layers by visibility.
+    for source in style.get("sources", {}).values():
+        source["url"] = f"pmtiles://{archives}{source['url'].rsplit('/', 1)[-1]}"
+        if source.get("attribution"):
+            # The Copernicus credit names the year of the data.
+            source["attribution"] = YEAR_IN_TEXT.sub(str(year), source["attribution"])
+    style["name"] = re.sub(r"\(\d{4}\)", f"({year})", style["name"])
+    for layer in style.get("layers", []):
+        layer["id"] = re.sub(r"-\d{4}$", f"-{year}", layer["id"])
+    return style
+
+
+def _style_templates(source_dir: Path) -> dict[str, Document]:
+    """Read the mosaics collection's tracked style templates, by asset key ``style-{stem}``."""
+    return {
+        f"style-{path.stem}": json.loads(path.read_text())
+        for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json"))
+    }
+
+
+def _write_style(path: Path, style: Document) -> Path:
+    """Write one staged style document."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
+    return path
+
+
+def stage_item_styles(
+    source_dir: Path, staged: Path, years: Sequence[int]
+) -> dict[int, dict[str, Path]]:
+    """Write each year's styles beside its archives, as ``{year}/styles/{stem}.json``.
+
+    Every published year thus has styles that draw its own archives, and its
+    mosaic item registers them.
+
+    Returns
+    -------
+    dict[int, dict[str, pathlib.Path]]
+        Staged path per year and style asset key, e.g.
+        ``{2024: {"style-default": …}}``.
+    """
+    templates = _style_templates(source_dir)
+    written: dict[int, dict[str, Path]] = {}
+    for year in years:
+        directory = staged / MOSAICS_DIR / str(year) / "styles"
+        written[year] = {
+            key: _write_style(
+                directory / f"{key.removeprefix('style-')}.json", year_style(template, year, "../")
+            )
+            for key, template in templates.items()
+        }
+    logger.info("Wrote %d style(s) over %d year(s)", len(templates) * len(years), len(years))
+    return written
+
+
+def stage_collection_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
+    """Write the mosaics collection's styles, each the latest year's copy.
+
+    They keep the tracked paths, ``styles/{stem}.json``, so the collection's
+    assets name them as rendered.
 
     Returns
     -------
     dict[str, pathlib.Path]
-        Staged path per style asset key, e.g. ``{"style-2024": …}``. The
-        caller records each file's size and checksum.
+        Staged path per style asset key, e.g. ``{"style-default": …}``.
     """
-    out = staged / MOSAICS_DIR / "styles"
-    out.mkdir(parents=True, exist_ok=True)
-    written: dict[str, Path] = {}
-    for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json")):
-        template = json.loads(path.read_text())
-        for year in years:
-            style = deepcopy(template)
-            # A style has one source per layer; clients switch layers by visibility.
-            for source in style.get("sources", {}).values():
-                source["url"] = re.sub(r"/\d{4}/", f"/{year}/", source["url"])
-                if source.get("attribution"):
-                    # The Copernicus credit names the year of the data.
-                    source["attribution"] = YEAR_IN_TEXT.sub(str(year), source["attribution"])
-            style["name"] = re.sub(r"\(\d{4}\)", f"({year})", style["name"])
-            for layer in style.get("layers", []):
-                layer["id"] = re.sub(r"-\d{4}$", f"-{year}", layer["id"])
-            key, name = style_asset(path.stem, year)
-            (out / name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
-            written[key] = out / name
-    logger.info("Wrote %d style(s) over %d year(s)", len(written), len(years))
-    return written
+    directory = staged / MOSAICS_DIR / "styles"
+    return {
+        key: _write_style(
+            directory / f"{key.removeprefix('style-')}.json",
+            year_style(template, latest, f"../{latest}/"),
+        )
+        for key, template in _style_templates(source_dir).items()
+    }
 
 
-def register_style_assets(document: Document, years: Sequence[int], latest: int) -> None:
-    """Replace each tracked style asset with one asset per year.
+def register_item_styles(
+    item: Document,
+    year: int,
+    styles: Mapping[str, Path],
+    item_assets: Mapping[str, Document],
+) -> None:
+    """Add one year's styles to its mosaic item document, with size and checksum.
 
-    The new assets point at the per-year copies :func:`repoint_styles` writes.
-    Title and media type come from the tracked entry, and the description is
-    the per-year wording from ``metadata/``. If the template has the
-    ``default`` role, its latest year's copy keeps it, so a client asking for
-    one style gets the newest.
+    Title, media type and roles come from the collection's ``item_assets``;
+    the title takes the year after a dash, and the description is the year's wording from
+    ``metadata/``.
     """
-    assets: dict[str, Document] = document.get("assets", {})
-    templates = {key: asset for key, asset in assets.items() if "style" in asset.get("roles", [])}
-    if not templates:
-        logger.warning("%s registers no style asset", MOSAICS_DIR)
-        return
+    assets: dict[str, Document] = item.setdefault("assets", {})
+    for key, path in sorted(styles.items()):
+        shared = item_assets.get(key, {})
+        payload = path.read_bytes()
+        assets[key] = {
+            "href": f"./styles/{path.name}",
+            "type": shared.get("type", "application/vnd.mapbox.style+json"),
+            "title": f"{shared.get('title', key)} – {year}",
+            "description": vocabulary().style_description(year),
+            "roles": list(shared.get("roles", ["style"])),
+            "file:size": len(payload),
+            "file:checksum": multihash_sha256(payload),
+        }
 
-    generated: dict[str, Document] = {}
-    for key, template in templates.items():
-        stem = key.removeprefix("style-")
+
+def publish_item_styles(
+    source_dir: Path,
+    layout: stac.StoreLayout,
+    years: Sequence[int],
+    item_assets: Mapping[str, Document],
+) -> None:
+    """Write each year's styles beside its archives and register them on its mosaic item.
+
+    Runs before the mosaics index is written, so the index lists the styles.
+    A rerun of a year's ``items`` step drops them from its item until the next
+    finalization.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        staged = Path(tmp)
+        styles = stage_item_styles(source_dir, staged, years)
+        # Every archive must have a layer in its year's styles.
+        check_style_coverage(layout, years, styles)
         for year in years:
-            asset_key, name = style_asset(stem, year)
-            is_default = year == latest and "default" in template.get("roles", [])
-            generated[asset_key] = {
-                "href": f"./styles/{name}",
-                "type": template.get("type", "application/vnd.mapbox.style+json"),
-                "title": f"{template['title']} ({year})",
-                "description": vocabulary().style_description(year),
-                "roles": ["style", "default"] if is_default else ["style"],
-            }
-
-    first = next(iter(templates))
-    rebuilt: dict[str, Document] = {}
-    for key, asset in assets.items():
-        if key == first:
-            rebuilt.update(generated)
-        if key not in templates:
-            rebuilt[key] = asset
-    document["assets"] = rebuilt
+            source = layout.mosaic_item(year)
+            if not source.exists():
+                continue
+            item = json.loads(UPath(source).read_text())
+            register_item_styles(item, year, styles[year], item_assets)
+            # Written as the build writes items.
+            path = staged / MOSAICS_DIR / str(year) / UPath(source).name
+            path.write_text(json.dumps(item, indent=2) + "\n")
+        upload_tree(staged, layout.root)
 
 
 def check_style_coverage(
     layout: stac.StoreLayout,
     years: Sequence[int],
-    styles: Mapping[str, Path],
+    styles: Mapping[int, Mapping[str, Path]],
 ) -> None:
-    """Check that every published web-map archive has a layer in its year's style.
+    """Check that every published web-map archive has a layer in its year's styles.
 
     A client finds an archive as a ``visual`` asset of the year's mosaic item
-    and draws it through that year's style, as layer ``glace-{key}-{year}``.
+    and draws it through that item's style, as layer ``glace-{key}-{year}``.
 
     Raises
     ------
     SystemExit
-        On the first archive whose layer is absent from its year's style.
+        On the first archive whose layer is absent from its year's styles.
     """
-    drawn: dict[int, set[str]] = {}
-    for path in styles.values():
-        match = re.search(r"(\d{4})", path.stem)
-        if match is None:
-            continue
-        style = json.loads(path.read_text())
-        ids = drawn.setdefault(int(match[1]), set())
-        ids.update(str(layer["id"]) for layer in style.get("layers", []))
-
     archives = 0
     for year in years:
         directory = layout.mosaic_year(year)
         if not directory.exists():
             continue
+        drawn = {
+            str(layer["id"])
+            for path in styles.get(year, {}).values()
+            for layer in json.loads(path.read_text()).get("layers", [])
+        }
         for archive in sorted(directory.iterdir()):
             if archive.suffix != ".pmtiles" or not archive.stem.endswith(stac.VIZ_SUFFIX):
                 continue
             layer_id = f"glace-{stac.data_key(archive.stem)}-{year}"
-            if layer_id not in drawn.get(year, set()):
+            if layer_id not in drawn:
                 msg = (
                     f"{MOSAICS_DIR}/{year}/{archive.name} is published, but "
-                    f"styles/{year}.json draws no layer {layer_id}"
+                    f"no style in {MOSAICS_DIR}/{year}/styles/ draws layer {layer_id}"
                 )
                 raise SystemExit(msg)
             archives += 1
@@ -409,14 +461,10 @@ def write_documents(
                 if path.is_file():
                     (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
 
-        # Write the styles first: the mosaics collection records the size and
-        # checksum of each per-year copy.
-        styles = repoint_styles(source_dir, staged, years)
-        register_style_assets(documents[MOSAICS_DIR], years, max(years))
-        stamp_style_assets(documents, styles)
+        # Write the styles first: the collections record their size and
+        # checksum. The mosaics collection's styles draw the latest year.
+        stamp_style_assets(documents, stage_collection_styles(source_dir, staged, max(years)))
         stamp_style_assets(documents, stage_grid_styles(source_dir, staged), TILES_DIR)
-        # Every archive must have a layer in its year's style.
-        check_style_coverage(layout, years, styles)
 
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
@@ -457,8 +505,8 @@ def stamp_style_assets(
     """Fill ``file:size`` and ``file:checksum`` on one collection's MapLibre styles.
 
     Each value is measured on the staged copy, which is the file readers
-    download: the per-year copies :func:`repoint_styles` wrote, or the tile
-    grid's style.
+    download: the latest year's copies :func:`stage_collection_styles` wrote,
+    or the tile grid's style.
     """
     for key, path in sorted(styles.items()):
         asset = documents.get(directory, {}).get("assets", {}).get(key)
@@ -725,6 +773,14 @@ def main() -> None:
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
+    # Read the mosaic items after their styles are registered: the mosaics
+    # index lists every item asset.
+    publish_item_styles(
+        SOURCE_DIR,
+        layout,
+        years,
+        _load(SOURCE_DIR / MOSAICS_DIR / "collection.json").get("item_assets", {}),
+    )
     mosaic_items = read_mosaic_items(layout, years)
     documents = patch_collections(
         SOURCE_DIR,

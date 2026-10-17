@@ -50,6 +50,9 @@ ramp from the [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
 ([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)). A client
 can change the ramp and the range without re-tiling.
 
+Each year's style sits beside its archives, at `{year}/styles/default.json`,
+and the collection's style draws the latest year.
+
 **To draw a map**, load a year's style in MapLibre GL JS, which decodes custom
 `raster-dem` encodings:
 
@@ -58,7 +61,7 @@ const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 new maplibregl.Map({
   container: "map",
-  style: "https://data.source.coop/giuz/glace-alps/mosaics/styles/2026.json",
+  style: "https://data.source.coop/giuz/glace-alps/mosaics/2026/styles/default.json",
 });
 ```
 
