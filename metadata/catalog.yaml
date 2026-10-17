@@ -53,7 +53,7 @@ usage_notes:
     text: >-
       Coherence is estimated over a 35 × 7 (range × azimuth) window. The
       finite window biases the estimate upwards, so fully decorrelated
-      surfaces do not reach 0: over large lakes, the median is about 0.09.
+      surfaces do not reach 0: over large lakes, the mean is about 0.09.
       Absolute values therefore differ from products that use larger windows,
       such as the global seasonal Sentinel-1 coherence of
       [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6).
