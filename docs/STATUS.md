@@ -12,7 +12,7 @@ describes: the next person will trust it. The design and its reasons are in
 | catalog documents | `glace-alps`, version 1.0, 2015–2026, rendered from `metadata/` (R-18) and committed, gated by `tests/test_render.py`. **0 rashid errors**; two accepted `PTL-COL-005` findings ([`conformance.md`](conformance.md)). The collections carry the LaRS version DOI as `sci:doi`; it is registered once the dataset is listed |
 | gates | ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, the item mirror, thumbnails, the tiler, the web-map build, finalize, links, publishing, stac-check, rashid |
 | source composites | 2015–2026 at `/mnt/data/alps-total/{year}/s1-comp-mean`, written by s1bursts 0.6.0 with mean aggregation. Every manifest passes `load_and_verify_manifest` (2026-10-16): 2 210 tiles of 12 files a year, except 2015, whose gaps the `coverage_note` in `metadata/catalog.yaml` describes |
-| glacier fractions | `tiles/.glacier-fractions.parquet`, a build input that is not published, derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
+| glacier fractions | `tiles/.glacier-fractions.parquet`, a build input that is not published; the items and the tile grid `tiles/grid.pmtiles` (2 210 tiles, 534 kB, z0–10) carry its values. Derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
 | store | Built and finalized locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`), 2026-10-16: 26 519 tile items, twelve mosaic items, 144 mosaic COGs and 144 web-map archives. The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents. `make conformance` gives 0 errors and twelve `PTL-CAT-001` warnings, one per year catalog ([`conformance.md`](conformance.md)) |
 | web maps | Twelve value-encoded archives a year, over the transport ranges remeasured on the mean composites (`metadata/assets.yaml`); finalization refuses archives whose recorded encoding differs. A year takes 54 min on 15 cores (AGENTS.md) |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
@@ -23,13 +23,6 @@ describes: the next person will trust it. The design and its reasons are in
 
 Ordered by what blocks what. Everything not listed here is done.
 
-- **P-21 — Publish the tile grid as PMTiles; stop publishing the fractions
-  table.** Plan:
-  [`2026-10-16-tile-grid-pmtiles.md`](superpowers/plans/2026-10-16-tile-grid-pmtiles.md).
-  The viewer then draws the grid without reading `items.parquet`, whose footer
-  is most of what it downloads. Do it before P-20, so the fractions table is
-  never uploaded. *Verified when* the built tree's tiles collection registers
-  `grid` with a `rel: "pmtiles"` link and rashid reports 0 errors.
 - **P-20 — Publish `glace-alps`.** Upload the store to `giuz/glace-alps`
   (AGENTS.md, "Publish the store"). *Verified when* `make conformance-live`
   over the mirrored store reports 0 errors.
