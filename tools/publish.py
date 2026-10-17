@@ -54,7 +54,8 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 
-DEFAULT_WORKERS = 8
+DEFAULT_WORKERS = 32
+"""Concurrent transfers; most objects are tile COGs of about 1 MB, bound by request latency."""
 COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
 SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
