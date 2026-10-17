@@ -194,6 +194,32 @@ def check_enumeration(checks: dict[str, bool]) -> None:
     )
 
 
+def check_declared_bounds(checks: dict[str, bool], source: Path, work: Path) -> None:
+    """Check that the header declares the bounds the writer is given."""
+    bounds = [8.21, 46.41, 8.33, 46.49]
+    declared = work / "declared.pmtiles"
+    write_archive(
+        source,
+        declared,
+        min_zoom=MIN_ZOOM,
+        max_zoom=MOSAIC_ZOOM,
+        spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format="PNG"),
+        name="bounds",
+        bounds=bounds,
+    )
+    header, _ = read_archive(declared)
+    west, south, east, north = bounds
+    checks["the header declares the bounds it is given"] = all(
+        abs(header[key] / 1e7 - value) < 2e-7
+        for key, value in (
+            ("min_lon_e7", west),
+            ("min_lat_e7", south),
+            ("max_lon_e7", east),
+            ("max_lat_e7", north),
+        )
+    )
+
+
 def check_all_transparent_refused(work: Path) -> bool:
     """Check that a source with no visible pixels is refused: zero tiles means a broken build."""
     blank = work / "blank.tif"
@@ -244,6 +270,7 @@ def main() -> int:
             check_archive(checks, label, archive)
 
         checks["a fully transparent source is refused"] = check_all_transparent_refused(work)
+        check_declared_bounds(checks, plain, work)
 
     # Each worker sets a bounded GDAL cache. GDAL's default of 5 % of RAM per
     # process adds up quickly across a pool of workers.

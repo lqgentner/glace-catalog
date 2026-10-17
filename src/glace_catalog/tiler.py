@@ -46,7 +46,7 @@ from rasterio.windows import from_bounds as window_from_bounds
 from glace_catalog.scopes import MERCATOR_ORIGIN, MERCATOR_SPAN_M, TILE_PX, WEB_MERCATOR
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -315,6 +315,7 @@ def write_archive(
     attribution: str = "",
     description: str = "",
     extra_metadata: dict[str, Any] | None = None,
+    bounds: Sequence[float] | None = None,
     pool: ProcessPoolExecutor | None = None,
 ) -> int:
     """Tile an RGBA raster into a PMTiles archive.
@@ -334,6 +335,10 @@ def write_archive(
         Archive metadata, as a viewer displays it.
     extra_metadata
         Further keys of the archive's metadata, such as its value encoding.
+    bounds
+        Extent the header declares, ``[west, south, east, north]`` in WGS84:
+        the data's own, such as its STAC item's bbox. Defaults to the
+        raster's extent, which on a tile-aligned grid is wider than the data.
     pool
         Worker pool the tiles are rendered in. Defaults to a fresh
         :func:`spawn_pool` for the duration of the call; pass one to share it
@@ -381,21 +386,12 @@ def write_archive(
         if not written:
             msg = f"{name}: no tile between z{min_zoom} and z{max_zoom} holds any data"
             raise ValueError(msg)
-        # The bounds a viewer reads, clamped to the projection's limits.
-        eps = 1e-10
-        west, east = max(-180 + eps, west), min(180 - eps, east)
-        south, north = max(-85.051129, south), min(85.051129, north)
         header: dict[str, Any] = {
             "version": 3,
             "tile_type": TILE_TYPES[spec.image_format],
             "tile_compression": Compression.NONE,
-            "min_lon_e7": int(west * 1e7),
-            "min_lat_e7": int(south * 1e7),
-            "max_lon_e7": int(east * 1e7),
-            "max_lat_e7": int(north * 1e7),
+            **_header_bounds(bounds or (west, south, east, north)),
             "center_zoom": min_zoom,
-            "center_lon_e7": int((west + east) / 2 * 1e7),
-            "center_lat_e7": int((south + north) / 2 * 1e7),
         }
         metadata = {
             "name": name,
@@ -408,6 +404,25 @@ def write_archive(
         }
         writer.finalize(header, metadata)
     return written
+
+
+def _header_bounds(bounds: Sequence[float]) -> dict[str, int]:
+    """Header fields of an extent: the bounds a viewer reads and their centre.
+
+    The bounds are clamped to the projection's limits.
+    """
+    west, south, east, north = bounds
+    eps = 1e-10
+    west, east = max(-180 + eps, west), min(180 - eps, east)
+    south, north = max(-85.051129, south), min(85.051129, north)
+    return {
+        "min_lon_e7": int(west * 1e7),
+        "min_lat_e7": int(south * 1e7),
+        "max_lon_e7": int(east * 1e7),
+        "max_lat_e7": int(north * 1e7),
+        "center_lon_e7": int((west + east) / 2 * 1e7),
+        "center_lat_e7": int((south + north) / 2 * 1e7),
+    }
 
 
 __all__ = [

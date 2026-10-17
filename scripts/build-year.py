@@ -314,8 +314,14 @@ def step_pmtiles(
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
     window: tuple[date, date],
+    files: Sequence[stac.CompositeFile],
 ) -> list[webmap.LayerInfo]:
-    """Render and upload the year's web-map archives."""
+    """Render and upload the year's web-map archives.
+
+    Each archive's header declares the bbox of the mosaic item, the extent of
+    the data rather than of the tile-aligned display grid.
+    """
+    _, bbox = mosaics.data_footprint(files)
     with staging(args, "pmtiles") as staged, staging(args, "rgba") as scratch:
         layers = webmap.build_layers(
             chain,
@@ -328,6 +334,7 @@ def step_pmtiles(
             concurrent_layers=args.concurrent_layers,
             # Outside `staged`, which is uploaded whole.
             scratch=scratch,
+            bounds=bbox,
         )
         # The archives are assets of the year's mosaic item, so they go beside
         # its COGs. `upload_tree` adds and overwrites files and leaves the rest.
@@ -681,7 +688,7 @@ def main() -> None:
                 grid=scope.display_grid,
                 name="vrt-display",
             )
-            built = step_pmtiles(args, layout, display_chain, composite_window(frame))
+            built = step_pmtiles(args, layout, display_chain, composite_window(frame), files)
             state.record(
                 step,
                 prints[step],

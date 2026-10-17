@@ -223,6 +223,7 @@ def build_pmtiles(
     workers: int | None = None,
     attribution: str = "",
     scratch: Path | None = None,
+    bounds: Sequence[float] | None = None,
     pool: ProcessPoolExecutor | None = None,
 ) -> LayerInfo:
     """Encode, warp and tile one display-grid mosaic into a PMTiles archive.
@@ -258,6 +259,9 @@ def build_pmtiles(
         subdirectory that is removed on return. Defaults to the system
         temporary directory. At Alpine scale the raster is about 1.1 GB, so
         choose a volume with room for it.
+    bounds
+        Extent of the data, ``[west, south, east, north]`` in WGS84, which
+        the archive's header declares. Defaults to the VRT's extent.
     pool
         A running :func:`~glace_catalog.tiler.spawn_pool` to render the tiles
         in, so several archives can share one.
@@ -277,8 +281,10 @@ def build_pmtiles(
         raise ValueError(msg)
     encoding = style.encoding
 
-    with rasterio_open(src_vrt) as dataset:
-        bounds = _wgs84_bounds(dataset)
+    if bounds is None:
+        with rasterio_open(src_vrt) as dataset:
+            bounds = _wgs84_bounds(dataset)
+    bounds = list(bounds)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if scratch is not None:
@@ -306,6 +312,7 @@ def build_pmtiles(
             attribution=attribution,
             # Record the raster-dem decoding parameters, as terrain archives do.
             extra_metadata={**encoding.maplibre(), "unit": style.units},
+            bounds=bounds,
             pool=executor,
         )
 
@@ -364,6 +371,7 @@ def build_layers(
     workers: int | None = None,
     concurrent_layers: int = DEFAULT_CONCURRENT_LAYERS,
     scratch: Path | None = None,
+    bounds: Sequence[float] | None = None,
 ) -> list[LayerInfo]:
     """Build one PMTiles archive per layer of one year, from the VRT chain.
 
@@ -399,6 +407,9 @@ def build_layers(
     scratch
         Where those rasters are written; the system temporary directory by
         default.
+    bounds
+        Extent of the year's data in WGS84, which every archive's header
+        declares: the mosaic item's bbox. Defaults to each VRT's extent.
 
     Returns
     -------
@@ -423,6 +434,7 @@ def build_layers(
             max_zoom=max_zoom,
             attribution=attribution,
             scratch=scratch,
+            bounds=bounds,
             pool=pool,
         )
 
