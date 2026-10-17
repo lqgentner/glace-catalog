@@ -620,6 +620,12 @@ def main() -> None:
         )
         raise SystemExit(msg)
     logger.info("%d tile items across %d year(s)", tile_count, len(years))
+    # Collect the grid before writing anything: years that disagree on a tile
+    # stop the run with the store as it was.
+    try:
+        grid = grid_frame(tables)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
 
     mosaic_items = read_mosaic_items(layout, years)
     documents = patch_collections(
@@ -637,10 +643,6 @@ def main() -> None:
     )
     if mosaic_items:
         stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=base_url)
-    try:
-        grid = grid_frame(tables)
-    except ValueError as error:
-        raise SystemExit(str(error)) from error
     write_grid(grid, layout.tiles_grid)
     logger.info("Wrote the tile grid: %d tiles", len(grid))
     if args.skip_thumbnail:

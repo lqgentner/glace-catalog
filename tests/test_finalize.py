@@ -33,6 +33,10 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+import shapely
+
 from glace_catalog import stac
 from glace_catalog.metadata import vocabulary
 
@@ -297,6 +301,50 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
     ) == len(published.read_bytes())
 
 
+def check_grid_conflict_before_writes(
+    checks: dict[str, bool], fin: ModuleType, work: Path
+) -> None:
+    """Check that years disagreeing on a tile stop finalization before it writes anything."""
+    store = _store(work / "conflict-store")
+    layout = stac.StoreLayout(store)
+    polygon = shapely.to_wkb(shapely.box(8.0, 46.4, 8.13, 46.49))
+    for year, fraction in ((2023, 0.1), (2024, 0.2)):
+        index = Path(str(layout.year_index(year)))
+        index.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "geometry": polygon,
+            "glace:mgrs_tile": "32TMS55",
+            "glace:glacier_fraction": fraction,
+            "glace:glacier_fraction_buffered": 0.3,
+            "version": "1.0",
+        }
+        pq.write_table(pa.Table.from_pylist([row]), index)
+        encoding = vocabulary().display("coh12_vv").encoding
+        state = stac.BuildState(path=Path(str(layout.build_state(year))))
+        state.record(
+            "pmtiles",
+            "print",
+            {"coh12_vv_viz": {"scale": encoding.scale, "offset": encoding.offset}},
+        )
+    settings, argv = getattr(fin, "settings"), sys.argv  # noqa: B009  (ModuleType has no typed attributes)
+    setattr(fin, "settings", type("Settings", (), {"store_root": store})())  # noqa: B010
+    sys.argv = ["finalize-catalog.py", "--skip-thumbnail", "--skip-validate"]
+    try:
+        fin.main()
+        stopped = ""
+    except SystemExit as error:
+        stopped = str(error)
+    except Exception as error:  # noqa: BLE001  (any other failure means the order is wrong)
+        stopped = f"unexpected {type(error).__name__}"
+    finally:
+        setattr(fin, "settings", settings)  # noqa: B010
+        sys.argv = argv
+    checks["a grid conflict stops finalization"] = "32TMS55" in stopped
+    checks["a grid conflict stops finalization before any write"] = not Path(
+        str(layout.tiles_index),
+    ).exists()
+
+
 def main() -> int:
     """Run every check; print the failures."""
     fin = _finalizer()
@@ -317,6 +365,7 @@ def main() -> int:
         check_no_published_fractions(checks, fin, work)
         check_grid_stamping(checks, fin, store)
         check_grid_style_staged(checks, fin, work)
+        check_grid_conflict_before_writes(checks, fin, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

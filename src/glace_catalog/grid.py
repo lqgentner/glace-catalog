@@ -42,6 +42,9 @@ GRID_MIN_ZOOM = 0
 GRID_MAX_ZOOM = 10
 """Highest zoom of the grid archive; clients overzoom beyond it."""
 
+POLYGON_TOLERANCE_DEG = 1e-9
+"""Largest coordinate difference, in degrees, between one tile's polygons in two years."""
+
 _INDEX_COLUMNS = {
     "glace:mgrs_tile": "mgrs_tile",
     "glace:glacier_fraction": "glacier_fraction",
@@ -99,6 +102,8 @@ def grid_frame(tables: Sequence[pa.Table]) -> gpd.GeoDataFrame:
 
     Every tile item carries its cell's polygon and both glacier fractions, so
     the grid needs no other input. A tile present in any year is in the grid.
+    ``tables`` run from the earliest year to the latest, and each tile keeps
+    its latest polygon.
 
     Returns
     -------
@@ -108,8 +113,9 @@ def grid_frame(tables: Sequence[pa.Table]) -> gpd.GeoDataFrame:
     Raises
     ------
     ValueError
-        If a tile has no fraction, or different fractions or polygons in two
-        years: the fraction table was rebuilt between years.
+        If a tile has no fraction, or different fractions in two years (the
+        fraction table was rebuilt between years), or polygons that differ
+        between years by more than :data:`POLYGON_TOLERANCE_DEG`.
     """
     frames = [
         table.select(list(_INDEX_COLUMNS)).rename_columns(list(_INDEX_COLUMNS.values()))
@@ -121,20 +127,40 @@ def grid_frame(tables: Sequence[pa.Table]) -> gpd.GeoDataFrame:
     if missing:
         msg = f"{len(missing)} tile(s) have no glacier fraction: {', '.join(missing[:5])}"
         raise ValueError(msg)
-    distinct = rows.drop_duplicates()
-    conflicting = sorted(distinct.loc[distinct["mgrs_tile"].duplicated(), "mgrs_tile"].unique())
+
+    values = rows[["mgrs_tile", *fractions]].drop_duplicates()
+    conflicting = sorted(values.loc[values["mgrs_tile"].duplicated(), "mgrs_tile"].unique())
     if conflicting:
         msg = (
-            f"{len(conflicting)} tile(s) differ between years in fraction or polygon: "
-            f"{', '.join(conflicting[:5])}; rebuild every year from one fraction table"
+            f"{len(conflicting)} tile(s) have different glacier fractions in different "
+            f"years: {', '.join(conflicting[:5])}; rebuild every year from one fraction table"
         )
         raise ValueError(msg)
-    distinct = distinct.sort_values("mgrs_tile", ignore_index=True)
-    return gpd.GeoDataFrame(
-        distinct[["mgrs_tile", *fractions]].astype(dict.fromkeys(fractions, "float64")),
-        geometry=shapely.from_wkb(distinct["geometry"]),
-        crs="EPSG:4326",
+
+    # Each year computes a tile's polygon anew, so a library update between
+    # builds can change its last digits.
+    polygons = shapely.from_wkb(rows["geometry"].to_numpy())
+    latest = rows.reset_index(drop=True).drop_duplicates("mgrs_tile", keep="last")
+    reference = dict(zip(latest["mgrs_tile"], polygons[latest.index], strict=True))
+    moved = ~shapely.equals_exact(
+        polygons,
+        [reference[tile] for tile in rows["mgrs_tile"]],
+        tolerance=POLYGON_TOLERANCE_DEG,
     )
+    if moved.any():
+        tiles = sorted(rows.loc[moved, "mgrs_tile"].unique())
+        msg = (
+            f"{len(tiles)} tile(s) have polygons that differ between years: "
+            f"{', '.join(tiles[:5])}; rebuild the items of the years that disagree"
+        )
+        raise ValueError(msg)
+
+    latest = latest.sort_values("mgrs_tile")
+    return gpd.GeoDataFrame(
+        latest[["mgrs_tile", *fractions]].astype(dict.fromkeys(fractions, "float64")),
+        geometry=polygons[latest.index],
+        crs="EPSG:4326",
+    ).reset_index(drop=True)
 
 
 def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:

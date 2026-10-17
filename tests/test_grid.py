@@ -107,13 +107,22 @@ CELLS = {
 }
 
 
-def _year(tiles: list[str], fractions: dict[str, tuple[float, float]] | None = None) -> pa.Table:
-    """One year's item index, reduced to the columns the grid reads."""
+def _year(
+    tiles: list[str],
+    fractions: dict[str, tuple[float, float]] | None = None,
+    shift: dict[str, float] | None = None,
+) -> pa.Table:
+    """One year's item index, reduced to the columns the grid reads.
+
+    ``shift`` moves a tile's polygon east by that many degrees.
+    """
     fractions = fractions or {}
+    shift = shift or {}
     rows = []
     for tile in tiles:
         lon, lat, plain, buffered = CELLS[tile]
         plain, buffered = fractions.get(tile, (plain, buffered))
+        lon += shift.get(tile, 0.0)
         polygon = shapely.box(lon, lat, lon + 0.13, lat + 0.09)
         rows.append(
             {
@@ -150,6 +159,17 @@ def check_grid_conflict(checks: dict[str, bool]) -> None:
     message = _raises(ValueError, grid_frame, [_year(list(CELLS)), changed])
     checks["conflict: refused"] = message is not None
     checks["conflict: names the tile"] = "32TMS56" in (message or "")
+
+    noisy = _year(list(CELLS), shift={"32TMS56": 1e-12})
+    checks["conflict: polygon noise between years is accepted"] = (
+        _raises(ValueError, grid_frame, [_year(list(CELLS)), noisy]) is None
+    )
+    moved = _year(list(CELLS), shift={"32TMS56": 0.01})
+    message = _raises(ValueError, grid_frame, [_year(list(CELLS)), moved])
+    checks["conflict: a moved polygon is refused"] = message is not None
+    checks["conflict: the refusal names the polygon, not the fractions"] = "polygon" in (
+        message or ""
+    ) and "fraction" not in (message or "")
 
     rows = _year(["32TMS55"]).to_pylist()
     rows[0]["glace:glacier_fraction"] = None
