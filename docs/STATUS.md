@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-10-16.** Update this file in the same commit as the change it
+**As of 2026-10-17.** Update this file in the same commit as the change it
 describes: the next person will trust it. The design and its reasons are in
 [`DESIGN.md`](DESIGN.md).
 
@@ -30,10 +30,6 @@ Ordered by what blocks what. Everything not listed here is done.
   Cooperative holds the old Swiss tree. Publishing never deletes, and the
   proxy deletes one object at a time (it answers the bulk `DeleteObjects` call
   with `NoSuchBucket`). *Verified when* listing that prefix returns nothing.
-- **P-5 — Overview depth at Alpine size.** `PTL-DAT-011` wants overviews down
-  to one tile. `rashid check --data` passes on the 2026 Alpine mosaics
-  (2026-10-16); the writer does not assert the level count yet. *Verified
-  when* the mosaic writer asserts the level count.
 - **P-10 — Register in the Portolan registry** once published
   (`portolan:register-catalog`). *Verified when* the catalog appears in the
   registry.

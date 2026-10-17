@@ -448,6 +448,41 @@ def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
     )
 
 
+def overview_factors(width: int, height: int, block: int) -> list[int]:
+    """Overview factors of a COG of this size, down to the level that fits in one tile.
+
+    GDAL's COG driver halves the raster until both sides, rounded down, are at
+    most one tile. Portolan rule ``PTL-DAT-011`` requires overviews, and a
+    zoomed-out reader then reads a single tile.
+    """
+    count = 0
+    while width >> count > block or height >> count > block:
+        count += 1
+    return [2**level for level in range(1, count + 1)]
+
+
+def require_overviews(path: Path) -> None:
+    """Check that a written COG has every overview level :func:`overview_factors` lists.
+
+    Raises
+    ------
+    ValueError
+        If the file has fewer or other levels, so that a zoomed-out read
+        would fetch more than one tile.
+    """
+    with rasterio_open(path) as src:
+        block_height, block_width = src.block_shapes[0]
+        width, height = src.width, src.height
+        found = src.overviews(1)
+    expected = overview_factors(width, height, max(block_height, block_width))
+    if found != expected:
+        msg = (
+            f"{path.name} has overview factors {found}, but a {width} x {height} "
+            f"raster in {block_width} px tiles needs {expected}"
+        )
+        raise ValueError(msg)
+
+
 @dataclass(frozen=True)
 class MosaicWrite:
     """One written mosaic COG, with what the item has to say about it.
@@ -523,6 +558,7 @@ def build_mosaic_cog(
     )
     with rasterio_open(described) as src:
         rasterio.shutil.copy(src, str(out_path), **creation)
+    require_overviews(out_path)
     return MosaicWrite(
         path=out_path,
         checksum=multihash_sha256_file(out_path),
