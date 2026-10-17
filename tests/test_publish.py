@@ -284,15 +284,15 @@ def check_target_config() -> dict[str, bool]:
 
     with tempfile.TemporaryDirectory() as directory:
         config = Path(directory) / "catalog.publish.yaml"
-        config.write_text("write_prefix: s3://lqgentner/glace-ch/\nprofile: source-coop\n")
+        config.write_text("write_prefix: s3://giuz/glace-alps/\nprofile: source-coop\n")
         checks["a trailing slash is not part of the prefix"] = (
-            str(publish.read_target(config)) == "s3://lqgentner/glace-ch"
+            str(publish.read_target(config)) == "s3://giuz/glace-alps"
         )
         refused = {
             "a configuration without write_prefix": "public_base: https://x.invalid/\n",
-            "a configuration without profile": "write_prefix: s3://lqgentner/glace-ch\n",
+            "a configuration without profile": "write_prefix: s3://giuz/glace-alps\n",
             "an https write_prefix": (
-                "write_prefix: https://data.source.coop/lqgentner\nprofile: source-coop\n"
+                "write_prefix: https://data.source.coop/giuz\nprofile: source-coop\n"
             ),
             "a write_prefix naming no bucket": "write_prefix: s3://\nprofile: source-coop\n",
         }

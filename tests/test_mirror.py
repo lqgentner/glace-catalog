@@ -68,7 +68,7 @@ GRID_SQUARES = ("MS", "MT", "NS", "NT")
 
 COLLECTION_ID = "glace-ch-tiles"
 MIRROR_KEY = "items"
-BASE_URL = "https://data.source.coop/lqgentner/glace-ch"
+BASE_URL = "https://data.source.coop/giuz/glace-alps"
 
 # Small row groups give the 400-row fixture enough groups (rashid needs at least
 # five) for its row-group metrics to apply. The real store gets there with the

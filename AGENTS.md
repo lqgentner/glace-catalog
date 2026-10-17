@@ -255,8 +255,23 @@ uv run --env-file .env tools/publish.py --prefix tiles/2024 --confirm
 The plan lists the proposed uploads and their reasons, and changes nothing.
 `--prefix` limits the subtree, `--force` re-uploads matching objects and
 `--workers` sets concurrency. Publishing only adds and replaces objects; remove
-remote objects separately. After publishing, `make conformance-live` checks
-the published catalog, its collection assets and its server.
+remote objects separately.
+
+After publishing, run both checks:
+
+```bash
+make links-live         # HEAD every published href; compare sizes with the store
+make conformance-live   # rashid: the catalog, its collection assets and its server
+```
+
+`make links-live` sends a HEAD request to each document in the store and to
+every href under `public_base` that the documents name, about 345 000 for the
+Alps. Each must answer 200 with the asset's `file:size`. It takes about
+15 minutes; `ARGS="--workers 64"` raises the concurrency.
+
+`tests/test_public_base.py` keeps every Source Cooperative URL in the
+repository under the prefixes in `catalog.publish.yaml`. When the catalog
+moves, add the old prefix to its `RETIRED_PREFIXES`.
 
 ## Related repositories
 

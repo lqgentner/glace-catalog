@@ -7,7 +7,7 @@ DOCS := .cache/glace-docs
 PUBLIC_BASE = $(shell awk '/^public_base:/ {print $$2}' catalog.publish.yaml)
 
 .DEFAULT_GOAL := help
-.PHONY: help render check build finalize conformance publish-plan publish conformance-live
+.PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live
 
 help:  ## List the targets.
 	@awk -F ':.*## ' '/^[a-z-]+:.*## / {printf "  %-17s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -41,3 +41,8 @@ conformance-live:  ## Check the published catalog, its collection assets and its
 	rm -rf $(DOCS)
 	$(RUN) tools/mirror_docs.py $(DOCS)
 	uv run rashid check $(DOCS) --schema --data --live --live-base-url $(PUBLIC_BASE)
+
+links-live:  ## Request every published href and compare its size with the store's.
+	rm -rf $(DOCS)
+	$(RUN) tools/mirror_docs.py $(DOCS)
+	uv run tests/test_links.py --remote $(DOCS) $(ARGS)

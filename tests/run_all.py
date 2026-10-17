@@ -34,6 +34,8 @@ TESTS = [
     "test_grid.py",
     "test_finalize.py",
     "test_links.py",
+    "test_links_remote.py",
+    "test_public_base.py",
     "test_publish.py",
     "test_stac_valid.py",
     "test_conformance.py",
