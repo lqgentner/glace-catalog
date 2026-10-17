@@ -60,6 +60,7 @@ ALTERNATE_ASSETS_EXTENSION_URI = (
 )
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 SCIENTIFIC_EXTENSION_URI = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+TABLE_EXTENSION_URI = "https://stac-extensions.github.io/table/v1.2.0/schema.json"
 WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
 DOI_RESOLVER = "https://doi.org/"
 
@@ -192,6 +193,20 @@ def _doi_links(vocabulary: Vocabulary) -> list[Document]:
     return links
 
 
+def _external_link(link: Mapping[str, str]) -> Document:
+    """Link one web page that ``catalog.yaml`` names, with its own relation."""
+    return _link(link["rel"], link["href"], link["title"], "text/html")
+
+
+def _preview_links(vocabulary: Vocabulary) -> list[Document]:
+    """Repeat the catalog's ``preview`` links, the web map, on a collection."""
+    return [
+        _external_link(link)
+        for link in vocabulary.catalog.links.values()
+        if link["rel"] == "preview"
+    ]
+
+
 def catalog_document(vocabulary: Vocabulary) -> Document:
     """Build the root ``catalog.json``.
 
@@ -210,10 +225,7 @@ def catalog_document(vocabulary: Vocabulary) -> Document:
             )
             for directory in (TILES_DIR, MOSAICS_DIR)
         ],
-        *[
-            {"rel": rel, "href": link["href"], "title": link["title"]}
-            for rel, link in catalog.links.items()
-        ],
+        *[_external_link(link) for link in catalog.links.values()],
         *_doi_links(vocabulary),
     ]
     return {
@@ -223,6 +235,7 @@ def catalog_document(vocabulary: Vocabulary) -> Document:
         "id": f"glace-{catalog.scope.key}",
         "title": catalog.full_title,
         "description": vocabulary.prose(catalog.description),
+        "providers": [dict(provider) for provider in catalog.providers],
         "links": links,
     }
 
@@ -245,6 +258,9 @@ def _collection_assets(
                 "normative representation; this is the one to query."
             ),
             "roles": ["collection-mirror"],
+            # Finalization adds each column's type and the row count.
+            "table:primary_geometry": "geometry",
+            "table:columns": vocabulary.mirror_columns(collection),
             "alternate": bases.alternate(f"{collection}/items.parquet"),
         },
     }
@@ -310,6 +326,7 @@ def collection_document(
         FILE_EXTENSION_URI,
         ALTERNATE_ASSETS_EXTENSION_URI,
         VERSION_EXTENSION_URI,
+        TABLE_EXTENSION_URI,
     ]
     web_map_links: list[Document] = []
     if collection == TILES_DIR:
@@ -376,6 +393,7 @@ def collection_document(
                 "text/html",
             ),
             *_doi_links(vocabulary),
+            *_preview_links(vocabulary),
             *web_map_links,
         ],
     }
@@ -523,6 +541,10 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],
         "tile_assets": vocabulary.asset_rows(TILES_DIR),
+        "mirror_columns": {
+            directory: vocabulary.mirror_columns(directory)
+            for directory in (TILES_DIR, MOSAICS_DIR)
+        },
         "analysis_grid": catalog.scope.analysis_grid,
         "min_zoom": VIZ_MIN_ZOOM,
         "max_zoom": MOSAIC_ZOOM,

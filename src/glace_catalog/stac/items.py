@@ -57,6 +57,7 @@ finalized, because citations resolve to the tag.
 """
 
 MGRS_EXTENSION_URI = "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
+GRID_EXTENSION_URI = "https://stac-extensions.github.io/grid/v1.1.0/schema.json"
 SAR_EXTENSION_URI = "https://stac-extensions.github.io/sar/v1.3.2/schema.json"
 PROJECTION_EXTENSION_URI = "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
 CLASSIFICATION_EXTENSION_URI = (
@@ -106,10 +107,15 @@ def _apply_common_metadata(item: pystac.Item, geobox: MGRSGeoBox, tile: str) -> 
     item.properties["mgrs:utm_zone"] = int(tile[:2])
     item.properties["mgrs:latitude_band"] = tile[2]
     item.properties["mgrs:grid_square"] = tile[3:5]
+    # The grid extension's form, which Earth Search and Planetary Computer
+    # filter Sentinel-2 by.
+    item.properties["grid:code"] = f"MGRS-{tile}"
     item.properties["proj:code"] = f"EPSG:{geobox.crs.epsg}"
     item.properties["proj:shape"] = [geobox.shape.y, geobox.shape.x]
     item.properties["proj:transform"] = list(geobox.affine)[:6]
-    item.stac_extensions.extend([MGRS_EXTENSION_URI, PROJECTION_EXTENSION_URI])
+    item.stac_extensions.extend(
+        [MGRS_EXTENSION_URI, GRID_EXTENSION_URI, PROJECTION_EXTENSION_URI],
+    )
 
 
 def composite_window(pairs: Iterable[tuple[str, str]]) -> tuple[date, date]:

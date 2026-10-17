@@ -15,7 +15,7 @@ describes: the next person will trust it. The design and its reasons are in
 | glacier fractions | `tiles/.glacier-fractions.parquet`, a build input that is not published; the items and the tile grid `tiles/grid.pmtiles` (2 210 tiles, 534 kB, z0–10) carry its values. Derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
 | store | Built and finalized locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`), 2026-10-16: 26 519 tile items, twelve mosaic items, 144 mosaic COGs and 144 web-map archives. The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents. `make conformance` gives 0 errors and twelve `PTL-CAT-001` warnings, one per year catalog ([`conformance.md`](conformance.md)) |
 | web maps | Twelve value-encoded archives a year, over the transport ranges remeasured on the mean composites (`metadata/assets.yaml`); finalization refuses archives whose recorded encoding differs. A year takes 54 min on 15 cores (AGENTS.md) |
-| item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks |
+| item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks. Its columns are described once, in `metadata/assets.yaml`, and published as `table:columns` and in the collection guides; finalization adds the types and row count and refuses an undocumented column |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
 | publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. `giuz/glace-alps` does not exist yet. The Swiss test catalog is still at `lqgentner/glace-ch` |
 
@@ -23,7 +23,9 @@ describes: the next person will trust it. The design and its reasons are in
 
 Ordered by what blocks what. Everything not listed here is done.
 
-- **P-20 — Publish `glace-alps`.** Upload the store to `giuz/glace-alps`
+- **P-20 — Publish `glace-alps`.** First rerun the `items` step of every
+  year (`make build YEAR=…`; the item layout version changed for
+  `grid:code`) and finalize again. Then upload the store to `giuz/glace-alps`
   (AGENTS.md, "Publish the store"). *Verified when* `make links-live`
   finds every published href with its recorded size and `make
   conformance-live` over the mirrored store reports 0 errors.
@@ -37,8 +39,6 @@ Ordered by what blocks what. Everything not listed here is done.
 
 Worth doing, blocking nothing:
 
-- **P-12 — `grid:code`** (`MGRS-32TLS`) on tile items: one line, for interop
-  with Planetary Computer and Earth Search.
 - **P-15 — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
   (raster styling).** This catalog is the first Portolan raster PMTiles case;
   the style files and the `renders` blocks may need changing when it settles.
@@ -59,10 +59,6 @@ Worth doing, blocking nothing:
   Use the paper's numbers and wording so the two stay consistent, and put the
   notes in a section on quirks that give silently wrong answers, as FIRMS
   does in `detections/AGENTS.md`.
-- **P-24 — `table` extension on the `items` assets.** `table:columns` and
-  `table:row_count`, generated from the code that writes the mirror, with the
-  AGENTS.md column table rendered from the same source. Seen in the
-  Sentinel-2 mirror.
 - **P-27 — Year styles as item assets.** FIRMS keeps each year's styles beside
   its archives (`pmtiles://./…`), so the collection holds only the default
   style. Check first that the Portolan browser reads a style from an item.
@@ -71,9 +67,6 @@ Worth doing, blocking nothing:
   tile-aligned display grid, about 1 km wider than the mosaic item's bbox.
   *Verified when* the archives' header bounds match the item bbox and the
   warning is gone.
-- **P-28 — Root and collection links.** A `rel: "preview"` link (`text/html`)
-  to the viewer, `via` to the Source Cooperative page, `providers` on the
-  root, and `updated` on the root and the collections at finalization.
 - **P-19 — Repoint to the production repository once it has the code.** The
   composite pipeline is moving from `deep-glacier-mapping` to
   [`glace-production`](https://github.com/lqgentner/glace-production), which

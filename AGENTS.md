@@ -192,10 +192,13 @@ Finalization:
 - refuses archives encoded over a transport range `metadata/assets.yaml` no
   longer has;
 - updates the collections' year links and temporal extent;
-- combines the item-index slices into `items.parquet`;
+- combines the item-index slices into `items.parquet`, and refuses an index
+  whose columns differ from `mirror_columns` in `metadata/assets.yaml`;
 - writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier fractions;
 - draws the thumbnails;
-- records asset sizes and checksums;
+- records asset sizes and checksums, and the item indexes' column types
+  and row counts;
+- sets `updated` on the root catalog and the collections;
 - points the default style to the latest year;
 - validates the store.
 

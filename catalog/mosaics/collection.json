@@ -8,6 +8,7 @@
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-mosaics",
@@ -670,6 +671,101 @@
       "roles": [
         "collection-mirror"
       ],
+      "table:primary_geometry": "geometry",
+      "table:columns": [
+        {
+          "name": "type",
+          "description": "Always `Feature`."
+        },
+        {
+          "name": "stac_version",
+          "description": "STAC version of the item."
+        },
+        {
+          "name": "stac_extensions",
+          "description": "Schema URIs of the STAC extensions the item uses."
+        },
+        {
+          "name": "id",
+          "description": "Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`."
+        },
+        {
+          "name": "geometry",
+          "description": "Footprint of the year's mosaic in WGS84 (EPSG:4326), as WKB: the union of the year's tiles, simplified."
+        },
+        {
+          "name": "bbox",
+          "description": "Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups."
+        },
+        {
+          "name": "links",
+          "description": "The item document's links. Their hrefs are relative to the item document, `mosaics/{year}/item.json`, not to this file."
+        },
+        {
+          "name": "assets",
+          "description": "One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null."
+        },
+        {
+          "name": "collection",
+          "description": "Id of the collection, `glace-{scope}-mosaics`."
+        },
+        {
+          "name": "start_datetime",
+          "description": "First day of the year's compositing window, at 00:00 UTC."
+        },
+        {
+          "name": "end_datetime",
+          "description": "The day after the window's last day, at 00:00 UTC."
+        },
+        {
+          "name": "constellation",
+          "description": "Always `sentinel-1`."
+        },
+        {
+          "name": "instruments",
+          "description": "Always `[c-sar]`."
+        },
+        {
+          "name": "sar:instrument_mode",
+          "description": "Always `IW`, Interferometric Wide swath."
+        },
+        {
+          "name": "sar:frequency_band",
+          "description": "Always `C`."
+        },
+        {
+          "name": "sar:polarizations",
+          "description": "Polarizations with at least one composite, `VV` and `VH`."
+        },
+        {
+          "name": "proj:code",
+          "description": "CRS of the item's COGs, `EPSG:3035`."
+        },
+        {
+          "name": "proj:shape",
+          "description": "Raster shape of the item's COGs, `[rows, columns]`."
+        },
+        {
+          "name": "proj:transform",
+          "description": "Affine transform of the item's COGs, six coefficients in `proj:code` units."
+        },
+        {
+          "name": "version",
+          "description": "Dataset version the item belongs to."
+        },
+        {
+          "name": "glace:build_fingerprint",
+          "description": "Fingerprint of the inputs and settings the year's mosaics were built from. It changes when any of them change."
+        },
+        {
+          "name": "description",
+          "description": "Description of the item."
+        },
+        {
+          "name": "datetime",
+          "description": "Midpoint of the compositing window."
+        }
+      ],
       "alternate": {
         "s3": {
           "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/mosaics/items.parquet",
@@ -738,6 +834,12 @@
       "href": "https://doi.org/10.48656/d4r9-fj97",
       "type": "text/html",
       "title": "Canonical DOI, every version"
+    },
+    {
+      "rel": "preview",
+      "href": "https://lqgentner.github.io/glace-viewer",
+      "type": "text/html",
+      "title": "GLACE Viewer, an interactive web map"
     }
   ]
 }

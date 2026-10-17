@@ -19,6 +19,15 @@ WHERE datetime BETWEEN '{{ last_year }}-01-01' AND '{{ last_year }}-12-31'
 ORDER BY frac DESC;
 ```
 
+`items.parquet` has one row per item and these columns, also listed with their
+types as `table:columns` on the collection's `items` asset:
+
+| Column | Description |
+| --- | --- |
+{% for column in mirror_columns.tiles %}
+| `{{ column.name }}` | {{ column.description }} |
+{% endfor %}
+
 ## Tile grid
 
 `tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a

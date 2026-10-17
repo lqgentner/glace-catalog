@@ -115,3 +115,132 @@ descriptions:
     decodes it as a raster-dem source and colours it with a color-relief
     layer. Lossy (WebP quality 90): for analysis, read the COGs with the
     "data" role.
+
+# The columns of each collection's item mirror, `items.parquet`, in the order
+# the files hold them. The collections publish them as `table:columns` and the collection AGENTS.md
+# files as a table; finalization adds each column's type from the written file
+# and refuses a file whose columns differ from this list. A description is one
+# string, or one per collection, and may name the scope's glacier_inventory and
+# glacier_buffer_m. `collections` limits a column to one of them.
+mirror_columns:
+  - name: type
+    description: Always `Feature`.
+  - name: stac_version
+    description: STAC version of the item.
+  - name: stac_extensions
+    description: Schema URIs of the STAC extensions the item uses.
+  - name: id
+    description:
+      tiles: Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`.
+      mosaics: Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`.
+  - name: geometry
+    description:
+      tiles: >-
+        Footprint of the MGRS square in WGS84 (EPSG:4326), as WKB: its four
+        corners.
+      mosaics: >-
+        Footprint of the year's mosaic in WGS84 (EPSG:4326), as WKB: the
+        union of the year's tiles, simplified.
+  - name: bbox
+    description: >-
+      Bounds of the footprint in WGS84. The GeoParquet covering column, with
+      statistics per row group, so a bounding-box filter skips row groups.
+  - name: links
+    description:
+      tiles: >-
+        Only the link to the CEOS-ARD specification. The structural links
+        are in the item document, `tiles/{year}/{mgrs_tile}/item.json`.
+      mosaics: >-
+        The item document's links. Their hrefs are relative to the item
+        document, `mosaics/{year}/item.json`, not to this file.
+  - name: assets
+    description: >-
+      One struct per asset key, with absolute https hrefs. An asset a tile
+      lacks, such as coherence on the 2015 gap tiles, is null.
+  - name: collection
+    collections: [mosaics]
+    description: Id of the collection, `glace-{scope}-mosaics`.
+  - name: start_datetime
+    description: First day of the year's compositing window, at 00:00 UTC.
+  - name: end_datetime
+    description: The day after the window's last day, at 00:00 UTC.
+  - name: constellation
+    description: Always `sentinel-1`.
+  - name: instruments
+    description: Always `[c-sar]`.
+  - name: sar:instrument_mode
+    description: Always `IW`, Interferometric Wide swath.
+  - name: sar:frequency_band
+    description: Always `C`.
+  - name: sar:polarizations
+    description: Polarizations with at least one composite, `VV` and `VH`.
+  - name: version
+    collections: [tiles]
+    description: Dataset version the item belongs to.
+  - name: glace:mgrs_tile
+    collections: [tiles]
+    description: The 10 km MGRS square, such as `32TMS55`.
+  - name: grid:code
+    collections: [tiles]
+    description: The MGRS square in the STAC grid extension's form, `MGRS-32TMS55`.
+  - name: mgrs:utm_zone
+    collections: [tiles]
+    description: UTM zone of the square.
+  - name: mgrs:latitude_band
+    collections: [tiles]
+    description: MGRS latitude band of the square.
+  - name: mgrs:grid_square
+    collections: [tiles]
+    description: MGRS 100 km grid square identifier, the two letters after the band.
+  - name: proj:code
+    description:
+      tiles: CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`.
+      mosaics: CRS of the item's COGs, `EPSG:3035`.
+  - name: proj:shape
+    description: Raster shape of the item's COGs, `[rows, columns]`.
+  - name: proj:transform
+    description: Affine transform of the item's COGs, six coefficients in `proj:code` units.
+  - name: version
+    collections: [mosaics]
+    description: Dataset version the item belongs to.
+  - name: glace:build_fingerprint
+    collections: [mosaics]
+    description: >-
+      Fingerprint of the inputs and settings the year's mosaics were built
+      from. It changes when any of them change.
+  - name: description
+    collections: [mosaics]
+    description: Description of the item.
+  - name: glace:coh_first_acquisition
+    collections: [tiles]
+    description: Date of the first acquisition in the square's coherence composites, `YYYY-MM-DD`.
+  - name: glace:coh_last_acquisition
+    collections: [tiles]
+    description: >-
+      Date of the last acquisition in the square's coherence composites. About
+      twelve days before the last backscatter date, because both images of a
+      pair must fall in the window.
+  - name: glace:rtc_first_acquisition
+    collections: [tiles]
+    description: Date of the first acquisition in the square's backscatter composites.
+  - name: glace:rtc_last_acquisition
+    collections: [tiles]
+    description: Date of the last acquisition in the square's backscatter composites.
+  - name: glace:glacier_fraction
+    collections: [tiles]
+    description: >-
+      Share of the square inside {{ glacier_inventory }} glacier outlines,
+      0 to 1. The same every year.
+  - name: glace:glacier_fraction_buffered
+    collections: [tiles]
+    description: >-
+      Share of the square inside the same outlines buffered by
+      {{ glacier_buffer_m }} m, 0 to 1. The same every year.
+  - name: processing:level
+    collections: [tiles]
+    description: Always `L3`, a composite over many acquisitions.
+  - name: glace:dem
+    collections: [tiles]
+    description: DEM used for terrain correction and geocoding.
+  - name: datetime
+    description: Midpoint of the compositing window.

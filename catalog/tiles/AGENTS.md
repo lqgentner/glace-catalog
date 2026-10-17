@@ -19,6 +19,45 @@ WHERE datetime BETWEEN '2026-01-01' AND '2026-12-31'
 ORDER BY frac DESC;
 ```
 
+`items.parquet` has one row per item and these columns, also listed with their
+types as `table:columns` on the collection's `items` asset:
+
+| Column | Description |
+| --- | --- |
+| `type` | Always `Feature`. |
+| `stac_version` | STAC version of the item. |
+| `stac_extensions` | Schema URIs of the STAC extensions the item uses. |
+| `id` | Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`. |
+| `geometry` | Footprint of the MGRS square in WGS84 (EPSG:4326), as WKB: its four corners. |
+| `bbox` | Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups. |
+| `links` | Only the link to the CEOS-ARD specification. The structural links are in the item document, `tiles/{year}/{mgrs_tile}/item.json`. |
+| `assets` | One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null. |
+| `start_datetime` | First day of the year's compositing window, at 00:00 UTC. |
+| `end_datetime` | The day after the window's last day, at 00:00 UTC. |
+| `constellation` | Always `sentinel-1`. |
+| `instruments` | Always `[c-sar]`. |
+| `sar:instrument_mode` | Always `IW`, Interferometric Wide swath. |
+| `sar:frequency_band` | Always `C`. |
+| `sar:polarizations` | Polarizations with at least one composite, `VV` and `VH`. |
+| `version` | Dataset version the item belongs to. |
+| `glace:mgrs_tile` | The 10 km MGRS square, such as `32TMS55`. |
+| `grid:code` | The MGRS square in the STAC grid extension's form, `MGRS-32TMS55`. |
+| `mgrs:utm_zone` | UTM zone of the square. |
+| `mgrs:latitude_band` | MGRS latitude band of the square. |
+| `mgrs:grid_square` | MGRS 100 km grid square identifier, the two letters after the band. |
+| `proj:code` | CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`. |
+| `proj:shape` | Raster shape of the item's COGs, `[rows, columns]`. |
+| `proj:transform` | Affine transform of the item's COGs, six coefficients in `proj:code` units. |
+| `glace:coh_first_acquisition` | Date of the first acquisition in the square's coherence composites, `YYYY-MM-DD`. |
+| `glace:coh_last_acquisition` | Date of the last acquisition in the square's coherence composites. About twelve days before the last backscatter date, because both images of a pair must fall in the window. |
+| `glace:rtc_first_acquisition` | Date of the first acquisition in the square's backscatter composites. |
+| `glace:rtc_last_acquisition` | Date of the last acquisition in the square's backscatter composites. |
+| `glace:glacier_fraction` | Share of the square inside RGI7-C-11 glacier outlines, 0 to 1. The same every year. |
+| `glace:glacier_fraction_buffered` | Share of the square inside the same outlines buffered by 250 m, 0 to 1. The same every year. |
+| `processing:level` | Always `L3`, a composite over many acquisitions. |
+| `glace:dem` | DEM used for terrain correction and geocoding. |
+| `datetime` | Midpoint of the compositing window. |
+
 ## Tile grid
 
 `tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a

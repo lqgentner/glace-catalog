@@ -438,6 +438,19 @@ def _write_mirror(
         pq.write_table(table, handle, row_group_size=row_group_size, write_statistics=True)
 
 
+def mirror_column_type(data_type: pa.DataType) -> str:
+    """Spell one mirror column's Arrow type for ``table:columns``.
+
+    A struct of nested fields, such as ``assets``, is named ``struct`` alone:
+    spelled out, its type runs to thousands of characters.
+    """
+    if pa.types.is_struct(data_type) and any(
+        pa.types.is_nested(data_type.field(index).type) for index in range(data_type.num_fields)
+    ):
+        return "struct"
+    return str(data_type)
+
+
 def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) -> dict[str, str]:
     """One relative link, as it appears in a written document.
 

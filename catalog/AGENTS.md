@@ -16,9 +16,9 @@ catalog.json
 ```
 
 Use each collection's `items.parquet` to search multiple items. This
-STAC-GeoParquet index has the `collection-mirror` role and includes `glace:*`
-and `proj:*` properties as columns. Individual item JSON files are the
-authoritative records.
+STAC-GeoParquet index has the `collection-mirror` role and holds the item
+properties as columns; each collection's guide lists them. Individual item
+JSON files are the authoritative records.
 
 This DuckDB query finds tiles with more than 20% glacier cover:
 

@@ -10,13 +10,13 @@
   {{ catalog.tagline }}
   <br />
   <br />
-  <a href="{{ catalog.links.related.href }}">🗺️ Web map</a>
+  <a href="{{ catalog.links.viewer.href }}">🗺️ Web map</a>
   ·
   <a href="{{ browser_url }}">🧭 Portolan/STAC browser</a>
   ·
   <a href="{{ catalog.links.vcs.href }}">🏷️ Metadata repository</a>
   ·
-  <a href="{{ catalog.links.via.href }}">⚙️ Production pipeline</a>
+  <a href="{{ catalog.links.pipeline.href }}">⚙️ Production pipeline</a>
 </p>
 
 Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
@@ -44,7 +44,7 @@ the main product for scientific analysis. The mosaics put every year on one
 fixed equal-area grid, so years can be stacked and compared without alignment.
 The mosaics collection also includes PMTiles archives for web maps.
 
-To explore the data visually, open the [GLACE Viewer]({{ catalog.links.related.href }}).
+To explore the data visually, open the [GLACE Viewer]({{ catalog.links.viewer.href }}).
 
 ## Get started
 
@@ -104,6 +104,14 @@ are in decibels and coherence is linear.
 Every analysis raster carries its description and processing record in its
 GeoTIFF tags.
 
+{% if usage_notes %}
+## Usage notes
+
+{% for note in usage_notes %}
+**{{ note.title }}.** {{ note.text }}
+
+{% endfor %}
+{% endif %}
 ## Composite processing
 
 Sentinel-1 SLC bursts are processed to 12-day repeat-pass coherence and
@@ -115,7 +123,7 @@ geometry. At each pixel, observations with finer resolution in map coordinates
 receive greater weight. Each year's window is chosen by minimizing MODIS NDSI
 over the target area.
 
-See the [production pipeline]({{ catalog.links.via.href }}) for processing details.
+See the [production pipeline]({{ catalog.links.pipeline.href }}) for processing details.
 
 ## License and citation
 

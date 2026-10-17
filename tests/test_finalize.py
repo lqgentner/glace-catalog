@@ -276,6 +276,32 @@ def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -
     )
 
 
+def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+    """Check that a mirror's types and count are recorded, and undocumented columns refused."""
+    layout = stac.StoreLayout(store)
+    index = Path(str(layout.mosaics_index))
+    index.parent.mkdir(parents=True, exist_ok=True)
+    collection = json.loads((SOURCE / "mosaics" / "collection.json").read_text())
+    names = [column["name"] for column in collection["assets"]["items"]["table:columns"]]
+    pq.write_table(pa.Table.from_pylist([dict.fromkeys(names, "x")] * 3), index)
+    documents = {"mosaics": collection}
+    fin.describe_mirrors(documents, layout)
+    asset = collection["assets"]["items"]
+    checks["a mirror records its row count"] = asset.get("table:row_count") == 3
+    checks["a mirror records each column's type"] = all(
+        column.get("type") == "string" for column in asset["table:columns"]
+    )
+    pq.write_table(pa.Table.from_pylist([dict.fromkeys([*names, "stray"], "x")]), index)
+    try:
+        fin.describe_mirrors(
+            {"mosaics": json.loads((SOURCE / "mosaics" / "collection.json").read_text())}, layout
+        )
+        checks["an undocumented mirror column stops finalization"] = False
+    except SystemExit as error:
+        checks["an undocumented mirror column stops finalization"] = "stray" in str(error)
+    index.unlink()
+
+
 def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
     """Check that the grid style is published beside the tiles collection, stamped."""
     source = work / "full-source"
@@ -291,6 +317,7 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
         documents,
         base_url="https://example.org/glace",
         years=[2023, 2024],
+        updated="2026-10-17T12:00:00Z",
     )
     published = store / "tiles" / "styles" / "grid.json"
     checks["the grid style is published"] = published.is_file()
@@ -299,6 +326,15 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
     checks["the grid style records its size"] = published.is_file() and asset.get(
         "file:size"
     ) == len(published.read_bytes())
+    root = json.loads((store / "catalog.json").read_text())
+    checks["the root and the collections carry the run's time"] = all(
+        document.get("updated") == "2026-10-17T12:00:00Z"
+        for document in (
+            root,
+            collection,
+            json.loads((store / "mosaics" / "collection.json").read_text()),
+        )
+    )
 
 
 def check_grid_conflict_before_writes(
@@ -364,6 +400,7 @@ def main() -> int:
         check_encodings(checks, fin, store)
         check_no_published_fractions(checks, fin, work)
         check_grid_stamping(checks, fin, store)
+        check_mirror_description(checks, fin, store)
         check_grid_style_staged(checks, fin, work)
         check_grid_conflict_before_writes(checks, fin, work)
 

@@ -96,20 +96,28 @@ providers:
     roles: [producer, processor, licensor, host]
     url: https://www.geo.uzh.ch/en.html
 
+# External links of the root catalog, by name; the templates refer to them by
+# name. Each carries its link relation; `preview` is also repeated on both
+# collections.
 links:
-  about:
+  source_coop:
+    rel: via
     href: https://source.coop/giuz/glace-alps
-    title: Dataset on Source Cooperative
+    title: This catalog on Source Cooperative
   vcs:
+    rel: vcs
     href: https://github.com/lqgentner/glace-catalog
     title: Source repository
   issues:
+    rel: issues
     href: https://github.com/lqgentner/glace-catalog/issues
     title: Issue tracker
-  related:
+  viewer:
+    rel: preview
     href: https://lqgentner.github.io/glace-viewer
-    title: GLACE Viewer, a web map over the PMTiles archives
-  via:
+    title: GLACE Viewer, an interactive web map
+  pipeline:
+    rel: via
     href: https://github.com/lqgentner/glace-production
     title: Production pipeline
 

@@ -135,6 +135,7 @@ class CatalogConfig:
     tagline: str
     preliminary_notice: str
     coverage_note: str
+    usage_notes: tuple[Mapping[str, str], ...]
     description: str
     license: str
     canonical_doi: str
@@ -193,6 +194,10 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
         tagline=str(document["tagline"]),
         preliminary_notice=str(document["preliminary_notice"]),
         coverage_note=str(document.get("coverage_note", "")),
+        usage_notes=tuple(
+            {"title": str(note["title"]), "text": str(note["text"])}
+            for note in document.get("usage_notes", ())
+        ),
         description=str(document["description"]),
         license=str(document["license"]),
         canonical_doi=str(document.get("doi", {}).get("canonical", "")),
@@ -392,6 +397,7 @@ class Vocabulary:
                 region=self.catalog.region,
             ),
             "coverage_note": self.catalog.coverage_note,
+            "usage_notes": self.catalog.usage_notes,
         }
 
     def prose(self, template: str, **context: Any) -> str:
@@ -472,6 +478,30 @@ class Vocabulary:
     def sar_product_type(self, key: str) -> str:
         """Return the ``sar:product_type`` of one measurement, ``COH`` or ``RTC``."""
         return str(self._product(parse_key(key))["sar_product_type"])
+
+    # -- the item mirrors --------------------------------------------------------
+
+    def mirror_columns(self, collection: Collection) -> list[dict[str, str]]:
+        """Name and describe each column of one collection's ``items.parquet``.
+
+        The collection's ``table:columns`` and its AGENTS.md table both list
+        these; finalization adds the types from the written file.
+        """
+        scope = self.catalog.scope
+        columns = []
+        for column in self._assets["mirror_columns"]:
+            if collection not in column.get("collections", (collection,)):
+                continue
+            description = column["description"]
+            if isinstance(description, dict):
+                description = description[collection]
+            text = self.prose(
+                str(description),
+                glacier_inventory=scope.glacier_inventory,
+                glacier_buffer_m=_format_number(scope.glacier_buffer_m),
+            )
+            columns.append({"name": str(column["name"]), "description": text})
+        return columns
 
     # -- tables for the prose --------------------------------------------------
 

@@ -27,6 +27,17 @@ change = cube.sel(time="{{ last_year }}") - cube.sel(time="{{ first_year }}")
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
 counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
+## Item index
+
+`items.parquet` has one row per year and these columns, also listed with their
+types as `table:columns` on the collection's `items` asset:
+
+| Column | Description |
+| --- | --- |
+{% for column in mirror_columns.mosaics %}
+| `{{ column.name }}` | {{ column.description }} |
+{% endfor %}
+
 ## Web maps
 
 `{stem}_viz.pmtiles` archives contain value-encoded WebP tiles: an 8-bit code

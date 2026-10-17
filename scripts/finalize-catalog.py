@@ -8,12 +8,14 @@ years and writes what spans them:
 - ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
   year and the temporal extent; the mosaics collection also lists one MapLibre
   style per year;
+- the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
   and its style ``tiles/styles/grid.json``;
 - ``tiles/items.parquet``, the per-year indexes combined, and
   ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
-  the public address.
+  the public address, and described by their ``items`` assets' column types
+  and row counts.
 
 It then validates the result against the STAC schemas.
 
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
@@ -47,7 +50,13 @@ from glace_catalog.documents import load_public_bases, stale_documents
 from glace_catalog.grid import grid_frame, write_grid
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
-from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
+from glace_catalog.stac.save import (
+    MOSAICS_DIR,
+    TILES_DIR,
+    Document,
+    mirror_column_type,
+    read_item,
+)
 from glace_catalog.stac.store import (
     ASSETS_DIR,
     YEAR_INDEX_NAME,
@@ -318,6 +327,15 @@ def check_style_coverage(
     logger.info("Every one of %d web-map archive(s) is drawn by its year's style", archives)
 
 
+def with_updated(document: Document, updated: str) -> Document:
+    """Return ``document`` with ``updated`` set, placed before its links."""
+    stamped = {key: value for key, value in document.items() if key not in {"updated", "links"}}
+    stamped["updated"] = updated
+    if "links" in document:
+        stamped["links"] = document["links"]
+    return stamped
+
+
 def write_documents(
     source_dir: Path,
     layout: stac.StoreLayout,
@@ -325,11 +343,13 @@ def write_documents(
     *,
     base_url: str,
     years: Sequence[int],
+    updated: str,
 ) -> None:
     """Stage the documents, styles and static files, then upload them.
 
     The root catalog's absolute ``self`` link is added here, so the tracked
-    catalog stays independent of where it is deployed.
+    catalog stays independent of where it is deployed. The root and both
+    collections take ``updated``, the time of this run.
     """
     base = base_url.rstrip("/")
     with tempfile.TemporaryDirectory() as tmp:
@@ -339,6 +359,7 @@ def write_documents(
             {"rel": "self", "href": f"{base}/catalog.json", "type": "application/json"},
             *_keep(catalog["links"], {"self"}),
         ]
+        catalog = with_updated(catalog, updated)
         (staged / "catalog.json").write_text(
             json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
         )
@@ -374,7 +395,9 @@ def write_documents(
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
+            path.write_text(
+                json.dumps(with_updated(document, updated), indent=2, ensure_ascii=False) + "\n",
+            )
 
         upload_tree(staged, layout.root)
 
@@ -513,6 +536,54 @@ def stamp_collection_assets(
             asset["file:size"] = len(payload)
             asset["file:checksum"] = multihash_sha256(payload)
             logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
+
+
+def describe_mirrors(
+    documents: Mapping[str, Document],
+    layout: stac.StoreLayout,
+) -> None:
+    """Add each column's type and the row count to the ``items`` assets.
+
+    The rendered ``table:columns`` name and describe the columns from
+    ``metadata/assets.yaml``; the types and the count come from the written
+    mirror, read from its footer alone.
+
+    Raises
+    ------
+    SystemExit
+        If a mirror's columns differ from the documented ones.
+    """
+    paths = stamped_asset_paths(layout)
+    for directory, document in documents.items():
+        asset = document.get("assets", {}).get("items")
+        if asset is None:
+            continue
+        with UPath(paths[directory]["items"]).open("rb") as handle:
+            mirror = pq.ParquetFile(handle)
+            schema, rows = mirror.schema_arrow, mirror.metadata.num_rows
+        columns = asset.get("table:columns", [])
+        documented = {column["name"] for column in columns}
+        undocumented = sorted(set(schema.names) - documented)
+        absent = sorted(documented - set(schema.names))
+        if undocumented or absent:
+            msg = (
+                f"{directory}/items.parquet differs from mirror_columns in "
+                f"metadata/assets.yaml: undocumented {undocumented}, absent {absent}. "
+                "Describe or remove them, render, then finalize again"
+            )
+            raise SystemExit(msg)
+        asset["table:columns"] = [
+            {
+                "name": column["name"],
+                "type": mirror_column_type(schema.field(column["name"]).type),
+                "description": column["description"],
+            }
+            for column in columns
+        ]
+        asset["table:row_count"] = rows
+        logger.info(
+            "Described %s/items.parquet: %d columns, %d rows", directory, len(columns), rows
+        )
 
 
 def validate(layout: stac.StoreLayout) -> None:
@@ -655,6 +726,7 @@ def main() -> None:
             attribution=args.thumbnail_attribution,
         )
 
+    describe_mirrors(documents, layout)
     stamp_collection_assets(documents, layout)
     write_documents(
         SOURCE_DIR,
@@ -662,6 +734,7 @@ def main() -> None:
         documents,
         base_url=base_url,
         years=years,
+        updated=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
     if not args.skip_validate:

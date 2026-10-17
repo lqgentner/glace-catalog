@@ -24,9 +24,9 @@ catalog.json
 ```
 
 Use each collection's `items.parquet` to search multiple items. This
-STAC-GeoParquet index has the `collection-mirror` role and includes `glace:*`
-and `proj:*` properties as columns. Individual item JSON files are the
-authoritative records.
+STAC-GeoParquet index has the `collection-mirror` role and holds the item
+properties as columns; each collection's guide lists them. Individual item
+JSON files are the authoritative records.
 
 This DuckDB query finds tiles with more than 20% glacier cover:
 
@@ -57,6 +57,14 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 - Read COGs for measurements. `{stem}_viz.pmtiles` contains lossy 8-bit value
   codes for web maps, stored beside the COGs as `visual` assets.
 
+{% if usage_notes %}
+## Quirks that produce silently wrong answers
+
+{% for note in usage_notes %}
+**{{ note.title }}.** {{ note.text }}
+
+{% endfor %}
+{% endif %}
 ## Compare years and collections
 
 Tiles and mosaics represent the same source composites on different grids.
@@ -69,4 +77,4 @@ per scope from {{ catalog.scope.glacier_inventory }} outlines, plain and buffere
 collection's `grid` asset, `tiles/grid.pmtiles`, carries them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
-the year styles. The [GLACE Viewer]({{ catalog.links.related.href }}) draws the PMTiles with these styles.
+the year styles. The [GLACE Viewer]({{ catalog.links.viewer.href }}) draws the PMTiles with these styles.

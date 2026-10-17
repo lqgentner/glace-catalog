@@ -16,6 +16,9 @@ The mosaic item carries its web-map archives only as assets with the
 ``visual`` role, beside the COGs they render. Its footprint is simplified to a
 few vertices per tile edge and still covers every tile.
 
+The item mirrors written from both kinds of item hold exactly the columns
+``mirror_columns`` in ``metadata/assets.yaml`` documents.
+
 Reads no data and needs no network.
 
 Run: uv run tests/test_items.py
@@ -33,6 +36,8 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from freezebase.mgrs import MGRSGeoBox
+import pyarrow.parquet as pq
+import pystac
 from shapely import get_num_coordinates
 from shapely.geometry import shape
 
@@ -52,14 +57,13 @@ from glace_catalog.stac.naming import (
     viz_filename,
     viz_key,
 )
+from glace_catalog.stac.save import export_geoparquet, index_from_items, item_document
 from glace_catalog.stac.store import BuildState, StoreLayout
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import ModuleType
-
-    import pystac
 
 TILE = "32TPS05"
 WINDOW = "20230718_20231015"
@@ -249,6 +253,28 @@ def _footprint_checks() -> dict[str, bool]:
     }
 
 
+def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
+    """Write both mirrors as the build does; compare their columns with the documented ones."""
+    mosaic = _mosaic_item()
+    mosaic.properties["glace:build_fingerprint"] = "0" * 64
+    mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
+    # Finalization reads the mosaic items back from the store, as written.
+    stored = pystac.Item.from_dict(item_document(mosaic, "glace-ch-mosaics", scope_title="GLACE"))
+    with tempfile.TemporaryDirectory() as tmp:
+        tiles, mosaics = Path(tmp) / "tiles.parquet", Path(tmp) / "mosaics.parquet"
+        export_geoparquet([tile_item], tiles)
+        index_from_items([stored], mosaics, base_url="https://example.org/glace")
+        written = {
+            "tiles": set(pq.read_schema(tiles).names),
+            "mosaics": set(pq.read_schema(mosaics).names),
+        }
+    return {
+        f"the {name} mirror holds the documented columns": columns
+        == {column["name"] for column in vocabulary().mirror_columns(name)}
+        for name, columns in written.items()
+    }
+
+
 def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     """Run the gate."""
     names = {
@@ -289,6 +315,8 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
             props.get("glace:rtc_last_acquisition"),
         )
         == ("2023-07-21", "2023-10-12"),
+        "the tile names its MGRS square in the grid extension": props.get("grid:code")
+        == f"MGRS-{TILE}",
         "no filename-derived span fields": "glace:coh_start" not in props
         and "glace:rtc_end" not in props,
         "acquisition tags reach the asset": item.assets["coh12_vv"].extra_fields.get(
@@ -380,6 +408,13 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering is titled by the vocabulary"] = viz.title == "Coherence VV – PMTiles"
     checks["a rendering's description carries the tiled zoom range"] = "z5-z12" in (
         viz.description or ""
+    )
+    checks.update(
+        _mirror_checks(
+            build_tile_item(
+                TILE, files, info, glacier_fraction=0.1, glacier_fraction_buffered=0.2
+            ),
+        ),
     )
     checks.update(_staging_checks())
     checks.update(_footprint_checks())

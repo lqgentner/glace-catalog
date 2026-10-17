@@ -27,6 +27,37 @@ change = cube.sel(time="2026") - cube.sel(time="2015")
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
 counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
+## Item index
+
+`items.parquet` has one row per year and these columns, also listed with their
+types as `table:columns` on the collection's `items` asset:
+
+| Column | Description |
+| --- | --- |
+| `type` | Always `Feature`. |
+| `stac_version` | STAC version of the item. |
+| `stac_extensions` | Schema URIs of the STAC extensions the item uses. |
+| `id` | Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`. |
+| `geometry` | Footprint of the year's mosaic in WGS84 (EPSG:4326), as WKB: the union of the year's tiles, simplified. |
+| `bbox` | Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups. |
+| `links` | The item document's links. Their hrefs are relative to the item document, `mosaics/{year}/item.json`, not to this file. |
+| `assets` | One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null. |
+| `collection` | Id of the collection, `glace-{scope}-mosaics`. |
+| `start_datetime` | First day of the year's compositing window, at 00:00 UTC. |
+| `end_datetime` | The day after the window's last day, at 00:00 UTC. |
+| `constellation` | Always `sentinel-1`. |
+| `instruments` | Always `[c-sar]`. |
+| `sar:instrument_mode` | Always `IW`, Interferometric Wide swath. |
+| `sar:frequency_band` | Always `C`. |
+| `sar:polarizations` | Polarizations with at least one composite, `VV` and `VH`. |
+| `proj:code` | CRS of the item's COGs, `EPSG:3035`. |
+| `proj:shape` | Raster shape of the item's COGs, `[rows, columns]`. |
+| `proj:transform` | Affine transform of the item's COGs, six coefficients in `proj:code` units. |
+| `version` | Dataset version the item belongs to. |
+| `glace:build_fingerprint` | Fingerprint of the inputs and settings the year's mosaics were built from. It changes when any of them change. |
+| `description` | Description of the item. |
+| `datetime` | Midpoint of the compositing window. |
+
 ## Web maps
 
 `{stem}_viz.pmtiles` archives contain value-encoded WebP tiles: an 8-bit code
