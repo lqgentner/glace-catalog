@@ -235,6 +235,68 @@ def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
         checks["a stale render stops finalization"] = "default.json" in str(error)
 
 
+def check_no_published_fractions(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+    """Check that a fraction table without the leading dot stops finalization."""
+    layout = stac.StoreLayout(work / "fractions-store")
+    tiles = Path(str(layout.tiles))
+    tiles.mkdir(parents=True)
+    (tiles / ".glacier-fractions.parquet").write_bytes(b"")
+    try:
+        fin.require_no_published_fractions(layout)
+        checks["the dot-prefixed fraction table is accepted"] = True
+    except SystemExit:
+        checks["the dot-prefixed fraction table is accepted"] = False
+    (tiles / "glacier-fractions.parquet").write_bytes(b"")
+    try:
+        fin.require_no_published_fractions(layout)
+        checks["a fraction table publishing would upload stops finalization"] = False
+    except SystemExit as error:
+        checks["a fraction table publishing would upload stops finalization"] = (
+            ".glacier-fractions.parquet" in str(error)
+        )
+
+
+def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+    """Check that the grid asset records the size of the archive in the store."""
+    layout = stac.StoreLayout(store)
+    grid = Path(str(layout.tiles_grid))
+    grid.parent.mkdir(parents=True, exist_ok=True)
+    grid.write_bytes(b"PMTiles" * 10)
+    Path(str(layout.tiles_index)).write_bytes(b"")
+    documents = {"tiles": json.loads((SOURCE / "tiles" / "collection.json").read_text())}
+    fin.stamp_collection_assets(documents, layout)
+    asset = documents["tiles"]["assets"]["grid"]
+    checks["the grid asset records its size"] = asset.get("file:size") == 70
+    checks["the grid asset records its checksum"] = str(asset.get("file:checksum", "")).startswith(
+        "1220"
+    )
+
+
+def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+    """Check that the grid style is published beside the tiles collection, stamped."""
+    source = work / "full-source"
+    shutil.copytree(SOURCE, source)
+    store = _store(work / "styled-store")
+    documents = {
+        directory: json.loads((source / directory / "collection.json").read_text())
+        for directory in ("tiles", "mosaics")
+    }
+    fin.write_documents(
+        source,
+        stac.StoreLayout(store),
+        documents,
+        base_url="https://example.org/glace",
+        years=[2023, 2024],
+    )
+    published = store / "tiles" / "styles" / "grid.json"
+    checks["the grid style is published"] = published.is_file()
+    collection = json.loads((store / "tiles" / "collection.json").read_text())
+    asset = collection["assets"].get("style-grid", {})
+    checks["the grid style records its size"] = published.is_file() and asset.get(
+        "file:size"
+    ) == len(published.read_bytes())
+
+
 def main() -> int:
     """Run every check; print the failures."""
     fin = _finalizer()
@@ -252,6 +314,9 @@ def main() -> int:
         check_skip_thumbnail(checks, fin, store)
         check_render(checks, fin, work)
         check_encodings(checks, fin, store)
+        check_no_published_fractions(checks, fin, work)
+        check_grid_stamping(checks, fin, store)
+        check_grid_style_staged(checks, fin, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

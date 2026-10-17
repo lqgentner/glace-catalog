@@ -9,6 +9,8 @@ years and writes what spans them:
   year and the temporal extent; the mosaics collection also lists one MapLibre
   style per year;
 - a thumbnail per collection, drawn from the latest year's COGs;
+- ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
+  and its style ``tiles/styles/grid.json``;
 - ``tiles/items.parquet``, the per-year indexes combined, and
   ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
   the public address.
@@ -42,6 +44,7 @@ from upath import UPath
 from glace_catalog import stac, webmap
 from glace_catalog.config import settings
 from glace_catalog.documents import load_public_bases, stale_documents
+from glace_catalog.grid import grid_frame, write_grid
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR, Document, read_item
@@ -364,6 +367,7 @@ def write_documents(
         styles = repoint_styles(source_dir, staged, years)
         register_style_assets(documents[MOSAICS_DIR], years, max(years))
         stamp_style_assets(documents, styles)
+        stamp_style_assets(documents, stage_grid_styles(source_dir, staged), TILES_DIR)
         # Every archive must have a layer in its year's style.
         check_style_coverage(layout, years, styles)
 
@@ -386,7 +390,7 @@ def stamped_asset_paths(
     return {
         TILES_DIR: {
             "items": layout.tiles_index,
-            "glacier-fractions": layout.glacier_fractions,
+            "grid": layout.tiles_grid,
             "thumbnail": layout.tiles_thumbnail,
         },
         MOSAICS_DIR: {
@@ -399,21 +403,61 @@ def stamped_asset_paths(
 def stamp_style_assets(
     documents: Mapping[str, Document],
     styles: Mapping[str, Path],
+    directory: str = MOSAICS_DIR,
 ) -> None:
-    """Fill ``file:size`` and ``file:checksum`` on the per-year MapLibre styles.
+    """Fill ``file:size`` and ``file:checksum`` on one collection's MapLibre styles.
 
-    Each value is measured on the staged copy that :func:`repoint_styles`
-    wrote, which is the file readers download.
+    Each value is measured on the staged copy, which is the file readers
+    download: the per-year copies :func:`repoint_styles` wrote, or the tile
+    grid's style.
     """
     for key, path in sorted(styles.items()):
-        asset = documents.get(MOSAICS_DIR, {}).get("assets", {}).get(key)
+        asset = documents.get(directory, {}).get("assets", {}).get(key)
         if asset is None:
-            logger.warning("%s declares no %s asset for %s", MOSAICS_DIR, key, path.name)
+            logger.warning("%s declares no %s asset for %s", directory, key, path.name)
             continue
         payload = path.read_bytes()
         asset["file:size"] = len(payload)
         asset["file:checksum"] = multihash_sha256(payload)
-        logger.info("Stamped %s/%s: %d bytes", MOSAICS_DIR, key, len(payload))
+        logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
+
+
+def stage_grid_styles(source_dir: Path, staged: Path) -> dict[str, Path]:
+    """Copy the tiles collection's styles, which do not depend on the year.
+
+    Returns
+    -------
+    dict[str, pathlib.Path]
+        Staged path per style asset key, e.g. ``{"style-grid": …}``.
+    """
+    out = staged / TILES_DIR / "styles"
+    out.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    for path in sorted((source_dir / TILES_DIR / "styles").glob("*.json")):
+        (out / path.name).write_bytes(path.read_bytes())
+        written[f"style-{path.stem}"] = out / path.name
+    return written
+
+
+def require_no_published_fractions(layout: stac.StoreLayout) -> None:
+    """Check that the glacier-fraction table is under its leading dot.
+
+    Publishing uploads every file without one, and the table is a build input,
+    not an asset: an old store would publish it unregistered.
+
+    Raises
+    ------
+    SystemExit
+        If ``tiles/glacier-fractions.parquet`` is in the store.
+    """
+    stray = layout.tiles / "glacier-fractions.parquet"
+    if stray.exists():
+        msg = (
+            f"{stray} would be published. Rename it to "
+            f"{layout.glacier_fractions.name} (on object storage, copy it there and "
+            "delete the original), then finalize again"
+        )
+        raise SystemExit(msg)
 
 
 def require_existing_thumbnails(layout: stac.StoreLayout) -> None:
@@ -565,6 +609,7 @@ def main() -> None:
     layout = stac.StoreLayout(settings.store_root)
     years = built_years(layout)
     require_current_encodings(layout, years)
+    require_no_published_fractions(layout)
 
     tables = [read_year_index(layout, year) for year in years]
     tile_count, versions = tiles_summary(tables)
@@ -592,6 +637,12 @@ def main() -> None:
     )
     if mosaic_items:
         stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=base_url)
+    try:
+        grid = grid_frame(tables)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    write_grid(grid, layout.tiles_grid)
+    logger.info("Wrote the tile grid: %d tiles", len(grid))
     if args.skip_thumbnail:
         require_existing_thumbnails(layout)
     else:

@@ -193,6 +193,7 @@ Finalization:
   longer has;
 - updates the collections' year links and temporal extent;
 - combines the item-index slices into `items.parquet`;
+- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier fractions;
 - draws the thumbnails;
 - records asset sizes and checksums;
 - points the default style to the latest year;
