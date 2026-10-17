@@ -24,8 +24,6 @@ coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
 the Alpine Convention perimeter, 2015–2026. The data is available as
 Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 
-> **Coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
-
 ## Collections
 
 | Collection | One item per | Grid | Use it for |
@@ -107,6 +105,8 @@ GeoTIFF tags.
 **Low coherence outside glaciers.** Other surfaces also decorrelate over 12 days and can have similarly low coherence, such as snow patches, lakes and unstable slopes.
 
 **Validated scope.** The validation covers glacier mapping in Switzerland only. Its scores do not describe glacier mapping performance in other parts of the Alps, or farther than 250 m from the glacier outlines. Other applications may also benefit from the composites, but were not validated.
+
+**2015 coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
 
 ## Composite processing
 

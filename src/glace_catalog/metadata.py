@@ -134,7 +134,6 @@ class CatalogConfig:
     subtitle: str
     tagline: str
     preliminary_notice: str
-    coverage_note: str
     usage_notes: tuple[Mapping[str, str], ...]
     description: str
     license: str
@@ -193,7 +192,6 @@ def _catalog_config(document: Mapping[str, Any]) -> CatalogConfig:
         subtitle=str(document["subtitle"]),
         tagline=str(document["tagline"]),
         preliminary_notice=str(document["preliminary_notice"]),
-        coverage_note=str(document.get("coverage_note", "")),
         usage_notes=tuple(
             {"title": str(note["title"]), "text": str(note["text"])}
             for note in document.get("usage_notes", ())
@@ -396,7 +394,6 @@ class Vocabulary:
             "preliminary_notice": self._env.from_string(self.catalog.preliminary_notice).render(
                 region=self.catalog.region,
             ),
-            "coverage_note": self.catalog.coverage_note,
             "usage_notes": self.catalog.usage_notes,
         }
 
