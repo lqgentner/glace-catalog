@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "catalog"
+TILE_COLUMNS = [column["name"] for column in vocabulary().mirror_columns("tiles")]
 
 
 def _finalizer() -> ModuleType:
@@ -337,6 +338,21 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
     )
 
 
+def check_stale_year_index(checks: dict[str, bool], fin: ModuleType) -> None:
+    """Check that a year indexed by an older build stops finalization."""
+    current = pa.Table.from_pylist([dict.fromkeys(TILE_COLUMNS, "x")])
+    fin.require_current_year_indexes([current], [2024])
+    checks["a year index with the documented columns is accepted"] = True
+    older = current.drop_columns(["collection"])
+    try:
+        fin.require_current_year_indexes([current, older], [2023, 2024])
+        checks["a year index without a documented column stops finalization"] = False
+    except SystemExit as error:
+        checks["a year index without a documented column stops finalization"] = (
+            "2024: missing ['collection']" in str(error)
+        )
+
+
 def check_grid_conflict_before_writes(
     checks: dict[str, bool], fin: ModuleType, work: Path
 ) -> None:
@@ -347,7 +363,9 @@ def check_grid_conflict_before_writes(
     for year, fraction in ((2023, 0.1), (2024, 0.2)):
         index = Path(str(layout.year_index(year)))
         index.parent.mkdir(parents=True, exist_ok=True)
+        # Every documented column, so the run reaches the grid check.
         row = {
+            **dict.fromkeys(TILE_COLUMNS, "x"),
             "geometry": polygon,
             "glace:mgrs_tile": "32TMS55",
             "glace:glacier_fraction": fraction,
@@ -402,6 +420,7 @@ def main() -> int:
         check_grid_stamping(checks, fin, store)
         check_mirror_description(checks, fin, store)
         check_grid_style_staged(checks, fin, work)
+        check_stale_year_index(checks, fin)
         check_grid_conflict_before_writes(checks, fin, work)
 
     failed = [name for name, ok in checks.items() if not ok]

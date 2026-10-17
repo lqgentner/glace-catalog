@@ -502,11 +502,15 @@
         },
         {
           "name": "links",
-          "description": "Only the link to the CEOS-ARD specification. The structural links are in the item document, `tiles/{year}/{mgrs_tile}/item.json`."
+          "description": "The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification."
         },
         {
           "name": "assets",
           "description": "One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null."
+        },
+        {
+          "name": "collection",
+          "description": "Id of the collection, `glace-{scope}-tiles`."
         },
         {
           "name": "start_datetime",

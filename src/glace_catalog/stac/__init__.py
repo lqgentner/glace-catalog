@@ -39,7 +39,6 @@ from glace_catalog.stac.save import (
     PORTOLAN_SCHEMA,
     UPathStacIO,
     concat_indexes,
-    export_geoparquet,
     index_from_items,
     is_tile_item,
     item_dict,
@@ -49,11 +48,13 @@ from glace_catalog.stac.save import (
     write_stac_geoparquet,
     year_catalog_document,
     year_child_link,
+    year_index_document,
 )
 from glace_catalog.stac.store import (
     BuildState,
     StoreLayout,
     copy_composites,
+    drop_empty_composites,
     fingerprint,
     manifest_composites,
     manifest_digest,
@@ -102,7 +103,7 @@ __all__ = [
     "copy_composites",
     "data_key",
     "discover_composites",
-    "export_geoparquet",
+    "drop_empty_composites",
     "fingerprint",
     "index_from_items",
     "is_tile_item",
@@ -129,4 +130,5 @@ __all__ = [
     "write_stac_geoparquet",
     "year_catalog_document",
     "year_child_link",
+    "year_index_document",
 ]

@@ -469,6 +469,49 @@ def manifest_valid_percents(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
     return percents
 
 
+EMPTY_COMPOSITE_LIMIT = 0.01
+"""Largest share of a year's measurements that may hold no valid pixel.
+
+A few empty composites are an edge effect: a burst assigned to a tile that
+none of its pixels reach. More point at a broken run, which should stop the
+build rather than thin out the catalog.
+"""
+
+
+def drop_empty_composites(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Remove each measurement with no valid pixel from a manifest, with its QA layers.
+
+    The manifest's ``valid_percent`` of a measurement is missing or 0 when no
+    pixel holds a value. Such a file is not published, and neither are the
+    count and quality layers of the same tile, product and polarization. A
+    tile left with no files gets no item.
+
+    Returns
+    -------
+    tuple
+        The remaining rows, and the ``{tile} {asset_key}`` of each dropped
+        measurement.
+
+    Raises
+    ------
+    ValueError
+        If more than :data:`EMPTY_COMPOSITE_LIMIT` of the measurements are
+        empty.
+    """
+    group = ["tile", "product", "polarization"]
+    data = frame.loc[frame["qa"].isna()]
+    empty = data.loc[data["valid_percent"].fillna(0) <= 0]
+    if len(empty) > EMPTY_COMPOSITE_LIMIT * max(len(data), 1):
+        msg = (
+            f"{len(empty)} of {len(data)} measurements hold no valid pixel, more than "
+            f"{EMPTY_COMPOSITE_LIMIT:.0%}; check the composite run"
+        )
+        raise ValueError(msg)
+    dropped = frame.set_index(group).index.isin(empty.set_index(group).index)
+    labels = sorted(f"{row.tile} {row.asset_key}" for row in empty.itertuples())
+    return frame.loc[~dropped].reset_index(drop=True), labels
+
+
 @dataclass(frozen=True)
 class CopyResult:
     """What one ``copy`` step did."""

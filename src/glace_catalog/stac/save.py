@@ -17,13 +17,15 @@ all of them.
 
 Structural links are relative, so the same tree is valid in the repository, in
 a preview and in production. Item asset hrefs are relative too
-(``./coh12_vv.tif``), and the item mirror carries absolute ones.
+(``./coh12_vv.tif``), and the item mirror carries absolute asset and link
+hrefs.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import posixpath
 from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urljoin
 
@@ -167,29 +169,45 @@ def write_stac_geoparquet(payloads: Sequence[Document], out_path: Path | UPath) 
     logger.info("Geoparquet index with %d items saved to %s", len(payloads), out_path)
 
 
-def export_geoparquet(items: Sequence[pystac.Item], out_path: Path | UPath) -> None:
-    """Export items as a stac-geoparquet index."""
-    write_stac_geoparquet([item_dict(item) for item in items], out_path)
+def year_index_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> Document:
+    """One row of a year's tile index: the published item, with hrefs from the store root.
+
+    The row carries the item document as published, collection and structural
+    links included. Its relative asset and link hrefs are rewritten from the
+    item's directory to the store root, so :func:`concat_indexes` can make them
+    absolute without knowing where each item lives.
+    """
+    payload = item_document(item, collection_id, scope_title=scope_title)
+    directory = item_prefix(item)
+    for entry in [*payload.get("assets", {}).values(), *payload.get("links", [])]:
+        href = entry.get("href")
+        if href is not None and "://" not in href:
+            entry["href"] = posixpath.normpath(posixpath.join(directory, href))
+    return payload
 
 
 def _rebase_hrefs(table: pa.Table, base_url: str) -> pa.Table:
-    """Rewrite an index's root-relative asset hrefs onto an absolute base URL."""
+    """Rewrite an index's root-relative asset and link hrefs onto an absolute base URL."""
     base = base_url.rstrip("/")
     assets = table.column("assets").to_pylist()
-    for row in assets:
-        if row is None:
+    links = table.column("links").to_pylist()
+    entries = [
+        # A struct column holds every key any item has; a tile without one of
+        # them (a single-polarization tile) carries a null there.
+        *[asset for row in assets if row is not None for asset in row.values()],
+        *[link for row in links if row is not None for link in row],
+    ]
+    for entry in entries:
+        if entry is None:
             continue
-        for asset in row.values():
-            # A struct column holds every key any item has; a tile without one
-            # of them (a single-polarization tile) carries a null there.
-            if asset is None:
-                continue
-            href = asset.get("href")
-            if href is not None and "://" not in href:
-                asset["href"] = f"{base}/{href.lstrip('/')}"
-    index = table.schema.get_field_index("assets")
-    rebased = pa.array(assets, type=table.schema.field(index).type)
-    return table.set_column(index, table.schema.field(index), rebased)
+        href = entry.get("href")
+        if href is not None and "://" not in href:
+            entry["href"] = f"{base}/{href.lstrip('/')}"
+    for name, rows in (("assets", assets), ("links", links)):
+        index = table.schema.get_field_index(name)
+        field = table.schema.field(index)
+        table = table.set_column(index, field, pa.array(rows, type=field.type))
+    return table
 
 
 def concat_indexes(
@@ -235,7 +253,7 @@ def index_from_items(
     base_url: str,
     hrefs_relative_to: str = "",
 ) -> int:
-    """Write a stac-geoparquet index straight from items, with absolute hrefs.
+    """Write a stac-geoparquet index straight from items, with absolute asset and link hrefs.
 
     Used for the mosaics index, which has one row per year and is built
     directly from the mosaic items.
@@ -263,10 +281,10 @@ def index_from_items(
         payload = item_dict(item)
         # urljoin resolves `../` segments, so every href is a clean URL.
         item_base = f"{base}/{hrefs_relative_to or item_prefix(item)}/"
-        for asset in payload.get("assets", {}).values():
-            href = asset.get("href")
+        for entry in [*payload.get("assets", {}).values(), *payload.get("links", [])]:
+            href = entry.get("href")
             if href is not None and "://" not in href:
-                asset["href"] = urljoin(item_base, href)
+                entry["href"] = urljoin(item_base, href)
         dicts.append(payload)
     write_stac_geoparquet(dicts, out_path)
     return len(dicts)

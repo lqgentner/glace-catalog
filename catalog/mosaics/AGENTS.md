@@ -40,8 +40,8 @@ types as `table:columns` on the collection's `items` asset:
 | `id` | Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`. |
 | `geometry` | Footprint of the year's mosaic in WGS84 (EPSG:4326), as WKB: the union of the year's tiles, simplified. |
 | `bbox` | Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups. |
-| `links` | The item document's links. Their hrefs are relative to the item document, `mosaics/{year}/item.json`, not to this file. |
-| `assets` | One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null. |
+| `links` | The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification. |
+| `assets` | One struct per asset key, with absolute https hrefs. |
 | `collection` | Id of the collection, `glace-{scope}-mosaics`. |
 | `start_datetime` | First day of the year's compositing window, at 00:00 UTC. |
 | `end_datetime` | The day after the window's last day, at 00:00 UTC. |

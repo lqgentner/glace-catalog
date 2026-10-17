@@ -699,11 +699,11 @@
         },
         {
           "name": "links",
-          "description": "The item document's links. Their hrefs are relative to the item document, `mosaics/{year}/item.json`, not to this file."
+          "description": "The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification."
         },
         {
           "name": "assets",
-          "description": "One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null."
+          "description": "One struct per asset key, with absolute https hrefs."
         },
         {
           "name": "collection",

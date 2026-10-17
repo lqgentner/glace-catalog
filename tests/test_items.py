@@ -57,7 +57,13 @@ from glace_catalog.stac.naming import (
     viz_filename,
     viz_key,
 )
-from glace_catalog.stac.save import export_geoparquet, index_from_items, item_document
+from glace_catalog.stac.save import (
+    concat_indexes,
+    index_from_items,
+    item_document,
+    write_stac_geoparquet,
+    year_index_document,
+)
 from glace_catalog.stac.store import BuildState, StoreLayout
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
@@ -254,25 +260,45 @@ def _footprint_checks() -> dict[str, bool]:
 
 
 def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
-    """Write both mirrors as the build does; compare their columns with the documented ones."""
+    """Write both mirrors as the build and finalization do; check their columns and links."""
+    base = "https://example.org/glace"
     mosaic = _mosaic_item()
     mosaic.properties["glace:build_fingerprint"] = "0" * 64
     mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
     # Finalization reads the mosaic items back from the store, as written.
     stored = pystac.Item.from_dict(item_document(mosaic, "glace-ch-mosaics", scope_title="GLACE"))
     with tempfile.TemporaryDirectory() as tmp:
-        tiles, mosaics = Path(tmp) / "tiles.parquet", Path(tmp) / "mosaics.parquet"
-        export_geoparquet([tile_item], tiles)
-        index_from_items([stored], mosaics, base_url="https://example.org/glace")
-        written = {
-            "tiles": set(pq.read_schema(tiles).names),
-            "mosaics": set(pq.read_schema(mosaics).names),
-        }
-    return {
-        f"the {name} mirror holds the documented columns": columns
+        year, tiles = Path(tmp) / ".items.parquet", Path(tmp) / "tiles.parquet"
+        mosaics = Path(tmp) / "mosaics.parquet"
+        row = year_index_document(tile_item, "glace-ch-tiles", scope_title="GLACE")
+        write_stac_geoparquet([row], year)
+        concat_indexes([year], tiles, base_url=base)
+        index_from_items([stored], mosaics, base_url=base)
+        tables = {"tiles": pq.read_table(tiles), "mosaics": pq.read_table(mosaics)}
+    checks = {
+        f"the {name} mirror holds the documented columns": set(table.column_names)
         == {column["name"] for column in vocabulary().mirror_columns(name)}
-        for name, columns in written.items()
+        for name, table in tables.items()
     }
+    for name, table in tables.items():
+        links = {link["rel"]: link["href"] for link in table.column("links").to_pylist()[0]}
+        checks[f"the {name} mirror links the root absolutely"] = (
+            links.get("root") == f"{base}/catalog.json"
+        )
+        checks[f"the {name} mirror names the collection"] = (
+            table.column("collection").to_pylist()[0].endswith(name)
+        )
+    tile_links = {
+        link["rel"]: link["href"] for link in tables["tiles"].column("links").to_pylist()[0]
+    }
+    checks["a tile row's parent is its year catalog"] = (
+        tile_links.get("parent") == f"{base}/tiles/2023/catalog.json"
+    )
+    asset = tables["tiles"].column("assets").to_pylist()[0]["coh12_vv"]["href"]
+    checks["a tile row's asset href is absolute"] = (
+        asset == f"{base}/tiles/2023/{TILE}/coh12_vv.tif"
+    )
+    return checks
 
 
 def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)

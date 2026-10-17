@@ -119,6 +119,32 @@ def tiles_summary(tables: Sequence[pa.Table]) -> tuple[int, set[str]]:
     return count, versions
 
 
+def require_current_year_indexes(tables: Sequence[pa.Table], years: Sequence[int]) -> None:
+    """Stop if a year's tile index lacks a documented column or has an undocumented one.
+
+    The combined mirror takes every column any year has and fills the rest
+    with nulls, so a year indexed by an older build would publish rows
+    without, say, their collection. Checked before anything is written.
+
+    Raises
+    ------
+    SystemExit
+        Listing each stale year and the command that reindexes it.
+    """
+    documented = {column["name"] for column in vocabulary().mirror_columns(TILES_DIR)}
+    stale = []
+    for year, table in zip(years, tables, strict=True):
+        written = set(table.column_names)
+        if written != documented:
+            stale.append(
+                f"{year}: missing {sorted(documented - written)}, "
+                f"undocumented {sorted(written - documented)}"
+            )
+    if stale:
+        hint = "reindex those years with: make build YEAR=... ARGS='--force-from items'"
+        raise SystemExit("\n".join([*stale, hint]))
+
+
 def read_mosaic_items(layout: stac.StoreLayout, years: Sequence[int]) -> list[pystac.Item]:
     """Read the per-year mosaic items; one per year, so reading them all is cheap."""
     items = []
@@ -683,6 +709,7 @@ def main() -> None:
     require_no_published_fractions(layout)
 
     tables = [read_year_index(layout, year) for year in years]
+    require_current_year_indexes(tables, years)
     tile_count, versions = tiles_summary(tables)
     if len(versions) > 1:
         msg = (

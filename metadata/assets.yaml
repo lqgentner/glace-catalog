@@ -146,20 +146,19 @@ mirror_columns:
       Bounds of the footprint in WGS84. The GeoParquet covering column, with
       statistics per row group, so a bounding-box filter skips row groups.
   - name: links
+    description: >-
+      The item document's links, with absolute hrefs: root, collection,
+      parent and the CEOS-ARD specification.
+  - name: assets
     description:
       tiles: >-
-        Only the link to the CEOS-ARD specification. The structural links
-        are in the item document, `tiles/{year}/{mgrs_tile}/item.json`.
-      mosaics: >-
-        The item document's links. Their hrefs are relative to the item
-        document, `mosaics/{year}/item.json`, not to this file.
-  - name: assets
-    description: >-
-      One struct per asset key, with absolute https hrefs. An asset a tile
-      lacks, such as coherence on the 2015 gap tiles, is null.
+        One struct per asset key, with absolute https hrefs. An asset a tile
+        lacks, such as coherence on the 2015 gap tiles, is null.
+      mosaics: One struct per asset key, with absolute https hrefs.
   - name: collection
-    collections: [mosaics]
-    description: Id of the collection, `glace-{scope}-mosaics`.
+    description:
+      tiles: Id of the collection, `glace-{scope}-tiles`.
+      mosaics: Id of the collection, `glace-{scope}-mosaics`.
   - name: start_datetime
     description: First day of the year's compositing window, at 00:00 UTC.
   - name: end_datetime

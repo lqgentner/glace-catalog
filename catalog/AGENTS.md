@@ -1,6 +1,6 @@
 # GLACE Alps – agent guide
 
-Known gaps: In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them lack backscatter as well: 32TNT14 has no 2015 item, and the 2015 backscatter of 32TNT24 holds no valid pixels. Every other year covers all squares.
+Known gaps: In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
 
 ## Find data
 

@@ -13,7 +13,7 @@ so they can only be satisfied there.
 **No repository here imports another** (M-30). They share files on disk: the
 glacier-fraction table, the label masks, the run manifest, and MGRS tile
 geometry via `freezebase`. `deep-glacier-mapping` owns three live contracts and
-`s1bursts` one small one (S-4); the settled ones are listed at the end.
+`s1bursts` two small ones (S-4, S-5); the settled ones are listed at the end.
 
 ---
 
@@ -132,6 +132,36 @@ from the item that describes it.
 *Verified when* a regenerated year's `coh12_vv.tif` opens in rasterio with
 `descriptions == ("coh12_vv",)`, and `build-year.py` writes it without
 the item builder overriding the name.
+
+---
+
+## S-5 — No composite without a valid pixel (`s1bursts`)
+
+**Status: open.** In 2015, the backscatter composites of `32TNT24` hold no
+valid pixel, yet the tile has a composite and both QA layers, and their
+`CONTRIBUTING_OBSERVATIONS` tag says 1. The composite run matches bursts to a
+tile by the tile's longitude-latitude bounding box, which is larger than the
+UTM square, so a burst can match without reaching any of its pixels. The
+compositor then counts and dates every input, and writes the empty result.
+
+- **What to change.** In `compose_rtc_lrw` and `compose_coherence_lrw`, leave
+  out each orbit/date group with no valid pixel in the cell: it counts
+  neither in `CONTRIBUTING_OBSERVATIONS` nor in the acquisition-date tags.
+  When no group is left, raise an error and write nothing. Branch
+  `fix/skip-empty-composites` of `s1bursts` does this, raising
+  `EmptyCompositeError`.
+- **In `deep-glacier-mapping`.** The per-cell handler of `run_composite`
+  already logs and skips any exception; catching `EmptyCompositeError` beside
+  `IncompleteCellError` would log one line instead of a traceback.
+- **Why.** The catalog publishes no measurement without a valid pixel: the
+  build leaves out such a file and its QA layers
+  (`glace_catalog.stac.store.drop_empty_composites`), and stops if more than
+  1 % of a year's measurements are empty. Without this change, every run
+  hands it such files and tags that overstate what was composited.
+
+*Verified when* a rerun of the 2015 cell `32TNT24`, with its old files
+removed, writes no backscatter composite, and no manifest row of any year has
+a measurement whose `valid_percent` is missing or 0.
 
 ---
 

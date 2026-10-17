@@ -60,13 +60,12 @@ if TYPE_CHECKING:
     from datetime import date
 
     import pandas as pd
-    import pystac
 
     from glace_catalog.scopes import Grid, Scope
 
 logger = logging.getLogger(Path(__file__).stem)
 
-CATALOGUE_SCHEMA_VERSION = 5
+CATALOGUE_SCHEMA_VERSION = 6
 """Version of the item documents' layout. Bump it to make the ``items`` step rerun."""
 
 
@@ -135,6 +134,27 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
 
     logger.info("Manifest verified: %d files across %d tiles", len(files), len(by_tile))
     return frame, files
+
+
+def without_empty_composites(
+    frame: pd.DataFrame,
+    files: list[stac.CompositeFile],
+) -> tuple[pd.DataFrame, list[stac.CompositeFile]]:
+    """Leave out the measurements with no valid pixel, and their QA layers.
+
+    Raises
+    ------
+    SystemExit
+        If too many are empty, which points at a broken composite run.
+    """
+    try:
+        kept, dropped = stac.drop_empty_composites(frame)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
+    for label in dropped:
+        logger.warning("%s holds no valid pixel; not published, nor its QA layers", label)
+    names = set(kept["filename"].astype(str))
+    return kept, [file for file in files if file.path.name in names]
 
 
 def step_copy(
@@ -429,22 +449,20 @@ def step_items(
             year_prose=render_year_prose(vocabulary(), args.year),
         )
         # Hrefs relative to the store root; finalize-catalog makes them absolute.
-        stac.export_geoparquet(
-            [_rooted(item, args.year) for item in tile_items],
+        stac.write_stac_geoparquet(
+            [
+                stac.year_index_document(
+                    item,
+                    scope.tiles_collection_id,
+                    scope_title=vocabulary().catalog.short_title,
+                )
+                for item in tile_items
+            ],
             staged_tiles / YEAR_INDEX_NAME,
         )
         stac.store.upload_tree(staged_tiles, layout.tile_year(args.year))
         stac.store.upload_tree(staged_mosaics, layout.mosaic_year(args.year))
     logger.info("items: %d tile items and one mosaic item", len(tile_items))
-
-
-def _rooted(item: pystac.Item, year: int) -> pystac.Item:
-    """Copy of a tile item whose asset hrefs are relative to the store root."""
-    rooted = item.clone()
-    tile = item.properties["glace:mgrs_tile"]
-    for asset in rooted.assets.values():
-        asset.href = f"tiles/{year}/{tile}/{asset.href}"
-    return rooted
 
 
 def mosaic_assets(
@@ -597,12 +615,15 @@ def main() -> None:
     logger.info("Building %s %d from %s into %s", scope.key, args.year, src, layout.root)
 
     frame, files = load_and_verify_manifest(src, args.year)
+    # Fingerprint the archive as verified. An empty composite adds no pixel to
+    # the mosaics or the web maps, so leaving it out reruns only the items.
+    copy_print = stac.fingerprint(stac.manifest_digest(frame))
+    frame, files = without_empty_composites(frame, files)
 
     state = stac.BuildState.load(layout.build_state(args.year))
     if args.force_from is not None:
         state.invalidate_from(args.force_from)
 
-    copy_print = stac.fingerprint(stac.manifest_digest(frame))
     prints = {
         "copy": copy_print,
         "vrt": copy_print,

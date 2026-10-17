@@ -36,6 +36,7 @@ from glace_catalog.stac.store import (
     MANIFEST_COLUMNS,
     StoreLayout,
     copy_composites,
+    drop_empty_composites,
     manifest_composites,
     manifest_raster_info,
     manifest_valid_percents,
@@ -155,6 +156,29 @@ def producer_manifest() -> pd.DataFrame:
     )
     frame.attrs["manifest_version"] = 1
     return frame
+
+
+def empty_composite_checks() -> dict[str, bool]:
+    """Check that an empty measurement is dropped with its QA layers, and many stop the build."""
+    full = producer_manifest()
+    empty = full.copy()
+    empty["tile"] = "32TNT24"
+    empty["filename"] = empty["filename"].str.replace("32TPS05", "32TNT24")
+    empty["valid_percent"] = np.nan
+    many = pd.concat([full] * 99 + [empty], ignore_index=True)
+    kept, dropped = drop_empty_composites(many)
+    checks = {
+        "an empty measurement is reported": dropped == ["32TNT24 coh12_vv"],
+        "an empty measurement goes with its QA layers": "32TNT24" not in set(kept["tile"]),
+        "a measurement with valid pixels stays, QA without a percentage too": len(kept)
+        == len(full) * 99,
+    }
+    try:
+        drop_empty_composites(pd.concat([full, empty], ignore_index=True))
+        checks["a run with many empty measurements stops the build"] = False
+    except ValueError:
+        checks["a run with many empty measurements stops the build"] = True
+    return checks
 
 
 def header_checks(tmp: Path) -> dict[str, bool]:
@@ -297,6 +321,7 @@ def main() -> int:
         ),
     }
     checks.update(header)
+    checks.update(empty_composite_checks())
     checks.update(source_pattern_checks())
     with tempfile.TemporaryDirectory() as tmp:
         checks.update(local_copy_links(Path(tmp)))

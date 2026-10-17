@@ -30,8 +30,9 @@ types as `table:columns` on the collection's `items` asset:
 | `id` | Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`. |
 | `geometry` | Footprint of the MGRS square in WGS84 (EPSG:4326), as WKB: its four corners. |
 | `bbox` | Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups. |
-| `links` | Only the link to the CEOS-ARD specification. The structural links are in the item document, `tiles/{year}/{mgrs_tile}/item.json`. |
+| `links` | The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification. |
 | `assets` | One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null. |
+| `collection` | Id of the collection, `glace-{scope}-tiles`. |
 | `start_datetime` | First day of the year's compositing window, at 00:00 UTC. |
 | `end_datetime` | The day after the window's last day, at 00:00 UTC. |
 | `constellation` | Always `sentinel-1`. |

@@ -136,7 +136,7 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 
 | Step | Result |
 | --- | --- |
-| `copy` | Validates the manifest and supported assets, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
+| `copy` | Validates the manifest and supported assets, leaves out each measurement with no valid pixel and its QA layers, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
 | `vrt` | Builds temporary regional VRTs for the next two steps. |
 | `mosaics` | Writes twelve annual analysis mosaics. |
 | `pmtiles` | Writes twelve value-encoded web-map archives. |
