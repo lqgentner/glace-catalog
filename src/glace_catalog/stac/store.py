@@ -127,7 +127,7 @@ class StoreLayout:
         |   |-- collection.json  README.md  AGENTS.md
         |   |-- items.parquet          # collection-mirror, every year
         |   |-- thumbnail.webp
-        |   |-- glacier-fractions.parquet
+        |   |-- .glacier-fractions.parquet  # build input, not published
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
         |       |-- .build-state.json  .items.parquet
@@ -210,8 +210,11 @@ class StoreLayout:
 
     @property
     def glacier_fractions(self) -> Path | UPath:
-        """Per-tile RGI7 glacier fractions, pinned to one inventory version."""
-        return self.tiles / "glacier-fractions.parquet"
+        """Per-tile glacier fractions, pinned to one inventory version.
+
+        A build input: the dot keeps it out of the upload.
+        """
+        return self.tiles / ".glacier-fractions.parquet"
 
     def tile_year(self, year: int) -> Path | UPath:
         """Directory of the sub-catalog organizing one year's tile items."""

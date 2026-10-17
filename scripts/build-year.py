@@ -44,11 +44,11 @@ import tempfile
 from typing import TYPE_CHECKING, Any
 
 from freezebase.s3 import list_object_sizes
-import pandas as pd
 
 from glace_catalog import mosaics, stac, tiler, webmap
 from glace_catalog.config import settings
 from glace_catalog.documents import render_year_prose
+from glace_catalog.grid import read_glacier_fractions
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.naming import ASSET_KEYS, published_name
@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
     from datetime import date
 
+    import pandas as pd
     import pystac
 
     from glace_catalog.scopes import Grid, Scope
@@ -353,33 +354,6 @@ def require_scratch_space(cache: Path, needed: int) -> None:
         raise SystemExit(msg)
 
 
-def load_glacier_fractions(layout: stac.StoreLayout) -> dict[str, tuple[float, float]]:
-    """Read the scope's precomputed glacier fractions.
-
-    Raises
-    ------
-    SystemExit
-        If the table is absent. Every tile item carries its glacier fraction.
-    """
-    path = layout.glacier_fractions
-    if not path.exists():
-        msg = (
-            f"{path} is absent. Run deep-glacier-mapping's "
-            "scripts/inventories/derive-glacier-fractions.py for this scope first; "
-            "the fractions are pinned per scope so they cannot drift between years."
-        )
-        raise SystemExit(msg)
-    with path.open("rb") as handle:
-        frame = pd.read_parquet(handle)
-    return {
-        str(row["mgrs_code"]): (
-            float(row["glacier_fraction"]),
-            float(row["glacier_fraction_buffered"]),
-        )
-        for row in frame.to_dict("records")
-    }
-
-
 def step_items(
     args: argparse.Namespace,
     scope: Scope,
@@ -396,7 +370,10 @@ def step_items(
     """
     raster_info = stac.manifest_raster_info(frame)
     percents = stac.manifest_valid_percents(frame)
-    fractions = load_glacier_fractions(layout)
+    try:
+        fractions = read_glacier_fractions(layout.glacier_fractions, scope)
+    except (FileNotFoundError, ValueError) as error:
+        raise SystemExit(str(error)) from error
 
     by_tile: dict[str, list[stac.CompositeFile]] = {}
     for file in files:

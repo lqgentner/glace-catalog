@@ -31,6 +31,7 @@ TESTS = [
     "test_thumbnails.py",
     "test_tiler.py",
     "test_webmap.py",
+    "test_grid.py",
     "test_finalize.py",
     "test_links.py",
     "test_publish.py",

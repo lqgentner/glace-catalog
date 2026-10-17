@@ -171,6 +171,12 @@ class Scope:
     utm_zones
         UTM zones the perimeter's MGRS tiles fall in, northern hemisphere, as
         the prose names them: ``("32N",)`` for Switzerland.
+    glacier_inventory
+        Glacier inventory the tiles' glacier fractions are computed from, as
+        the fraction table's ``rgi_version`` column names it.
+    glacier_buffer_m
+        Buffer around the inventory outlines for the buffered glacier
+        fraction, in metres.
     """
 
     key: str
@@ -179,6 +185,8 @@ class Scope:
     display_grid: Grid
     perimeter_tiles: int
     utm_zones: tuple[str, ...]
+    glacier_inventory: str
+    glacier_buffer_m: float
 
     @property
     def catalog_title(self) -> str:
@@ -228,6 +236,8 @@ SCOPES: Mapping[str, Scope] = {
         # inventory buffered by 250 m.
         perimeter_tiles=143,
         utm_zones=("32N",),
+        glacier_inventory="RGI7-C-11",
+        glacier_buffer_m=250.0,
     ),
     "alps": Scope(
         key="alps",
@@ -251,6 +261,8 @@ SCOPES: Mapping[str, Scope] = {
         perimeter_tiles=2210,
         # The perimeter spans about 5°E to 17°E.
         utm_zones=("31N", "32N", "33N"),
+        glacier_inventory="RGI7-C-11",
+        glacier_buffer_m=250.0,
     ),
 }
 """Every scope a store can be built over, keyed by :attr:`Scope.key`."""

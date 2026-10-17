@@ -17,25 +17,27 @@ geometry via `freezebase`. `deep-glacier-mapping` owns three live contracts and
 
 ---
 
-## D-1 — `glacier-fractions.parquet` stays yours
+## D-1 — `.glacier-fractions.parquet` stays yours
 
 `scripts/inventories/derive-glacier-fractions.py` produces it, using that
 repository's `datasets.py` and `geo.py`. This catalog consumes it as a
-**file**: it publishes it as an asset of the tiles collection and **fails
-loudly on a missing tile** rather than computing a fallback.
+**file**, a build input it does not publish: the build copies the fractions
+onto every tile item, finalization draws them into the tile grid, and both
+**fail loudly on a missing tile** rather than computing a fallback.
 
 Columns: `mgrs_code`, `glacier_fraction`, `glacier_fraction_buffered`,
 `rgi_version`, `buffer_m`. Pin the inventory version: the fraction is the same
 for every year, and recomputing it per run could give one tile different
-values in different years.
+values in different years. The build refuses a table whose `rgi_version` or
+`buffer_m` differs from the scope's (`RGI7-C-11`, 250 m).
 
 The perimeter is passed as a tile count, and the output belongs in the store
-the catalog publishes:
+the catalog builds, under a leading dot so that publishing skips it:
 
 ```bash
 pixi run python scripts/inventories/derive-glacier-fractions.py \
     --scope alps --perimeter-tiles 2210 \
-    --out s3://s1-bursts/data/glace-alps/tiles/glacier-fractions.parquet
+    --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet
 ```
 
 Run it from your checkout, and write the prefix in full: it is the catalog's

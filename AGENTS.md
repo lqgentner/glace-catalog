@@ -113,10 +113,13 @@ Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
 ( cd ../deep-glacier-mapping &&
   pixi run python scripts/inventories/derive-glacier-fractions.py \
       --scope alps --perimeter-tiles 2210 \
-      --out s3://s1-bursts/data/glace-alps/tiles/glacier-fractions.parquet )
+      --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
 Every year reuses this lookup, so a tile's glacier fraction stays constant.
+The build checks that the table names the scope's inventory and buffer
+(`src/glace_catalog/scopes.py`). The leading dot keeps the table out of the
+upload: the items and the tile grid carry its values.
 
 ### 2. Build each year
 
