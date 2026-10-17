@@ -92,6 +92,14 @@ def check_fraction_reader(checks: dict[str, bool], work: Path) -> None:
         )
         is not None
     )
+    untagged = work / "untagged.parquet"
+    pd.read_parquet(good).drop(columns=["rgi_version", "buffer_m"]).to_parquet(untagged)
+    message = _raises(ValueError, read_glacier_fractions, untagged, SCOPE)
+    checks["fractions: a table without inventory and buffer is refused"] = message is not None
+    checks["fractions: the refusal names the missing columns"] = "buffer_m, rgi_version" in (
+        message or ""
+    )
+
     checks["fractions: a missing table is refused"] = (
         _raises(FileNotFoundError, read_glacier_fractions, work / "absent.parquet", SCOPE)
         is not None
@@ -187,6 +195,10 @@ def check_grid_archive(checks: dict[str, bool], work: Path) -> None:
     checks["archive: written to the target"] = path.is_file()
     if not path.is_file():
         return
+    write_grid(grid_frame([_year(list(CELLS))]), target)
+    checks["archive: rewriting it leaves no temporary file"] = [
+        child.name for child in path.parent.iterdir()
+    ] == ["grid.pmtiles"]
 
     with path.open("rb") as handle:
         reader = Reader(MmapSource(handle))

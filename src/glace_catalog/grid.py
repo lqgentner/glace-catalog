@@ -14,19 +14,20 @@ them, and a web map draws it without reading the item index.
 from __future__ import annotations
 
 from pathlib import Path
+from secrets import token_hex
 import tempfile
 from typing import TYPE_CHECKING
 
+from freezebase.s3 import LOCAL_PROTOCOLS
 import geopandas as gpd
 import pandas as pd
 import pyarrow as pa
 import pyogrio
 import shapely
+from upath import UPath
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from upath import UPath
 
     from glace_catalog.scopes import Scope
 
@@ -44,6 +45,15 @@ GRID_MAX_ZOOM = 10
 
 POLYGON_TOLERANCE_DEG = 1e-9
 """Largest coordinate difference, in degrees, between one tile's polygons in two years."""
+
+FRACTION_COLUMNS = (
+    "mgrs_code",
+    "glacier_fraction",
+    "glacier_fraction_buffered",
+    "rgi_version",
+    "buffer_m",
+)
+"""Columns the fraction table must have."""
 
 _INDEX_COLUMNS = {
     "glace:mgrs_tile": "mgrs_tile",
@@ -67,8 +77,8 @@ def read_glacier_fractions(path: Path | UPath, scope: Scope) -> dict[str, tuple[
     FileNotFoundError
         If the table is absent. Every tile item carries its glacier fraction.
     ValueError
-        If the table was computed from another inventory or buffer than the
-        scope's.
+        If the table lacks one of :data:`FRACTION_COLUMNS`, or was computed
+        from another inventory or buffer than the scope's.
     """
     if not path.exists():
         msg = (
@@ -79,6 +89,14 @@ def read_glacier_fractions(path: Path | UPath, scope: Scope) -> dict[str, tuple[
         raise FileNotFoundError(msg)
     with path.open("rb") as handle:
         frame = pd.read_parquet(handle)
+    missing = sorted(set(FRACTION_COLUMNS) - set(frame.columns))
+    if missing:
+        msg = (
+            f"{path} has no column {', '.join(missing)}. Rerun deep-glacier-mapping's "
+            "scripts/inventories/derive-glacier-fractions.py, which records the "
+            "inventory and buffer the fractions were computed with."
+        )
+        raise ValueError(msg)
     inventories = sorted(set(frame["rgi_version"].astype(str)))
     buffers = sorted(set(frame["buffer_m"].astype(float)))
     if inventories != [scope.glacier_inventory] or buffers != [scope.glacier_buffer_m]:
@@ -169,6 +187,10 @@ def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
     GDAL writes PMTiles to a local file only, so the archive is written to a
     temporary directory and then copied, also to object storage. It keeps
     every feature at every zoom: no simplification, no feature or size limit.
+
+    On object storage one put replaces the archive at once. On a local disk
+    the copy goes to a sibling temporary file that is renamed over the
+    target, so a reader never sees a partial archive.
     """
     with tempfile.TemporaryDirectory() as tmp:
         local = Path(tmp) / GRID_ARCHIVE
@@ -187,4 +209,20 @@ def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
                 "MAX_SIZE": 100_000_000,
             },
         )
-        target.write_bytes(local.read_bytes())
+        _replace_bytes(target, local.read_bytes())
+
+
+def _replace_bytes(target: Path | UPath, payload: bytes) -> None:
+    """Write ``payload`` to ``target`` in one step, as :func:`write_grid` describes."""
+    if UPath(target).protocol not in LOCAL_PROTOCOLS:
+        target.write_bytes(payload)
+        return
+    local = Path(UPath(target).path)
+    # The leading dot keeps a file left by a killed run out of the upload.
+    partial = local.with_name(f".{local.name}.{token_hex(8)}.partial")
+    try:
+        partial.write_bytes(payload)
+        partial.replace(local)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
