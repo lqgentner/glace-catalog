@@ -127,6 +127,8 @@ class StoreLayout:
         |   |-- collection.json  README.md  AGENTS.md
         |   |-- items.parquet          # collection-mirror, every year
         |   |-- thumbnail.webp
+        |   |-- grid.pmtiles           # tile grid with glacier fractions
+        |   |-- styles/grid.json
         |   |-- .glacier-fractions.parquet  # build input, not published
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
@@ -207,6 +209,11 @@ class StoreLayout:
     def tiles_thumbnail(self) -> Path | UPath:
         """Thumbnail of the tiles collection, which Portolan requires."""
         return self.tiles / THUMBNAIL_NAME
+
+    @property
+    def tiles_grid(self) -> Path | UPath:
+        """Vector PMTiles of the tile grid, with each tile's glacier fractions."""
+        return self.tiles / "grid.pmtiles"
 
     @property
     def glacier_fractions(self) -> Path | UPath:
