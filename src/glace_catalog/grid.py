@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
     from glace_catalog.scopes import Scope
 
+GRID_ARCHIVE = "grid.pmtiles"
+"""File name of the grid archive in the tiles collection."""
+
 GRID_LAYER = "mgrs"
 """Vector layer of the grid archive."""
 
@@ -142,7 +145,7 @@ def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
     every feature at every zoom: no simplification, no feature or size limit.
     """
     with tempfile.TemporaryDirectory() as tmp:
-        local = Path(tmp) / "grid.pmtiles"
+        local = Path(tmp) / GRID_ARCHIVE
         pyogrio.write_dataframe(
             frame,
             local,

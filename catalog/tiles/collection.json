@@ -8,6 +8,7 @@
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
     "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-tiles",
@@ -479,17 +480,17 @@
         }
       }
     },
-    "glacier-fractions": {
-      "href": "https://data.source.coop/giuz/glace-alps/tiles/glacier-fractions.parquet",
-      "type": "application/vnd.apache.parquet",
-      "title": "Per-tile glacier cover fractions (RGI7)",
-      "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, computed once per scope: the lookup behind the glace:glacier_fraction properties on every item.",
+    "grid": {
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Tile grid with glacier fractions",
+      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs, with the properties mgrs_tile, glacier_fraction and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
       "roles": [
-        "metadata"
+        "visual"
       ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/glacier-fractions.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
           "alternate:name": "S3"
         }
       }
@@ -500,6 +501,16 @@
       "title": "GLACE tiles preview",
       "roles": [
         "thumbnail"
+      ]
+    },
+    "style-grid": {
+      "href": "./styles/grid.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "GLACE tile grid style",
+      "description": "Draws the tile grid, each tile filled by its buffered glacier fraction.",
+      "roles": [
+        "style",
+        "default"
       ]
     }
   },
@@ -545,6 +556,15 @@
       "href": "https://doi.org/10.48656/d4r9-fj97",
       "type": "text/html",
       "title": "Canonical DOI, every version"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Tile grid with glacier fractions",
+      "pmtiles:layers": [
+        "mgrs"
+      ]
     }
   ]
 }

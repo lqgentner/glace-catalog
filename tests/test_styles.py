@@ -10,7 +10,13 @@ them, so this gate holds it to what a client is entitled to assume:
 - each layer is a ``color-relief`` whose ramp is the default colormap over the
   default stretch, and that colormap resolves;
 - every default stretch is ordered and lies inside its transport range, since
-  a client cannot draw a value the archive cannot carry.
+  a client cannot draw a value the archive cannot carry;
+- the tile grid's style draws the grid archive's one vector layer, filled by
+  the buffered glacier fraction;
+- the tiles collection registers the grid archive as Portolan requires of a
+  collection with PMTiles: a ``visual`` asset, a ``rel: "pmtiles"`` link that
+  names its layer, the web-map-links extension and a style; the mosaics
+  collection carries no such link (M-36).
 
 Reads no data and needs no network.
 
@@ -27,7 +33,10 @@ from glace_catalog.metadata import load_vocabulary
 from glace_catalog.stac.naming import ASSET_KEYS
 from glace_catalog.styles import ramp_colors
 
-STYLE_PATH = Path(__file__).resolve().parent.parent / "catalog/mosaics/styles/default.json"
+CATALOG = Path(__file__).resolve().parent.parent / "catalog"
+STYLE_PATH = CATALOG / "mosaics/styles/default.json"
+GRID_STYLE_PATH = CATALOG / "tiles/styles/grid.json"
+WEB_MAP_LINKS = "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
 
 VOCABULARY = load_vocabulary()
 problems: list[str] = []
@@ -72,10 +81,59 @@ for key in sorted(expected & set(layers)):
             f"the transport range {encoding.lo}-{encoding.hi}",
         )
 
+if not GRID_STYLE_PATH.is_file():
+    problems.append(f"{GRID_STYLE_PATH.relative_to(CATALOG)} is missing")
+else:
+    grid_style = json.loads(GRID_STYLE_PATH.read_text())
+    grid_sources = grid_style.get("sources", {})
+    if grid_style.get("version") != 8:
+        problems.append("grid style: not MapLibre style version 8")
+    if [source.get("type") for source in grid_sources.values()] != ["vector"]:
+        problems.append("grid style: needs exactly one vector source")
+    if [source.get("url") for source in grid_sources.values()] != ["pmtiles://../grid.pmtiles"]:
+        problems.append("grid style: the source does not point at ../grid.pmtiles")
+    grid_layers = grid_style.get("layers", [])
+    if not grid_layers or any(layer.get("source-layer") != "mgrs" for layer in grid_layers):
+        problems.append("grid style: every layer must draw source-layer mgrs")
+    fills = [layer for layer in grid_layers if layer.get("type") == "fill"]
+    if not fills or "glacier_fraction_buffered" not in json.dumps(
+        fills[0].get("paint", {}).get("fill-color"),
+    ):
+        problems.append("grid style: the fill colour does not read glacier_fraction_buffered")
+
+tiles = json.loads((CATALOG / "tiles/collection.json").read_text())
+grid = tiles["assets"].get("grid", {})
+if "glacier-fractions" in tiles["assets"]:
+    problems.append("tiles collection: still registers glacier-fractions")
+if grid.get("roles") != ["visual"] or grid.get("type") != "application/vnd.pmtiles":
+    problems.append("tiles collection: grid must be an application/vnd.pmtiles visual asset")
+if not str(grid.get("href", "")).endswith("/tiles/grid.pmtiles"):
+    problems.append("tiles collection: grid href does not name tiles/grid.pmtiles")
+pmtiles_links = [link for link in tiles["links"] if link.get("rel") == "pmtiles"]
+if [
+    (link.get("href"), link.get("type"), link.get("pmtiles:layers")) for link in pmtiles_links
+] != [(grid.get("href"), "application/vnd.pmtiles", ["mgrs"])]:
+    problems.append("tiles collection: needs one pmtiles link to the grid, layers [mgrs]")
+if WEB_MAP_LINKS not in tiles["stac_extensions"]:
+    problems.append("tiles collection: web-map-links extension not declared")
+style_asset = tiles["assets"].get("style-grid", {})
+if (style_asset.get("href"), style_asset.get("roles"), style_asset.get("type")) != (
+    "./styles/grid.json",
+    ["style", "default"],
+    "application/vnd.mapbox.style+json",
+):
+    problems.append("tiles collection: style-grid must be the default style at ./styles/grid.json")
+mosaics = json.loads((CATALOG / "mosaics/collection.json").read_text())
+if any(link.get("rel") == "pmtiles" for link in mosaics["links"]):
+    problems.append("mosaics collection: carries a pmtiles link (M-36)")
+
 if problems:
     for problem in problems:
         print(f"error  {problem}")
     print(f"FAILED: {len(problems)} problem(s)")
     raise SystemExit(1)
 
-print(f"OK: {len(layers)} encoded layer(s), each decoded and coloured as the vocabulary says")
+print(
+    f"OK: {len(layers)} encoded layer(s), each decoded and coloured as the vocabulary says; "
+    "the tile grid is registered and styled",
+)

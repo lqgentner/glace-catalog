@@ -94,6 +94,13 @@ column gives each tile's zone.
 
 Open the resulting `.vrt` file as a raster layer in QGIS.
 
+## Tile grid
+
+`grid.pmtiles` holds every tile of any year as a polygon in the vector layer
+`mgrs`, with its MGRS code and glacier fractions: the share of the tile within
+RGI7-C-11 glacier outlines, plain and buffered by 250 m.
+`styles/grid.json` draws it, each tile filled by its buffered fraction.
+
 ## Units
 
 - Coherence (`coh12_vv`, `coh12_vh`) is dimensionless and linear.

@@ -19,6 +19,16 @@ WHERE datetime BETWEEN '{{ last_year }}-01-01' AND '{{ last_year }}-12-31'
 ORDER BY frac DESC;
 ```
 
+## Tile grid
+
+`tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a
+vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
+polygon has `mgrs_tile`, `glacier_fraction` and `glacier_fraction_buffered`,
+the share of the tile within {{ catalog.scope.glacier_inventory }} outlines,
+plain and buffered by {{ catalog.scope.glacier_buffer_m | int }} m. The grid is the same every year.
+Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
+`items.parquet` to query them.
+
 ## Assets and units
 
 Asset keys are filenames without `.tif`. QA layers use the measurement's key

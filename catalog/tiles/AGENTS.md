@@ -19,6 +19,16 @@ WHERE datetime BETWEEN '2026-01-01' AND '2026-12-31'
 ORDER BY frac DESC;
 ```
 
+## Tile grid
+
+`tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a
+vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
+polygon has `mgrs_tile`, `glacier_fraction` and `glacier_fraction_buffered`,
+the share of the tile within RGI7-C-11 outlines,
+plain and buffered by 250 m. The grid is the same every year.
+Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
+`items.parquet` to query them.
+
 ## Assets and units
 
 Asset keys are filenames without `.tif`. QA layers use the measurement's key

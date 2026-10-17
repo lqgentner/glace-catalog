@@ -27,6 +27,7 @@ import jinja2
 from pyproj import Transformer
 import yaml
 
+from glace_catalog.grid import GRID_ARCHIVE, GRID_LAYER, GRID_MAX_ZOOM, GRID_MIN_ZOOM
 from glace_catalog.metadata import (
     METADATA_DIR,
     PMTILES_MEDIA_TYPE,
@@ -59,6 +60,7 @@ ALTERNATE_ASSETS_EXTENSION_URI = (
 )
 VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 SCIENTIFIC_EXTENSION_URI = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
 DOI_RESOLVER = "https://doi.org/"
 
 PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
@@ -66,6 +68,9 @@ PORTOLAN_BROWSER = "https://browser.portolan-sdi.org/#/external/"
 
 STYLE_MEDIA_TYPE = "application/vnd.mapbox.style+json"
 STYLE_TEMPLATE_NAME = "default"
+GRID_STYLE_NAME = "grid"
+GRID_CMAP = "cmc.devon_r"
+"""Colour map the grid style fills the buffered glacier fraction with."""
 
 STYLE_LAYER_ORDER: tuple[str, ...] = (
     "coh12_vv",
@@ -227,8 +232,9 @@ def _collection_assets(
     collection: str,
     bases: PublicBases,
 ) -> Document:
-    """Build the assets a collection declares over itself: mirror, thumbnail, style."""
+    """Build the assets a collection declares over itself: mirror, grid, thumbnail, style."""
     short = vocabulary.collection_short_title(collection)
+    scope = vocabulary.catalog.scope
     assets: Document = {
         "items": {
             "href": bases.href(f"{collection}/items.parquet"),
@@ -243,17 +249,19 @@ def _collection_assets(
         },
     }
     if collection == TILES_DIR:
-        assets["glacier-fractions"] = {
-            "href": bases.href(f"{collection}/glacier-fractions.parquet"),
-            "type": "application/vnd.apache.parquet",
-            "title": "Per-tile glacier cover fractions (RGI7)",
+        assets["grid"] = {
+            "href": bases.href(f"{collection}/{GRID_ARCHIVE}"),
+            "type": PMTILES_MEDIA_TYPE,
+            "title": "Tile grid with glacier fractions",
             "description": (
-                "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and "
-                "buffered by 250 m, computed once per scope: the lookup behind the "
-                "glace:glacier_fraction properties on every item."
+                f"Every MGRS tile of any year as a polygon in the vector layer {GRID_LAYER}, "
+                "with the properties mgrs_tile, glacier_fraction and "
+                "glacier_fraction_buffered: the share of the tile covered by "
+                f"{scope.glacier_inventory} outlines, plain and buffered by "
+                f"{scope.glacier_buffer_m:g} m."
             ),
-            "roles": ["metadata"],
-            "alternate": bases.alternate(f"{collection}/glacier-fractions.parquet"),
+            "roles": ["visual"],
+            "alternate": bases.alternate(f"{collection}/{GRID_ARCHIVE}"),
         }
     assets["thumbnail"] = {
         "href": bases.href(f"{collection}/thumbnail.webp"),
@@ -261,6 +269,16 @@ def _collection_assets(
         "title": f"{short} preview",
         "roles": ["thumbnail"],
     }
+    if collection == TILES_DIR:
+        assets[f"style-{GRID_STYLE_NAME}"] = {
+            "href": f"./styles/{GRID_STYLE_NAME}.json",
+            "type": STYLE_MEDIA_TYPE,
+            "title": "GLACE tile grid style",
+            "description": (
+                "Draws the tile grid, each tile filled by its buffered glacier fraction."
+            ),
+            "roles": ["style", "default"],
+        }
     if collection == MOSAICS_DIR:
         assets[f"style-{STYLE_TEMPLATE_NAME}"] = {
             "href": f"./styles/{STYLE_TEMPLATE_NAME}.json",
@@ -293,6 +311,20 @@ def collection_document(
         ALTERNATE_ASSETS_EXTENSION_URI,
         VERSION_EXTENSION_URI,
     ]
+    web_map_links: list[Document] = []
+    if collection == TILES_DIR:
+        # Portolan registers a collection's PMTiles through a link
+        # (PORTO-FMT-011); the tile grid is the tiles collection's one archive.
+        extensions.append(WEB_MAP_LINKS_EXTENSION_URI)
+        web_map_links.append(
+            {
+                "rel": "pmtiles",
+                "href": bases.href(f"{TILES_DIR}/{GRID_ARCHIVE}"),
+                "type": PMTILES_MEDIA_TYPE,
+                "title": "Tile grid with glacier fractions",
+                "pmtiles:layers": [GRID_LAYER],
+            },
+        )
     scientific: Document = {}
     if doi := version_doi(vocabulary):
         extensions.append(SCIENTIFIC_EXTENSION_URI)
@@ -344,6 +376,61 @@ def collection_document(
                 "text/html",
             ),
             *_doi_links(vocabulary),
+            *web_map_links,
+        ],
+    }
+
+
+def grid_style_document() -> Document:
+    """Build the MapLibre style of the tile grid.
+
+    One vector source, the grid archive, drawn twice: a fill coloured by each
+    tile's buffered glacier fraction over 0–1, and an outline.
+    """
+    colors = ramp_colors(GRID_CMAP, 9)
+    stops: list[Any] = []
+    for index, color in enumerate(colors):
+        stops += [round(index / (len(colors) - 1), 3), color]
+    return {
+        "version": 8,
+        "name": f"GLACE{TITLE_SEPARATOR}tile grid",
+        "metadata": {
+            "description": (
+                "The MGRS tiles of the tiles collection, each filled by its glacier "
+                "fraction within the buffered outlines. Rendered by glace_catalog.documents."
+            ),
+        },
+        "sources": {
+            "grid": {
+                "type": "vector",
+                "url": f"pmtiles://../{GRID_ARCHIVE}",
+                "minzoom": GRID_MIN_ZOOM,
+                "maxzoom": GRID_MAX_ZOOM,
+            },
+        },
+        "layers": [
+            {
+                "id": "glace-grid-fill",
+                "type": "fill",
+                "source": "grid",
+                "source-layer": GRID_LAYER,
+                "paint": {
+                    "fill-color": [
+                        "interpolate",
+                        ["linear"],
+                        ["get", "glacier_fraction_buffered"],
+                        *stops,
+                    ],
+                    "fill-opacity": 0.6,
+                },
+            },
+            {
+                "id": "glace-grid-outline",
+                "type": "line",
+                "source": "grid",
+                "source-layer": GRID_LAYER,
+                "paint": {"line-color": "#555555", "line-width": 0.5},
+            },
         ],
     }
 
@@ -534,6 +621,7 @@ def render_tree(
         f"{MOSAICS_DIR}/collection.json": _json(
             collection_document(vocabulary, MOSAICS_DIR, bases),
         ),
+        f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": _json(grid_style_document()),
         f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
             style_document(vocabulary, vocabulary.catalog.last_year),
         ),

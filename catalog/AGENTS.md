@@ -55,8 +55,10 @@ Tiles and mosaics represent the same source composites on different grids.
 Pair them by year; reproject before comparing pixels. Mosaics use a fixed
 equal-area grid across years.
 
-`glace:glacier_fraction` uses one RGI7 version and is computed once per scope.
-The lookup table is the tiles collection's `glacier-fractions` asset.
+`glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once
+per scope from RGI7-C-11 outlines, plain and buffered by
+250 m, so a tile has the same values every year. The tiles
+collection's `grid` asset, `tiles/grid.pmtiles`, carries them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
 the year styles. The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) draws the PMTiles with these styles.

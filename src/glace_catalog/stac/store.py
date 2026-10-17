@@ -26,6 +26,7 @@ from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
+from glace_catalog.grid import GRID_ARCHIVE
 from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
@@ -213,7 +214,7 @@ class StoreLayout:
     @property
     def tiles_grid(self) -> Path | UPath:
         """Vector PMTiles of the tile grid, with each tile's glacier fractions."""
-        return self.tiles / "grid.pmtiles"
+        return self.tiles / GRID_ARCHIVE
 
     @property
     def glacier_fractions(self) -> Path | UPath:

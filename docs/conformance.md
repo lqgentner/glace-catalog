@@ -68,7 +68,8 @@ links they would form a list that long on the collection page.
 
 rashid does not report the omission: `PTL-VIZ-003` checks only a collection
 that carries a PMTiles asset or link, and the mosaics collection carries
-neither. So the `ACCEPTED` list in `tests/test_conformance.py` does not include
+neither. The tiles collection conforms: its one archive, the tile grid, is a
+`visual` asset with a `rel: "pmtiles"` link and a style (M-38). So the `ACCEPTED` list in `tests/test_conformance.py` does not include
 it; it is recorded here so that a clean run is not read as conformance.
 
 The archives are still fully described. Each year's item lists its archives as
@@ -106,7 +107,7 @@ if browsing the published tree proves painful.
 ### `PTL-AST-003` — `file:size` and `file:checksum` on collection assets
 
 *"every asset should carry file:size and file:checksum."* The collection-level
-assets (`items`, `glacier-fractions`, `thumbnail`, the styles) point at files
+assets (`items`, `grid`, `thumbnail`, the styles) point at files
 generated during the build, so their bytes do not exist when the tracked
 document is rendered. `finalize-catalog.py` fills both fields from the real
 bytes on the **store copy** of each collection, which is what is published.
