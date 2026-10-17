@@ -42,23 +42,6 @@ Worth doing, blocking nothing:
 - **P-15 — Track [portolan-spec#41](https://github.com/portolan-sdi/portolan-spec/issues/41)
   (raster styling).** This catalog is the first Portolan raster PMTiles case;
   the style files and the `renders` blocks may need changing when it settles.
-- **P-23 — Align the READMEs and agent guides with the paper's Usage Notes**
-  (`../glace-paper/main.tex`, "Usage Notes"). The guides already cover linear
-  backscatter and its decibel conversion, NaN nodata, the lossy PMTiles and
-  the 2015 gaps. They lack three of its notes:
-  - CQM: separability drops where it is below 0.5. Mask or weight those
-    pixels, or use the CQM as a model input.
-  - Interpreting coherence:
-    - lakes reach about 0.09 with the 35 × 7 window, so values are not
-      comparable with products that use larger windows, and thresholds should
-      come from GLACE itself;
-    - persistent snow, unstable slopes and lakes look glacier-like.
-  - Validated scope: glacier mapping in Switzerland, within 250 m of the
-    outlines.
-
-  Use the paper's numbers and wording so the two stay consistent, and put the
-  notes in a section on quirks that give silently wrong answers, as FIRMS
-  does in `detections/AGENTS.md`.
 - **P-27 — Year styles as item assets.** FIRMS keeps each year's styles beside
   its archives (`pmtiles://./…`), so the collection holds only the default
   style. Check first that the Portolan browser reads a style from an item.

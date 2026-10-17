@@ -24,7 +24,7 @@ coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
 the Alpine Convention perimeter, 2015–2026. The data is available as
 Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 
-> **Coverage.** In 2015, coherence is missing on 91 MGRS squares in the south-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them lack backscatter as well: 32TNT14 has no 2015 item, and the 2015 backscatter of 32TNT24 holds no valid pixels. Every other year covers all squares.
+> **Coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them lack backscatter as well: 32TNT14 has no 2015 item, and the 2015 backscatter of 32TNT24 holds no valid pixels. Every other year covers all squares.
 
 ## Collections
 
@@ -97,6 +97,16 @@ are in decibels and coherence is linear.
 
 Every analysis raster carries its description and processing record in its
 GeoTIFF tags.
+
+## Usage notes
+
+**Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favourable viewing geometries contributed. In the validation, glacier and non-glacier pixels with a CQM below 0.5 (linear, about −3 dB) separate worse (AUC 0.87) than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
+
+**Coherence bias.** Coherence is estimated over a 35 × 7 (range × azimuth) window. The finite window biases the estimate upwards, so fully decorrelated surfaces do not reach 0: over large lakes, the median is about 0.09. Absolute values therefore differ from products that use larger windows, such as the global seasonal Sentinel-1 coherence of [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6). Do not compare values across products, and choose thresholds on GLACE itself.
+
+**Low coherence outside glaciers.** Other surfaces also decorrelate over 12 days and can have similarly low coherence, such as snow patches, lakes and unstable slopes.
+
+**Validated scope.** The validation covers glacier mapping in Switzerland only. Its scores do not describe glacier mapping performance in other parts of the Alps, or farther than 250 m from the glacier outlines. Other applications may also benefit from the composites, but were not validated.
 
 ## Composite processing
 
