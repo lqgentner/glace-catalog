@@ -33,8 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RETIRED_PREFIXES = ("lqgentner/glace-ch",)
 """Prefixes the catalog was published under before; no URL may name them."""
 
-URL_PATTERN = re.compile(r"(?:https?|s3)://[^\s\"'<>()\[\]`|\\]+")
-"""A URL in prose, Markdown, YAML, JSON or code."""
+URL_PATTERN = re.compile(r"(?:https?|s3)://[^\s\"'<>()\[\]{}`|\\]+")
+"""A URL in prose, Markdown, YAML, JSON or code; a brace ends it, before a placeholder."""
 
 TRAILING = ".,;:…*"
 """Punctuation that ends a sentence rather than the URL."""
