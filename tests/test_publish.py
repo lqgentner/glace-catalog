@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Gate on what publication would upload, before it uploads anything.
+"""Checks what publication would upload, before it uploads anything.
 
-``tools/sync_data.py`` is the only thing between the private store and a public
-bucket, and its two decisions -- which objects move, and what they are served as
--- are both made from listings rather than from bytes. That makes them checkable
-without a network, and this is where they are checked: the change detection over
-a synthetic pair of listings, the content types, the target the publication
-file names, the refusal of a local store root, and the dry run, which is the
-last thing a person reads before typing ``--confirm``.
+``tools/publish.py`` copies the private store to the public bucket. It
+decides which objects to upload, and with which content type, from object
+listings alone, so both decisions can be checked offline. This gate checks the
+change detection over a synthetic pair of listings, the content types, the
+target named in the publication file, publication from a local store root, and
+the dry-run summary a person reads before passing ``--confirm``.
 
-Both sides of a transfer are in-memory filesystems, because the tool only ever
-asks a root for a listing, a reader and a writer. Nothing here opens a socket.
+Both sides of a transfer are in-memory filesystems, since the tool only asks a
+root for a listing, a reader and a writer. Needs no network.
 
-Run: uv run tests/test_sync_data.py
+Run: uv run tests/test_publish.py
 """
 
 from __future__ import annotations
@@ -32,28 +31,28 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-# glace_catalog.config resolves its locations at import, so importing the tool
-# needs the variable set. A local value keeps every path in this gate off
-# object storage; nothing here reads or writes the location.
+# glace_catalog.config resolves its locations on import, so the variable must be
+# set before the tool is imported. A local placeholder path keeps the gate on
+# local disk.
 os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
 
 from botocore.exceptions import ProfileNotFound  # noqa: E402
 from fsspec.implementations.memory import MemoryFileSystem  # noqa: E402
-import sync_data  # noqa: E402
+import publish  # noqa: E402
 from upath import UPath  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-Entry = sync_data.Entry
+Entry = publish.Entry
 
 BUILT = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 """When the store was written, in the synthetic listings."""
 PUBLISHED_AT = BUILT + timedelta(hours=6)
-"""When it was last synced: after the build, the way publication always is."""
+"""When it was last published: after the build, the way publication always is."""
 
 # One year of one collection, cut down: a document, a raster, an archive, the
-# item mirror, and the two dotfiles that are build state rather than content.
+# item index, and two dotfiles that hold build state.
 SOURCE: dict[str, int] = {
     "catalog.json": 1_024,
     "tiles/collection.json": 2_048,
@@ -62,11 +61,11 @@ SOURCE: dict[str, int] = {
     "tiles/2024/.items.parquet": 4_096,
     "tiles/2024/32TMS24/item.json": 3_072,
     "tiles/2024/32TMS24/coh12_vv.tif": 1_048_576,
-    "mosaics/2024/coh12_rgb_viz.pmtiles": 2_097_152,
+    "mosaics/2024/rtc_vh_viz.pmtiles": 2_097_152,
 }
 
-# What the target already holds: the root catalog unchanged, the collection
-# document rewritten at a different size, and nothing else.
+# What the target already holds: the root catalog unchanged, and the collection
+# document at a different size.
 PUBLISHED: dict[str, int] = {
     "catalog.json": 1_024,
     "tiles/collection.json": 1_500,
@@ -76,8 +75,8 @@ PUBLISHED: dict[str, int] = {
 def memory_root(listing: Mapping[str, int], written: datetime = BUILT) -> UPath:
     """Make a fresh in-memory root holding one object of the listed size per path.
 
-    Every object is stamped ``written``, so a test says which side is newer
-    instead of depending on the order it built the roots in.
+    Every object is stamped ``written``, so each test sets explicitly which
+    side is newer.
     """
     root = UPath(f"memory://{uuid4().hex}")
     for relative, size in listing.items():
@@ -109,8 +108,8 @@ class TwoRoots:
 
     def __init__(self, source_root: UPath, target_root: UPath) -> None:
         self.patches = (
-            patch.object(sync_data, "read_target", self._returning(target_root)),
-            patch.object(sync_data, "bucket_root", self._returning(source_root)),
+            patch.object(publish, "read_target", self._returning(target_root)),
+            patch.object(publish, "store_root", self._returning(source_root)),
         )
 
     @staticmethod
@@ -135,12 +134,12 @@ class TwoRoots:
 def check_change_detection() -> dict[str, bool]:
     """Classification of a listing against what is already published."""
     source, published = entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT)
-    plan = sync_data.plan_sync(source, published)
-    forced = sync_data.plan_sync(source, published, force=True)
+    plan = publish.plan_upload(source, published)
+    forced = publish.plan_upload(source, published, force=True)
     return {
         "an object the target lacks is new": plan.new
         == (
-            "mosaics/2024/coh12_rgb_viz.pmtiles",
+            "mosaics/2024/rtc_vh_viz.pmtiles",
             "tiles/2024/32TMS24/coh12_vv.tif",
             "tiles/2024/32TMS24/item.json",
             "tiles/items.parquet",
@@ -175,10 +174,10 @@ REBUILT = PUBLISHED_AT + timedelta(hours=1)
 def check_same_size_detection() -> dict[str, bool]:
     """Check what decides a same-size object: two MD5s, else which side is newer.
 
-    A single-part ETag is the MD5, so two of them settle it from the listings
-    whatever the timestamps say. Anything else falls to the rule ``aws s3
-    sync`` uses: the build writes the store before publication copies it, so a
-    source object newer than its published copy was rewritten since.
+    A single-part ETag is the object's MD5, so two of them decide from the
+    listings alone, whatever the timestamps say. Otherwise the ``aws s3 sync``
+    rule applies: the build writes the store before publication copies it, so a
+    source object newer than its published copy has been rewritten.
     """
     source = {
         "etag/equal.json": Entry(SIZE, MD5_A, REBUILT),
@@ -202,7 +201,7 @@ def check_same_size_detection() -> dict[str, bool]:
         "time/unknown-target.tif": Entry(SIZE, None, None),
         "time/quoted-etags.json": Entry(SIZE, f'"{MD5_A.upper()}"', PUBLISHED_AT),
     }
-    plan = sync_data.plan_sync(source, target)
+    plan = publish.plan_upload(source, target)
     return {
         "two equal MD5s are unchanged even when the source is newer": {
             "etag/equal.json",
@@ -241,8 +240,8 @@ def check_content_types() -> dict[str, bool]:
         "tiles/2024/32TMS24/coh12_vv.tif": (
             "image/tiff; application=geotiff; profile=cloud-optimized"
         ),
-        "mosaics/2024/coh12_rgb_viz.pmtiles": "application/vnd.pmtiles",
-        "mosaics/thumbnail.png": "image/png",
+        "mosaics/2024/rtc_vh_viz.pmtiles": "application/vnd.pmtiles",
+        "mosaics/thumbnail.webp": "image/webp",
         "_assets/glace-wordmark.svg": "image/svg+xml",
         "tiles/2024/config.yaml": "application/yaml",
         "tiles/2024/32TMS24/COH12_VV.TIF": (
@@ -252,9 +251,9 @@ def check_content_types() -> dict[str, bool]:
         "LICENSE": "application/octet-stream",
     }
     wrong = {
-        name: sync_data.content_type_for(name)
+        name: publish.content_type_for(name)
         for name, expected in cases.items()
-        if sync_data.content_type_for(name) != expected
+        if publish.content_type_for(name) != expected
     }
     for name, got in wrong.items():
         print(f"error  {name} is served as {got}")
@@ -264,15 +263,15 @@ def check_content_types() -> dict[str, bool]:
 def check_target_config() -> dict[str, bool]:
     """Check the target the repository's own publication file opens.
 
-    Building the path opens no connection, so this can read the real file: the
-    profile only has to exist once a request is signed.
+    Building the path is offline, so this reads the real file; the profile is
+    needed only once a request is signed.
     """
-    target = sync_data.read_target()
+    target = publish.read_target()
     options = target.storage_options
     checks = {
         "the target is an S3 path": target.protocol == "s3",
         "catalog.publish.yaml names the account bucket and the product prefix": str(target)
-        == "s3://lqgentner/glace-ch",
+        == "s3://giuz/glace-alps",
         "the profile is the one catalog.publish.yaml names": options.get("profile")
         == "source-coop",
         "no endpoint is passed; the profile's config section carries it": options.get(
@@ -285,22 +284,22 @@ def check_target_config() -> dict[str, bool]:
 
     with tempfile.TemporaryDirectory() as directory:
         config = Path(directory) / "catalog.publish.yaml"
-        config.write_text("write_prefix: s3://lqgentner/glace-ch/\nprofile: source-coop\n")
+        config.write_text("write_prefix: s3://giuz/glace-alps/\nprofile: source-coop\n")
         checks["a trailing slash is not part of the prefix"] = (
-            str(sync_data.read_target(config)) == "s3://lqgentner/glace-ch"
+            str(publish.read_target(config)) == "s3://giuz/glace-alps"
         )
         refused = {
             "a configuration without write_prefix": "public_base: https://x.invalid/\n",
-            "a configuration without profile": "write_prefix: s3://lqgentner/glace-ch\n",
+            "a configuration without profile": "write_prefix: s3://giuz/glace-alps\n",
             "an https write_prefix": (
-                "write_prefix: https://data.source.coop/lqgentner\nprofile: source-coop\n"
+                "write_prefix: https://data.source.coop/giuz\nprofile: source-coop\n"
             ),
             "a write_prefix naming no bucket": "write_prefix: s3://\nprofile: source-coop\n",
         }
         for name, text in refused.items():
             config.write_text(text)
             try:
-                sync_data.read_target(config)
+                publish.read_target(config)
             except ValueError:
                 checks[f"{name} is refused"] = True
             else:
@@ -309,18 +308,39 @@ def check_target_config() -> dict[str, bool]:
 
 
 def check_local_root() -> dict[str, bool]:
-    """Check that a local store root is refused: there is no staging mode."""
+    """Check that a store built on local disk publishes like one on the bucket.
+
+    The store root comes from the real configuration here, so this tests how a
+    plain local path is resolved.
+    """
     checks: dict[str, bool] = {}
-    try:
-        sync_data.bucket_root(Path("/mnt/glace/glace-ch"))
-    except ValueError as error:
-        checks["a local store root is refused"] = True
-        checks["the refusal names the variable"] = "GLACE_STORE_ROOT" in str(error)
-    else:
-        checks["a local store root is refused"] = False
-        checks["the refusal names the variable"] = False
-    root = sync_data.bucket_root(UPath("s3://s1-bursts/data/glace-ch"))
-    checks["a bucket root is accepted"] = str(root) == "s3://s1-bursts/data/glace-ch"
+    target_root = memory_root({})
+    payload = {"catalog.json": b"{}", "tiles/2023/31TFJ68/coh12_vv.tif": b"x" * 4096}
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, data in payload.items():
+            path = Path(tmp) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        (Path(tmp) / "tiles/2023/.build-state.json").write_text("{}")
+        locations = publish.settings.locations
+        original = locations.store_root
+        locations.store_root = tmp
+        try:
+            with (
+                patch.object(publish, "read_target", lambda: target_root),
+                redirect_stdout(StringIO()),
+            ):
+                code = publish.main(["--confirm"])
+        finally:
+            locations.store_root = original
+    checks["a local store root publishes"] = code == 0
+    checks["every object arrives with its bytes"] = all(
+        (target_root / name).exists() and (target_root / name).read_bytes() == data
+        for name, data in payload.items()
+    )
+    checks["build state stays behind"] = not (
+        target_root / "tiles/2023/.build-state.json"
+    ).exists()
     return checks
 
 
@@ -353,18 +373,18 @@ def check_listing_and_transfer() -> dict[str, bool]:
     """Check both listings and one transfer per object with its content type."""
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED, PUBLISHED_AT)
-    source = sync_data.list_subtree(source_root, "")
-    published = sync_data.list_subtree(target_root, "")
-    plan = sync_data.plan_sync(source, published)
+    source = publish.list_subtree(source_root, "")
+    published = publish.list_subtree(target_root, "")
+    plan = publish.plan_upload(source, published)
     # Listed before the transfer adds the year's objects under tiles/.
-    subtree = sync_data.list_subtree(target_root, "tiles")
+    subtree = publish.list_subtree(target_root, "tiles")
 
     with RecordingWrites() as writes:
-        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
+        failed = publish.transfer(source_root, target_root, plan.upload, workers=2)
     written = {
         path.removeprefix(f"{target_root.path}/"): kwargs for path, kwargs in writes.opened.items()
     }
-    after = sync_data.list_subtree(target_root, "")
+    after = publish.list_subtree(target_root, "")
     return {
         "the source listing comes back store-relative": sizes_of(source) == SOURCE,
         "the target listing comes back store-relative": sizes_of(published) == PUBLISHED,
@@ -376,7 +396,7 @@ def check_listing_and_transfer() -> dict[str, bool]:
         ),
         "a subtree lists only its own keys, still store-relative": sizes_of(subtree)
         == {"tiles/collection.json": 1_500},
-        "an unpublished target lists as empty": sync_data.list_subtree(
+        "an unpublished target lists as empty": publish.list_subtree(
             UPath(f"memory://{uuid4().hex}"),
             "",
         )
@@ -400,16 +420,16 @@ def check_failure_is_reported() -> dict[str, bool]:
     """One unreadable object is reported, not raised, and the rest still move."""
     source_root = memory_root(SOURCE)
     target_root = memory_root(PUBLISHED)
-    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
-    # The raster is not on the source at all, which is what a rejected read
-    # looks like from the tool's side.
+    plan = publish.plan_upload(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
+    # Delete the raster from the source; to the tool this looks like a rejected
+    # read.
     (source_root / "tiles/2024/32TMS24/coh12_vv.tif").unlink()
-    # The tool reports the failure on stderr as it happens; held here so the
-    # gate's own output stays a list of what it checked.
+    # Capture the tool's stderr report, so the gate's own output stays a list of
+    # checks.
     reported = StringIO()
     with redirect_stderr(reported):
-        failed = sync_data.transfer(source_root, target_root, plan.upload, workers=2)
-    after = sync_data.list_subtree(target_root, "")
+        failed = publish.transfer(source_root, target_root, plan.upload, workers=2)
+    after = publish.list_subtree(target_root, "")
     return {
         "the failed object is named": failed == ["tiles/2024/32TMS24/coh12_vv.tif"],
         "the reason reaches stderr": "coh12_vv.tif" in reported.getvalue(),
@@ -423,9 +443,10 @@ def check_failure_is_reported() -> dict[str, bool]:
 class TwoPhaseWriter(BytesIO):
     """A write handle with s3fs's lifecycle: close uploads, commit publishes.
 
-    ``memory://`` commits at open and closes as a no-op, so it cannot show
-    whether the tool commits by hand and discards on failure. This records the
-    order of the calls and only stores the bytes on ``commit``.
+    ``memory://`` commits as soon as a file is opened. This writer behaves like
+    s3fs instead: it records the order of the calls and stores the bytes only
+    on ``commit``, which shows whether the tool commits explicitly and discards
+    on failure.
     """
 
     def __init__(self, store: dict[str, bytes], path: str, **kwargs: Any) -> None:
@@ -502,8 +523,9 @@ class BrokenReader(BytesIO):
 def check_commit_is_explicit() -> dict[str, bool]:
     """Check that a transfer commits after closing and a failed one only discards.
 
-    An fsspec file closed by a ``with`` block commits whatever it holds even on
-    an exception, which would publish a truncated COG under the right name.
+    An fsspec file closed by a ``with`` block commits whatever it holds, even
+    after an exception. The tool commits explicitly, so a failed transfer
+    leaves no truncated COG under the published name.
     """
     small = {"tiles/collection.json": 2_048, "tiles/2024/32TMS24/coh12_vv.tif": 3 * 8 << 20}
     source_root = memory_root(small)
@@ -511,7 +533,7 @@ def check_commit_is_explicit() -> dict[str, bool]:
     checks: dict[str, bool] = {}
 
     with TwoPhaseTarget() as target:
-        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+        failed = publish.transfer(source_root, target_root, tuple(small), workers=1)
     good = target.writers[f"{target_root.path}/tiles/collection.json"]
     checks["a good transfer does not fail"] = not failed
     checks["the writer is opened without autocommit"] = good.kwargs.get("autocommit") is False
@@ -528,7 +550,7 @@ def check_commit_is_explicit() -> dict[str, bool]:
 
     reported = StringIO()
     with TwoPhaseTarget(failing_read="coh12_vv.tif") as target, redirect_stderr(reported):
-        failed = sync_data.transfer(source_root, target_root, tuple(small), workers=1)
+        failed = publish.transfer(source_root, target_root, tuple(small), workers=1)
     broken = target.writers[f"{target_root.path}/tiles/2024/32TMS24/coh12_vv.tif"]
     checks["a read that breaks half-way is reported"] = failed == [
         "tiles/2024/32TMS24/coh12_vv.tif",
@@ -547,41 +569,33 @@ def check_commit_is_explicit() -> dict[str, bool]:
     return checks
 
 
-def _no_profile(path: Path = sync_data.PUBLISH_CONFIG) -> UPath:
+def _no_profile(path: Path = publish.PUBLISH_CONFIG) -> UPath:
     """Fail the way an absent ``source-coop`` profile does."""
     del path
     raise ProfileNotFound(profile="source-coop")
 
 
 def check_setup_failures_are_messages() -> dict[str, bool]:
-    """Check that a missing profile is one line and exit 1, not a traceback.
+    """Check that a missing profile gives a one-line message and exit code 1.
 
-    Every failure between the configuration and the plan -- an absent profile,
-    a rejected credential, an unreachable endpoint -- reaches a person who has
-    to fix a credential file, so none of them may arrive as a stack trace.
+    Failures between reading the configuration and planning (a missing profile,
+    a rejected credential, an unreachable endpoint) usually mean a credential
+    file needs fixing, so each is reported as a short message.
     """
     checks: dict[str, bool] = {}
-    original = sync_data.read_target
-    sync_data.read_target = _no_profile
+    original = publish.read_target
+    publish.read_target = _no_profile
     reported = StringIO()
     try:
         with redirect_stderr(reported):
-            code = sync_data.main([])
+            code = publish.main([])
     finally:
-        sync_data.read_target = original
+        publish.read_target = original
     message = reported.getvalue()
     checks["a botocore failure exits non-zero"] = code == 1
     checks["it prints one line naming the profile"] = (
         len(message.strip().splitlines()) == 1 and "source-coop" in message
     )
-
-    # The store root this gate runs with is local, which is the other way the
-    # same guard fires.
-    reported = StringIO()
-    with redirect_stderr(reported):
-        code = sync_data.main([])
-    checks["a local store root exits non-zero"] = code == 1
-    checks["it names GLACE_STORE_ROOT"] = "GLACE_STORE_ROOT" in reported.getvalue()
     return checks
 
 
@@ -590,18 +604,18 @@ def check_workers_floor() -> dict[str, bool]:
     checks: dict[str, bool] = {}
     for raw in ("0", "-4", "many"):
         try:
-            sync_data.positive_int(raw)
+            publish.positive_int(raw)
         except ArgumentTypeError:
             checks[f"--workers {raw} is refused"] = True
         else:
             checks[f"--workers {raw} is refused"] = False
-    checks["--workers 4 is a pool of four"] = sync_data.positive_int("4") == 4
+    checks["--workers 4 is a pool of four"] = publish.positive_int("4") == 4
     return checks
 
 
 DRY_RUN = """\
-source:  s3://s1-bursts/data/glace-ch
-target:  s3://lqgentner/glace-ch  (profile source-coop)
+source:  s3://s1-bursts/data/glace-alps
+target:  s3://giuz/glace-alps  (profile source-coop)
 
   new             4     3.0 MiB
   changed         1     2.0 KiB
@@ -616,28 +630,26 @@ nothing is ever deleted; removing a file from the store leaves it published\
 
 def check_summary() -> dict[str, bool]:
     """Check the table a person reads before typing ``--confirm``."""
-    plan = sync_data.plan_sync(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
+    plan = publish.plan_upload(entries(SOURCE), entries(PUBLISHED, PUBLISHED_AT))
     rendered = "\n".join(
-        sync_data.summary_lines(plan, "s3://s1-bursts/data/glace-ch", sync_data.read_target()),
+        publish.summary_lines(plan, "s3://s1-bursts/data/glace-alps", publish.read_target()),
     )
     if rendered != DRY_RUN:
         print("--- rendered ---")
         print(rendered)
     return {
         "the dry-run summary reads as recorded": rendered == DRY_RUN,
-        "byte counts are binary": sync_data.human_bytes(1536) == "1.5 KiB",
-        "small counts stay in bytes": sync_data.human_bytes(512) == "512 B",
+        "byte counts are binary": publish.human_bytes(1536) == "1.5 KiB",
+        "small counts stay in bytes": publish.human_bytes(512) == "512 B",
     }
 
 
 def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
-    """Check the P-17 case: a collection document re-stamped at an identical length.
+    """Check that the dry run catches a document rewritten at the same size.
 
-    On 2026-09-09 ``tiles/collection.json`` changed its digests and kept its
-    size, and a size-only plan called it unchanged. The dry run over a store
-    published whole and then rebuilt in that one document has to say
-    ``changed``, on the strength of the rewrite alone: the in-memory roots
-    list no ETags, so this is the timestamp rule the ETags fall back to.
+    A collection document can change its checksums and keep its length. The
+    in-memory roots list no ETags, so this exercises the timestamp rule: the
+    source copy was rewritten after publication and must count as ``changed``.
     """
     source_root = memory_root(SOURCE)
     target_root = memory_root(SOURCE, PUBLISHED_AT)
@@ -645,7 +657,7 @@ def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
     touch(source_root, "tiles/collection.json", REBUILT)
     printed = StringIO()
     with TwoRoots(source_root, target_root), redirect_stdout(printed):
-        code = sync_data.main([])
+        code = publish.main([])
     lines = printed.getvalue().splitlines()
     return {
         "the dry run exits zero": code == 0,
@@ -680,9 +692,9 @@ def main() -> int:
     for name in failed:
         print(f"error  {name}")
     if failed:
-        print(f"FAILED: {len(failed)} of {len(checks)} sync check(s)")
+        print(f"FAILED: {len(failed)} of {len(checks)} publish check(s)")
         return 1
-    print(f"OK: {len(checks)} sync check(s)")
+    print(f"OK: {len(checks)} publish check(s)")
     return 0
 
 

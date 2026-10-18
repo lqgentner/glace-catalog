@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """Format, lint and type gates for the Python in this repository.
 
-Three checks, all of which must be reproducible from a clean checkout:
+Three checks, all reproducible from a clean checkout:
 
-- ``ruff format --check`` — formatting is not a matter of taste here, it is a
-  property the diff depends on. A reformatting commit that touches a file it
-  did not mean to change costs a reviewer more than it saves a writer.
-- ``ruff check`` — the lint rule set is in ``pyproject.toml``, deliberately the
-  same one the sibling repositories use, so code moving between them does not
-  change shape on the way.
-- ``pyrefly check`` under the ``strict`` preset, over the paths
-  ``[tool.pyrefly] project-includes`` names.
+- ``ruff format --check``: code must already be formatted, so a diff shows
+  only real changes.
+- ``ruff check``: the rule set is in ``pyproject.toml`` and matches the one
+  the sibling repositories use.
+- ``pyrefly check`` with the ``strict`` preset, over the paths listed in
+  ``[tool.pyrefly] project-includes``.
 
-Each tool is resolved from the active interpreter's environment first
-(``python -m ruff``), then from PATH. A tool that is absent **fails** rather
-than skips: a skipped gate reports a green run for code nothing read.
+Each tool is looked up in the current Python environment first
+(``python -m ruff``), then on PATH. A missing tool fails the gate, so a passing
+run always means the code was checked.
 
 Run: uv run tests/test_lint.py
 """
@@ -46,9 +44,8 @@ def run(name: str, tool: str, args: list[str], *, targets: bool = True) -> str |
     command = resolve(tool)
     if command is None:
         return f"{tool} is not installed; install it with: uv sync --all-groups"
-    # pyrefly reads its own `project-includes` and `project-excludes` from
-    # pyproject.toml. Handing it paths here would override both and drag in the
-    # vendored template code, which is deliberately out of scope.
+    # pyrefly takes its paths from `project-includes` and `project-excludes` in
+    # pyproject.toml, which keep the vendored template code out of scope.
     existing = [t for t in TARGETS if (ROOT / t).exists()] if targets else []
     result = subprocess.run(
         [*command, *args, *existing],

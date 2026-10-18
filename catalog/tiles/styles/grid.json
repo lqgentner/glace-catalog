@@ -1,0 +1,64 @@
+{
+  "version": 8,
+  "name": "GLACE – tile grid",
+  "metadata": {
+    "description": "The MGRS tiles of the tiles collection, each filled by its glacier fraction within the buffered outlines. Rendered by glace_catalog.documents."
+  },
+  "sources": {
+    "grid": {
+      "type": "vector",
+      "url": "pmtiles://../grid.pmtiles",
+      "minzoom": 0,
+      "maxzoom": 10
+    }
+  },
+  "layers": [
+    {
+      "id": "glace-grid-fill",
+      "type": "fill",
+      "source": "grid",
+      "source-layer": "mgrs",
+      "paint": {
+        "fill-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "get",
+            "glacier_fraction_buffered"
+          ],
+          0.0,
+          "#ffffff",
+          0.125,
+          "#e4e2fa",
+          0.25,
+          "#cac6f4",
+          0.375,
+          "#afaaee",
+          0.5,
+          "#7d8edc",
+          0.625,
+          "#4171bb",
+          0.75,
+          "#28578e",
+          0.875,
+          "#29376a",
+          1.0,
+          "#2c1a4c"
+        ],
+        "fill-opacity": 0.6
+      }
+    },
+    {
+      "id": "glace-grid-outline",
+      "type": "line",
+      "source": "grid",
+      "source-layer": "mgrs",
+      "paint": {
+        "line-color": "#555555",
+        "line-width": 0.5
+      }
+    }
+  ]
+}

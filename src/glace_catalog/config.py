@@ -1,26 +1,18 @@
-"""Where the store's inputs are read from and where its bytes are written to.
+"""Where a build reads its inputs and writes its outputs.
 
-Three locations, deliberately separate, because they have different owners and
-different failure modes:
+Three locations are kept separate on purpose:
 
-- **source** — the composite archive a run produced, on the private UZH bucket.
-  Read-only here; this repository never writes into it. It is named per run, as
-  ``publish-year.py --src``, because one year's archive is one prefix and a
-  store may draw on more than one.
-- **store** — where the published tree is assembled: a prefix on the private UZH
-  bucket. The store *is* what gets published, object for object, so a local
-  ``GLACE_STORE_ROOT`` is a build that cannot be published —
-  ``tools/sync_data.py`` refuses one. A local path still resolves here, which is
-  what tests and throwaway builds use.
-- **publish target** — Source Cooperative, which this module does *not* know
-  about. It lives in ``catalog.publish.yaml`` and is read by
-  ``tools/sync_data.py`` alone, so a credential for the public bucket can never
-  be picked up by a build step that only meant to read a composite.
+- **source**: the composite archives of an upstream run, one per year
+  (``GLACE_SOURCE``, a pattern with ``{year}``). They are only ever read.
+- **store**: where the published tree is built, an ``s3://`` prefix or a local
+  directory (``GLACE_STORE_ROOT``). ``tools/publish.py`` uploads it as is.
+- **publish target**: Source Cooperative, configured in ``catalog.publish.yaml``
+  and read only by ``tools/publish.py``. Only the upload therefore holds
+  credentials for the public bucket.
 
-Configuration is read from the environment only, so every command needs
-``--env-file .env``. Fields without a default are required at import time: a
-build that cannot say where its data is should fail before it opens a file, not
-half-way through a year.
+Settings come from the environment only, so run commands with
+``--env-file .env``. Required settings are checked at import time, so a
+misconfigured build fails before it touches any data.
 """
 
 from __future__ import annotations
@@ -39,17 +31,15 @@ type AnyDir = Path | UPath
 
 
 class StoreSettings(BaseSettings):
-    """Locations from ``GLACE_*`` environment variables, held as raw strings.
-
-    ``store_root`` is where the published tree is assembled, normally an
-    ``s3://`` prefix on the private bucket. A local path resolves the same way
-    and is written the same way; only publication insists on the bucket.
-    """
+    """Locations from ``GLACE_*`` environment variables, as raw strings."""
 
     model_config = SettingsConfigDict(env_prefix="GLACE_", extra="ignore")
 
     store_root: str
     """Root the published tree is assembled under. ``s3://...`` or a local path."""
+
+    source: str | None = None
+    """Composite archive of one year, with ``{year}`` in place of the year."""
 
 
 class Settings:
@@ -57,14 +47,13 @@ class Settings:
 
     Directory values resolve to :class:`~pathlib.Path` when local and to
     :class:`~upath.UPath` carrying the S3 profile and endpoint when they start
-    with ``s3://``, so downstream code does not branch on the storage backend.
+    with ``s3://``, so downstream code treats both backends alike.
 
-    The S3 side is :class:`freezebase.settings.S3Settings` under the
-    ``GLACE_S3_`` prefix: authentication is by named profile only, so no access
-    key passes through the environment; ``GLACE_S3_ENDPOINT_URL`` is optional
-    when the profile's config section carries the endpoint; and the two
-    checksum policies default to ``when_required``, which the UZH Ceph gateway
-    needs.
+    S3 access uses :class:`freezebase.settings.S3Settings` with the
+    ``GLACE_S3_`` prefix. It authenticates with a named AWS profile only.
+    ``GLACE_S3_ENDPOINT_URL`` may be left
+    unset when the profile defines the endpoint. Both checksum policies default
+    to ``when_required``, which the UZH Ceph gateway needs.
     """
 
     def __init__(self) -> None:
@@ -96,12 +85,29 @@ class Settings:
         """Root the published tree is assembled under."""
         return self.resolve_path(self.locations.store_root)
 
+    def source(self, year: int) -> AnyDir:
+        """Composite archive of ``year``, from the ``GLACE_SOURCE`` pattern.
+
+        Raises
+        ------
+        SystemExit
+            If ``GLACE_SOURCE`` is unset or names no ``{year}``.
+        """
+        pattern = self.locations.source
+        if not pattern or "{year}" not in pattern:
+            msg = (
+                "set GLACE_SOURCE to the composite archive of a year, with {year} in "
+                "place of the year, e.g. s3://s1-bursts/data/alps-total/{year}/s1-comp"
+            )
+            raise SystemExit(msg)
+        return self.resolve_path(pattern.replace("{year}", str(year)))
+
     @property
     def cache_dir(self) -> Path:
-        """Scratch directory for the VRT chain and other build artefacts.
+        """Scratch directory for the VRT chain and other unpublished build files.
 
         Honours ``FREEZEBASE_CACHE``, falling back to the platform cache
-        directory. Nothing here is published; a chain is rebuilt in seconds.
+        directory.
         """
         return get_cache_dir()
 

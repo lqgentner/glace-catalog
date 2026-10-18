@@ -1,28 +1,21 @@
-# What publishes, and where.
+# Where the built store is published.
 #
-# The published tree is the store itself: tools/sync_data.py streams every
-# object under GLACE_STORE_ROOT to write_prefix. Nothing is staged and nothing
-# is uploaded from the tracked catalog/ directory, whose collection documents
-# finalize-catalog patches on the way in.
+# tools/publish.py uploads every object under GLACE_STORE_ROOT to
+# write_prefix. The tracked catalog/ directory is never uploaded directly.
 
-# The Source Cooperative repository uploads are written to. The profile below
-# carries endpoint_url = https://data.source.coop, the Source Cooperative S3
-# proxy, and it is that endpoint which makes the bucket the account name and
-# the key start with the product. Against the AWS-native bucket names these
-# credentials are rejected.
-write_prefix: s3://lqgentner/glace-ch
+# Upload target. The profile's endpoint is the Source Cooperative S3 proxy
+# (https://data.source.coop), where the bucket is the account and the key
+# starts with the product.
+write_prefix: s3://giuz/glace-alps
 
-# The public URL that serves write_prefix. Every absolute href the publish step
-# writes is built from this, so it is what ends up in the STAC JSON and
-# write_prefix is not.
-public_base: https://data.source.coop/lqgentner/glace-ch
+# Public HTTPS address of write_prefix. Every absolute href in the published
+# STAC documents starts with it.
+public_base: https://data.source.coop/giuz/glace-alps
 
-# The same tree over anonymous S3, which the `alternate` href of every
-# collection asset carries. Range requests answer 206 on both.
-public_s3_base: s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch
+# The same tree over anonymous S3, used in the `alternate` href of each
+# collection asset.
+public_s3_base: s3://eu-central-1.opendata.source.coop/giuz/glace-alps
 
-# The named AWS profile the publisher uses. Source Cooperative issues
-# per-account credentials; store them under this profile in ~/.aws/credentials
-# (or wherever AWS_SHARED_CREDENTIALS_FILE points) rather than in the
-# environment, so no access key passes through a shell.
+# Named profile in ~/.aws/credentials holding the Source Cooperative
+# credentials.
 profile: source-coop

@@ -1,11 +1,10 @@
-"""Filenames of the GLACE archive, and the published names they map onto.
+"""Composite filenames in the source archive, and their names in the store.
 
-Two vocabularies meet here. The *staging* archive names a composite by
-everything about it — ``S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif`` — while
-the *store* names it by its role alone: ``coh12_vv.tif``, in a directory that
-already says which tile and which year. The published name is the asset key, so
-nothing in the store has to be parsed to be understood, and two files resolving
-to one asset key becomes structurally impossible.
+The source archive names a composite by all its attributes, for example
+``S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif``. The store names it by its
+asset key alone, ``coh12_vv.tif``, inside a directory that gives the tile and
+year. Store filenames therefore need no parsing, and each asset key has exactly
+one file per item.
 """
 
 from __future__ import annotations
@@ -28,15 +27,24 @@ POLARIZATIONS = ("VV", "VH")
 PRODUCTS = ("COH12", "RTC")
 QA_METRICS = ("NUM", "CQM")
 
-"""Label value for a pixel that must be excluded from loss and metrics."""
-
 ASSET_KEYS: tuple[str, ...] = tuple(
     f"{product.lower()}_{pol.lower()}{suffix}"
     for product in PRODUCTS
     for pol in POLARIZATIONS
     for suffix in ("", "_qa_num", "_qa_cqm")
 )
-"""The twelve LRW asset keys a complete tile or mosaic item carries."""
+"""The twelve asset keys a complete tile or mosaic item carries."""
+
+
+def published_name(asset_key: str) -> str:
+    """Return the store filename of an asset key, e.g. ``coh12_vv.tif``.
+
+    The directory gives the year and the item properties give the compositing
+    window, so the filename is just the asset key. All readers and writers of
+    store rasters use this function.
+    """
+    return f"{asset_key}.tif"
+
 
 _COMPOSITE_RE = re.compile(
     r"^S1_(?P<product>COH\d{2}|RTC)"
@@ -53,12 +61,13 @@ _LABEL_RE = re.compile(
 )
 
 
-"""Glacier inventories available as label collections, keyed by filename token."""
-
-
 @dataclass(frozen=True)
 class CompositeFile:
-    """A parsed per-tile LRW or pass composite (or QA) raster."""
+    """A parsed per-tile composite or QA raster.
+
+    LRW (locally resolution-weighted) composites combine all acquisitions;
+    pass composites (``COMP_A``, ``COMP_D``) use one orbit direction.
+    """
 
     path: Path | UPath
     product: str  # "COH12" or "RTC"
@@ -88,19 +97,13 @@ class CompositeFile:
 
     @property
     def published_name(self) -> str:
-        """Filename this composite takes in the store, e.g. ``coh12_vv.tif``.
-
-        The date range leaves the filename — the directory carries the year and
-        the item properties carry the window — so the published name is exactly
-        the asset key.
-        """
-        return f"{self.asset_key}.tif"
+        """Filename this composite takes in the store, e.g. ``coh12_vv.tif``."""
+        return published_name(self.asset_key)
 
 
 VIZ_SUFFIX = "_viz"
-"""Suffix that marks a rendering: ``coh12_vv_viz.pmtiles`` is the web-map
-archive of ``coh12_vv.tif``. The two sit in one directory, so the stem has to
-say which is the measurement and which is the picture."""
+"""Suffix of a rendering: ``coh12_vv_viz.pmtiles`` is the web-map archive of
+``coh12_vv.tif``. Both sit in one directory, and the suffix tells them apart."""
 
 
 def viz_key(asset_key: str) -> str:
@@ -128,20 +131,15 @@ def data_key(key: str) -> str:
 
 
 def by_asset_key(file: CompositeFile) -> str:
-    """Sort key ordering composite files by the asset key they publish under.
-
-    A named function rather than a lambda so the parameter carries a type: every
-    caller sorts the same records the same way.
-    """
+    """Sort key that orders composite files by asset key."""
     return file.asset_key
 
 
 def parse_composite_name(path: Path | UPath) -> CompositeFile | None:
     """Parse a composite filename; return ``None`` for non-matching names.
 
-    The dates in the name identify the file and are matched, not read: the
-    compositing window a year publishes comes from the run manifest, the one
-    source of every fact about a raster, see ``composite_window``.
+    The dates in the name are matched but not used. A year's compositing window
+    comes from the run manifest (see ``composite_window``).
     """
     match = _COMPOSITE_RE.match(path.name)
     if match is None:
@@ -170,11 +168,10 @@ def discover_composites(comp_dir: Path | UPath) -> dict[str, list[CompositeFile]
 def require_unique_composites(by_tile: Mapping[str, Sequence[CompositeFile]]) -> None:
     """Reject multiple files that resolve to the same published name.
 
-    A composite is named with its compositing window, so a rerun of the same
-    window overwrites its file and a changed window writes a second one beside
-    it. Neither filename is implicitly preferred: publishing one must be an
-    explicit archive-maintenance decision, never an implicit overwrite of one
-    by the other.
+    A composite's filename includes its compositing window. Rerunning the same
+    window overwrites the file; a changed window writes a second file beside
+    it. Choosing between the two is a deliberate archive-maintenance step, so
+    duplicates are an error.
 
     Raises
     ------

@@ -1,15 +1,14 @@
-"""The store on object storage: where its files go, and how they get there.
+"""The store layout, the run manifest, the server-side copy and the build state.
 
 A GLACE store is one self-contained, relocatable tree holding the composite
 COGs, the documents describing them, the annual mosaics and the web-map tiles.
-This module owns the parts of that which touch the object store: the layout, the
-run manifest that says what a year's composites are, the server-side copy that
-moves them in, and the build state that makes a rerun safe.
+This module handles the parts that touch object storage: where each file goes,
+the run manifest listing a year's composites, the server-side copy that brings
+them in, and the build state that makes reruns safe.
 
-Two rules run through all of it. Composites are **copied, never rewritten**, so
-the bytes and the compression the run chose survive exactly; and every step
-records an **input fingerprint** rather than a "done" flag, so a step whose
-inputs moved reruns itself instead of letting a stale product through.
+Two rules apply throughout. Composites are copied byte for byte, keeping the
+compression the run chose. Each step records a fingerprint of its inputs and
+reruns whenever those inputs change.
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from freezebase.s3 import atomic_write_text, list_object_sizes
@@ -26,12 +26,12 @@ from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
+from glace_catalog.grid import GRID_ARCHIVE
 from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -41,25 +41,24 @@ YEAR_INDEX_NAME = ".items.parquet"
 ITEMS_INDEX_NAME = "items.parquet"
 """Filename of a collection's item mirror.
 
-Fixed by convention rather than by the specification, which requires only that
-the mirror be registered as a collection asset with the ``collection-mirror``
-role. Tooling looks for this name, so a collection that uses it is found without
-reading the collection document first.
+The specification only requires the mirror to be a collection asset with the
+``collection-mirror`` role; this filename is a convention. Tools look for it,
+so they find the mirror without reading the collection document first.
 """
 
 README_NAME = "README.md"
 AGENTS_NAME = "AGENTS.md"
-THUMBNAIL_NAME = "thumbnail.png"
+THUMBNAIL_NAME = "thumbnail.webp"
 ASSETS_DIR = "_assets"
-"""Root directory of files the catalog documents link but do not describe."""
+"""Root directory of files the catalog documents link to without describing them."""
 
 TILES_DIR = "tiles"
 MOSAICS_DIR = "mosaics"
 """Directory, and collection-id suffix, of each collection.
 
-The scope prefixes these into the published ids (``glace-ch-tiles``), but the
-directory stays unprefixed: the scope is already the store root, so repeating it
-one level down would only make every href longer.
+The scope prefixes these to form the published ids (``glace-ch-tiles``). The
+directories themselves are unprefixed, because the store root already belongs
+to one scope.
 """
 
 STATISTICS_COLUMNS: dict[str, str] = {
@@ -69,10 +68,10 @@ STATISTICS_COLUMNS: dict[str, str] = {
     "stddev": "stat_stddev",
     "valid_percent": "stat_valid_percent",
 }
-"""The embedded band statistics, as :class:`BandStatistics` field to manifest column.
+"""Manifest column of each embedded band statistic, by :class:`BandStatistics` field.
 
-Read from the COG's own band tags at write time, so the publisher can put them on
-``bands[].statistics`` without a second read of the header.
+The upstream writer copies them from the COG's band tags, so the build
+fills ``bands[].statistics`` from the manifest alone.
 """
 
 MANIFEST_COLUMNS: tuple[str, ...] = (
@@ -98,18 +97,17 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
 )
 """The columns :func:`read_manifest` requires, before the one column per tag.
 
-The composite driver in ``deep-glacier-mapping`` writes the manifest — these
-columns and, after them, one column per GeoTIFF tag. Nothing here writes one:
-an archive without a manifest gets one by rerunning its year, which skips every
-complete tile and describes and hashes every file. ``tests/test_manifest_contract.py``
-holds the driver's column list verbatim and is where drift on either side surfaces.
+The composite driver in ``deep-glacier-mapping`` writes the manifest: these
+columns, then one column per GeoTIFF tag. To create a manifest for an archive,
+rerun its year upstream; complete tiles are skipped, and every file is
+described and hashed. ``tests/test_manifest_contract.py`` holds the driver's
+column list and catches drift on either side.
 
-The tag columns are SCREAMING_CASE and these are lowercase, so the two
-vocabularies cannot collide.
+Tag columns are upper case and these are lower case, so names cannot collide.
 
-``sha256`` holds the **multihash-encoded** digest — ``1220`` followed by the
-sha256 hex — because that is the form ``file:checksum`` requires, and a value
-stored one way and published another invites exactly one bug.
+``sha256`` holds the multihash-encoded digest (``1220`` followed by the sha256
+hex), the form ``file:checksum`` publishes, so the stored and published values
+are identical.
 """
 
 
@@ -117,11 +115,10 @@ stored one way and published another invites exactly one bug.
 class StoreLayout:
     """Where everything in one store lives.
 
-    The tree is **collection-owned**: every document and every byte a collection
-    publishes sits beneath that collection's directory. Portolan requires it
-    (core: "a collection directory MUST contain a ``collection.json`` and holds
-    one subdirectory per item"), and it is what lets a year catalog exist at all,
-    since a catalog may appear below a collection to organize its items.
+    Every document and file a collection publishes sits beneath that
+    collection's directory. Portolan requires this ("a collection directory
+    MUST contain a ``collection.json`` and holds one subdirectory per item").
+    Year catalogs sit below a collection and group its items.
 
     ::
 
@@ -130,39 +127,36 @@ class StoreLayout:
         |-- tiles/
         |   |-- collection.json  README.md  AGENTS.md
         |   |-- items.parquet          # collection-mirror, every year
-        |   |-- thumbnail.png
-        |   |-- glacier-fractions.parquet
+        |   |-- thumbnail.webp
+        |   |-- grid.pmtiles           # tile grid with glacier fractions
+        |   |-- styles/grid.json
+        |   |-- .glacier-fractions.parquet  # build input, not published
         |   `-- {year}/
         |       |-- catalog.json  README.md  AGENTS.md
         |       |-- .build-state.json  .items.parquet
         |       `-- {tile}/item.json + 12 COGs
         `-- mosaics/
             |-- collection.json  README.md  AGENTS.md
-            |-- items.parquet  thumbnail.png  styles/
-            `-- {year}/item.json + 12 analysis COGs + 14 web-map archives
+            |-- items.parquet  thumbnail.webp
+            |-- styles/default.json    # the latest year's style
+            `-- {year}/item.json + 12 analysis COGs + 12 web-map archives
+                `-- styles/default.json  # the year's style, an item asset
 
-    One thing is deliberately not mirrored from the old flat layout: there is no
-    per-year directory shared by both collections, because a year is not a thing
-    either collection owns.
+    Each web-map archive is an asset of its year's mosaic item, so it sits in
+    that item's directory beside the raster it shows. The ``_viz`` suffix tells
+    the two apart: ``coh12_vv.tif`` holds linear float32 values, while
+    ``coh12_vv_viz.pmtiles`` holds 8-bit value codes for display (in
+    decibels for backscatter and QA-CQM).
 
-    The web-map archives sit beside the rasters they render, in the year's own
-    item directory, because each one is an asset of that year's item. The
-    ``_viz`` suffix keeps the two products apart in a listing: ``coh12_vv.tif``
-    is linear float32 and ``coh12_vv_viz.pmtiles`` is a pre-stretched 8-bit
-    rendering, the backscatter ones in decibels, and two files one letter apart
-    holding different quantities is the kind of thing that reads fine until
-    someone compares them.
-
-    Dotfiles are build state, never published: ``.build-state.json`` records what
-    a step already did, and ``.items.parquet`` is the year's slice of the item
-    mirror before :mod:`finalize-catalog` concatenates it. Naming them with a
-    leading dot keeps them out of the item mirror's own directory listing and out
-    of the publish sync.
+    Dotfiles are build state and are excluded from publication:
+    ``.build-state.json`` records which steps have run, and ``.items.parquet``
+    is the year's slice of the item mirror, which ``finalize-catalog``
+    concatenates.
 
     Parameters
     ----------
     root
-        Store root, e.g. ``s3://s1-bursts/data/glace-ch`` or ``/mnt/glace/ch``.
+        Store root, e.g. ``s3://path/to/store`` or ``/path/to/store``.
     """
 
     root: Path | UPath
@@ -171,7 +165,7 @@ class StoreLayout:
 
     @property
     def catalog(self) -> Path | UPath:
-        """Root catalog. The publish step stamps its absolute ``self`` link."""
+        """Root catalog. Finalization stamps its absolute ``self`` link."""
         return self.root / "catalog.json"
 
     @property
@@ -188,9 +182,8 @@ class StoreLayout:
     def icon(self) -> Path | UPath:
         """Catalog wordmark, linked ``rel: "icon"`` from the root catalog.
 
-        An SVG rather than a raster: registries and browsers display it at
-        whatever size they render a catalog card at (``PTL-LNK-007``), and it
-        is the same file the viewer draws its header from.
+        An SVG, so registries and browsers can draw it at any card size
+        (``PTL-LNK-007``). The viewer's header uses the same file.
         """
         return self.root / ASSETS_DIR / "glace-wordmark.svg"
 
@@ -211,20 +204,27 @@ class StoreLayout:
         """Item mirror of every tile item, across every year.
 
         Registered as a collection asset with the ``collection-mirror`` role,
-        which is the whole of Portolan's registration requirement: no
-        ``rel: "items"`` link accompanies it.
+        which is all Portolan requires.
         """
         return self.tiles / ITEMS_INDEX_NAME
 
     @property
     def tiles_thumbnail(self) -> Path | UPath:
-        """Thumbnail of the tiles collection; a Portolan MUST for a geospatial one."""
+        """Thumbnail of the tiles collection, which Portolan requires."""
         return self.tiles / THUMBNAIL_NAME
 
     @property
+    def tiles_grid(self) -> Path | UPath:
+        """Vector PMTiles of the tile grid, with each tile's glacier fractions."""
+        return self.tiles / GRID_ARCHIVE
+
+    @property
     def glacier_fractions(self) -> Path | UPath:
-        """Per-tile RGI7 glacier fractions, pinned to one inventory version."""
-        return self.tiles / "glacier-fractions.parquet"
+        """Per-tile glacier fractions, pinned to one inventory version.
+
+        A build input: the dot keeps it out of the upload.
+        """
+        return self.tiles / ".glacier-fractions.parquet"
 
     def tile_year(self, year: int) -> Path | UPath:
         """Directory of the sub-catalog organizing one year's tile items."""
@@ -239,14 +239,14 @@ class StoreLayout:
         return self.tile_year(year) / tile
 
     def build_state(self, year: int) -> Path | UPath:
-        """Build state of one year's publication. Not published."""
+        """Build state of one year's publication, excluded from publication."""
         return self.tile_year(year) / BUILD_STATE_NAME
 
     def year_index(self, year: int) -> Path | UPath:
         """Locate the year's slice of the item mirror, with root-relative hrefs.
 
-        A build artefact: ``finalize-catalog`` concatenates every year's slice
-        into :attr:`tiles_index` and rebases the hrefs onto the public base URL.
+        A build file: ``finalize-catalog`` concatenates every year's slice into
+        :attr:`tiles_index` and rebases the hrefs onto the public base URL.
         """
         return self.tile_year(year) / YEAR_INDEX_NAME
 
@@ -288,9 +288,9 @@ class StoreLayout:
     def viz(self, year: int, asset_key: str) -> Path | UPath:
         """One year's web-map archive of ``asset_key``, beside the COG it renders.
 
-        Same directory, distinct stem: ``coh12_vv_viz.pmtiles`` next to
+        Same directory, different stem: ``coh12_vv_viz.pmtiles`` next to
         ``coh12_vv.tif``. The archive is an asset of the year item with the
-        ``visual`` role and, on the collection, a ``rel="pmtiles"`` link.
+        ``visual`` role.
         """
         return self.mosaic_year(year) / viz_filename(asset_key)
 
@@ -301,7 +301,7 @@ def read_manifest(path: Path | UPath) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If columns the publisher depends on are absent.
+        If columns the build depends on are absent.
     """
     with UPath(path).open("rb") as handle:
         frame = pd.read_parquet(handle)
@@ -319,19 +319,18 @@ MULTIHASH_SHA256 = "1220"
 def multihash_sha256(payload: bytes) -> str:
     """Multihash-encoded sha256 of some bytes, the form ``file:checksum`` requires.
 
-    ``1220`` is the multihash prefix for a 32-byte sha256 digest: the same
-    encoding the run manifest carries for every composite, so a checksum this
-    writes and one the pipeline measured are read the same way.
+    ``1220`` is the multihash prefix for a 32-byte sha256 digest. The run
+    manifest uses the same encoding for every composite.
     """
     return MULTIHASH_SHA256 + hashlib.sha256(payload).hexdigest()
 
 
 def multihash_sha256_file(path: Path | UPath) -> str:
-    """Multihash-encoded sha256 of a file, streamed rather than read at once.
+    """Multihash-encoded sha256 of a file, read as a stream.
 
     Same encoding as :func:`multihash_sha256`, for the files this repository
-    writes itself: an annual mosaic is hundreds of megabytes, and holding one in
-    memory to hash it would undo the streaming the writer is careful about.
+    writes. Streaming keeps memory low for annual mosaics of hundreds of
+    megabytes.
     """
     return MULTIHASH_SHA256 + file_sha256(path)
 
@@ -339,8 +338,8 @@ def multihash_sha256_file(path: Path | UPath) -> str:
 def manifest_digest(frame: pd.DataFrame) -> str:
     """Content digest of a manifest, as the fingerprint the copy step keys on.
 
-    Taken over the filenames, sizes and digests rather than the whole frame, so a
-    rewritten but unchanged manifest does not invalidate a copy.
+    Taken over the filenames, sizes and digests only, so a rewritten manifest
+    with the same content keeps the copy current.
     """
     payload = frame.loc[:, ["filename", "size", "sha256"]].sort_values("filename")
     digest = hashlib.sha256()
@@ -369,16 +368,13 @@ def verify_manifest(
 ) -> list[ManifestMismatch]:
     """Compare a manifest against a listing of the archive it describes.
 
-    Returns one record per disagreement, empty when the two match. The manifest
-    is a cache, not the source of truth — every tag it lists is also written into
-    the file — so this is what stops a stale cache describing an archive that
-    has moved on.
+    Returns one record per disagreement, or an empty list when they match. The
+    manifest caches what the files themselves record, so this check catches a
+    manifest that is out of date with its archive.
 
-    **This is a presence and size check, not an integrity check.** A listing
-    returns sizes; verifying content means reading bytes, and the manifest's
-    ``sha256`` is what does that — published as ``file:checksum`` on every asset
-    and verified by ``rashid check --data`` before publication. Catching a
-    substituted file of identical size is that pass's job, not this one's.
+    This checks presence and size only. File contents are verified through the
+    manifest's ``sha256``, published as ``file:checksum`` on every asset and
+    checked by ``rashid check --data`` before publication.
     """
     problems: list[ManifestMismatch] = []
     for record in frame.loc[:, ["filename", "size"]].to_dict("records"):
@@ -421,8 +417,8 @@ def manifest_composites(frame: pd.DataFrame, src_dir: Path | UPath) -> list[Comp
 def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]]:
     """Rebuild the per-asset raster metadata a manifest carries.
 
-    This is what collapses the publisher's most expensive work: the survey that
-    used to be one remote open per file becomes one read of the manifest.
+    One read of the manifest gives the metadata of every file, without
+    opening the remote files.
 
     Raises
     ------
@@ -452,9 +448,8 @@ def manifest_raster_info(frame: pd.DataFrame) -> dict[str, dict[str, RasterInfo]
             band_name=str(row["band_name"] or ""),
             band_unit=str(row["band_unit"] or ""),
             data_type=str(row["data_type"]),
-            # A NaN in the column *is* the nodata value: every float composite
-            # declares NaN, and parquet has no way to say "none declared" apart
-            # from it. Only a missing value is "none declared".
+            # NaN in this column is the nodata value itself, which every float
+            # composite declares. Only None means that no nodata is declared.
             nodata=None if nodata is None else float(nodata),
             spatial_resolution=float(row["spatial_resolution"]),
             bits_per_sample=int(row["bits_per_sample"]),
@@ -474,6 +469,49 @@ def manifest_valid_percents(frame: pd.DataFrame) -> dict[str, dict[str, float]]:
         tile, key = str(record["tile"]), str(record["asset_key"])
         percents.setdefault(tile, {})[key] = float(record["valid_percent"])
     return percents
+
+
+EMPTY_COMPOSITE_LIMIT = 0.01
+"""Largest share of a year's measurements that may hold no valid pixel.
+
+A few empty composites are an edge effect: a burst assigned to a tile that
+none of its pixels reach. More point at a broken run, which should stop the
+build rather than thin out the catalog.
+"""
+
+
+def drop_empty_composites(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Remove each measurement with no valid pixel from a manifest, with its QA layers.
+
+    The manifest's ``valid_percent`` of a measurement is missing or 0 when no
+    pixel holds a value. Such a file is not published, and neither are the
+    count and quality layers of the same tile, product and polarization. A
+    tile left with no files gets no item.
+
+    Returns
+    -------
+    tuple
+        The remaining rows, and the ``{tile} {asset_key}`` of each dropped
+        measurement.
+
+    Raises
+    ------
+    ValueError
+        If more than :data:`EMPTY_COMPOSITE_LIMIT` of the measurements are
+        empty.
+    """
+    group = ["tile", "product", "polarization"]
+    data = frame.loc[frame["qa"].isna()]
+    empty = data.loc[data["valid_percent"].fillna(0) <= 0]
+    if len(empty) > EMPTY_COMPOSITE_LIMIT * max(len(data), 1):
+        msg = (
+            f"{len(empty)} of {len(data)} measurements hold no valid pixel, more than "
+            f"{EMPTY_COMPOSITE_LIMIT:.0%}; check the composite run"
+        )
+        raise ValueError(msg)
+    dropped = frame.set_index(group).index.isin(empty.set_index(group).index)
+    labels = sorted(f"{row.tile} {row.asset_key}" for row in empty.itertuples())
+    return frame.loc[~dropped].reset_index(drop=True), labels
 
 
 @dataclass(frozen=True)
@@ -498,9 +536,11 @@ def copy_composites(
 ) -> CopyResult:
     """Copy a year's composites into the store, server-side.
 
-    Each file lands at ``{root}/tiles/{year}/{tile}/{asset_key}.tif`` through a
-    ``CopyObject``: no download, no upload, no egress, and the bytes and the
-    compression the run chose are preserved exactly.
+    Each file is copied to ``{root}/tiles/{year}/{tile}/{asset_key}.tif`` with
+    a server-side ``CopyObject``, so no data passes through this machine and
+    the bytes and compression stay exactly as the run wrote them. When the
+    archive and the store are on the same local disk, each file is hard-linked
+    instead, so the store takes no extra space.
 
     Parameters
     ----------
@@ -522,24 +562,29 @@ def copy_composites(
     """
     root = UPath(layout.root)
     destinations = list_object_sizes(layout.tile_year(year), recursive=True)
-    # An object store needs no directory, but a local store does, and creating
-    # them once up front keeps that out of the copy pool.
-    for tile in sorted({file.tile for file in files}):
-        layout.tile(year, tile).mkdir(parents=True, exist_ok=True)
+    # A local store needs its directories; create them once, before the copy
+    # pool starts.
+    if isinstance(layout.root, Path):
+        for tile in sorted({file.tile for file in files}):
+            layout.tile(year, tile).mkdir(parents=True, exist_ok=True)
 
     def copy_one(file: CompositeFile) -> bool:
         target = layout.tile(year, file.tile) / file.published_name
         key = f"{file.tile}/{file.published_name}"
         found = destinations.get(key)
-        # Size alone is a weak content check, and deliberately all this step
-        # does. It does not have to be strong: the copy below is a server-side
-        # CopyObject, which is byte-exact by construction, so a destination of
-        # the right size was produced by this same copy from this same source.
-        # A source replaced behind our back is caught one level up, where the
-        # build state reruns the whole step whenever the manifest digest moves.
+        # A destination of the right size counts as copied: the server-side
+        # CopyObject is byte-exact, so it came from this same copy. A changed
+        # source changes the manifest digest, which reruns the whole step
+        # (see BuildState).
         if found is not None and found == listing[file.path.name]:
             return False
-        root.fs.cp(str(UPath(file.path).path), str(UPath(target).path))
+        linked = (
+            isinstance(file.path, Path)
+            and isinstance(target, Path)
+            and hard_link(file.path, target)
+        )
+        if not linked:
+            root.fs.cp_file(str(file.path), str(target))
         return True
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -549,11 +594,33 @@ def copy_composites(
     return result
 
 
-def upload_tree(local: Path, destination: Path | UPath) -> int:
-    """Upload a locally staged directory tree in one pass.
+def hard_link(source: Path, target: Path) -> bool:
+    """Hard-link ``target`` to ``source``, replacing whatever is there.
 
-    Everything a step writes is staged locally and uploaded once: writing 2 209
-    small JSON files straight to the object store would be 2 209 round trips.
+    The link is made under a temporary name and moved into place, so a failed
+    or interrupted link leaves the previous file untouched.
+
+    Returns
+    -------
+    bool
+        False if the two paths cannot share a link, for example because they
+        are on different disks; the caller then copies the file.
+    """
+    staged = target.with_name(f".{target.name}.link")
+    staged.unlink(missing_ok=True)
+    try:
+        staged.hardlink_to(source)
+    except OSError:
+        return False
+    staged.replace(target)
+    return True
+
+
+def upload_tree(local: Path, destination: Path | UPath) -> int:
+    """Upload every file of a locally staged directory tree.
+
+    Steps write their outputs to a local directory first and upload them here
+    once complete.
     """
     destination = UPath(destination)
     sources = sorted(path for path in local.rglob("*") if path.is_file())
@@ -569,10 +636,10 @@ STEPS: tuple[str, ...] = ("copy", "vrt", "mosaics", "pmtiles", "items")
 """The publication steps, in the order they must run."""
 
 _UNFINGERPRINTED = frozenset({"vrt"})
-"""Steps that are always rerun.
+"""Steps that always rerun.
 
-The VRTs are local and ephemeral, so a remote "done" can be true while the cache
-is empty. They take seconds to rebuild, so there is nothing to protect.
+The VRTs live in a local scratch cache, which may be empty even when the store
+records the step as done. They rebuild in seconds.
 """
 
 
@@ -580,14 +647,11 @@ is empty. They take seconds to rebuild, so there is nothing to protect.
 class BuildState:
     """Per-step input fingerprints of one year's publication.
 
-    Recording only outputs is not enough: if ``copy`` replaces a source, or the
-    grid, bounds or style change, a state file saying "mosaics: done" would let a
-    stale product through. Each step records what it was built *from*, and reruns
-    itself exactly when that moved.
+    Each step records what it was built from (sources, grid, bounds, style
+    settings) and reruns exactly when that changes.
 
-    State is written once, atomically, after every output of a step is verified,
-    never appended per output — a crash halfway through ``pmtiles`` must leave
-    the step incomplete rather than done with six of fourteen archives present.
+    The state is written atomically once all of a step's outputs are verified,
+    so an interrupted step stays incomplete.
     """
 
     path: Path | UPath

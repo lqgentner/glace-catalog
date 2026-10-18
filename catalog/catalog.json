@@ -4,15 +4,37 @@
   "stac_extensions": [
     "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
   ],
-  "id": "glace-ch",
-  "title": "GLACE Switzerland (preliminary) – Sentinel-1 Glacier Coherence and Backscatter",
-  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2021–2024. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every cloud-optimized GeoTIFF is LERC-compressed and carries its processing record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator are provided for web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer).\n\nThis is a preliminary release over the Swiss Alps, published to exercise the GLACE publication pipeline while the full dataset is produced. The dataset is GLACE Alps, over the Alpine Convention perimeter, which uses this same pipeline and supersedes this catalog. These URLs are provisional: do not cite them, and expect the coverage, the years and the identifiers to change.",
+  "id": "glace-alps",
+  "title": "GLACE Alps – Sentinel-1 Glacier Coherence and Backscatter",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2015–2026. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every cloud-optimized GeoTIFF is LERC-compressed and carries its processing record in its own tags. For web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles in Web Mercator hold 8-bit value-encoded WebP tiles.",
+  "providers": [
+    {
+      "name": "European Space Agency / Copernicus",
+      "description": "Operates the Sentinel-1 mission and distributes the SLC data these composites are derived from, through the Copernicus Data Space Ecosystem.",
+      "roles": [
+        "producer",
+        "licensor"
+      ],
+      "url": "https://sentinel.esa.int/web/sentinel/missions/sentinel-1"
+    },
+    {
+      "name": "University of Zurich, Department of Geography",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "roles": [
+        "producer",
+        "processor",
+        "licensor",
+        "host"
+      ],
+      "url": "https://www.geo.uzh.ch/en.html"
+    }
+  ],
   "links": [
     {
       "rel": "root",
       "href": "./catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "describedby",
@@ -45,29 +67,46 @@
       "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)"
     },
     {
-      "rel": "about",
-      "href": "https://source.coop/lqgentner/glace-ch",
-      "title": "Dataset on Source Cooperative"
+      "rel": "via",
+      "href": "https://source.coop/giuz/glace-alps",
+      "type": "text/html",
+      "title": "This catalog on Source Cooperative"
     },
     {
       "rel": "vcs",
       "href": "https://github.com/lqgentner/glace-catalog",
+      "type": "text/html",
       "title": "Source repository"
     },
     {
       "rel": "issues",
       "href": "https://github.com/lqgentner/glace-catalog/issues",
+      "type": "text/html",
       "title": "Issue tracker"
     },
     {
-      "rel": "related",
+      "rel": "preview",
       "href": "https://lqgentner.github.io/glace-viewer",
-      "title": "GLACE Viewer, a web map over the PMTiles archives"
+      "type": "text/html",
+      "title": "GLACE Viewer, an interactive web map"
     },
     {
       "rel": "via",
       "href": "https://github.com/lqgentner/glace-production",
+      "type": "text/html",
       "title": "Production pipeline"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.48656/60er-3j55",
+      "type": "text/html",
+      "title": "DOI of version 1.0"
+    },
+    {
+      "rel": "related",
+      "href": "https://doi.org/10.48656/d4r9-fj97",
+      "type": "text/html",
+      "title": "Canonical DOI, every version"
     }
   ]
 }

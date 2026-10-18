@@ -1,16 +1,14 @@
-"""Building the GLACE store: its names, its documents and the tree they live in.
+"""Build the GLACE store: file names, STAC documents and the storage layout.
 
-The package splits along what each part is responsible for:
-
-- :mod:`~glace_catalog.stac.naming` — the archive's filenames and the
-  published names they map onto.
-- :mod:`~glace_catalog.stac.tags` — what a composite says about itself, and
-  whether that is enough to publish.
-- :mod:`~glace_catalog.stac.items` — the items and collections themselves.
-- :mod:`~glace_catalog.stac.store` — the layout on object storage, the run
-  manifest, the server-side copy and the build state.
-- :mod:`~glace_catalog.stac.save` — writing the catalogue out with relative
-  hrefs, and the geoparquet indexes beside it.
+- :mod:`~glace_catalog.stac.naming`: source archive filenames and their
+  published names.
+- :mod:`~glace_catalog.stac.tags`: a composite's provenance tags, and the
+  checks on them.
+- :mod:`~glace_catalog.stac.items`: the STAC items.
+- :mod:`~glace_catalog.stac.store`: the store layout, the run manifest, the
+  server-side copy and the build state.
+- :mod:`~glace_catalog.stac.save`: writing the documents with relative hrefs,
+  and the geoparquet indexes beside them.
 """
 
 from glace_catalog.stac.items import (
@@ -41,7 +39,6 @@ from glace_catalog.stac.save import (
     PORTOLAN_SCHEMA,
     UPathStacIO,
     concat_indexes,
-    export_geoparquet,
     index_from_items,
     is_tile_item,
     item_dict,
@@ -51,11 +48,13 @@ from glace_catalog.stac.save import (
     write_stac_geoparquet,
     year_catalog_document,
     year_child_link,
+    year_index_document,
 )
 from glace_catalog.stac.store import (
     BuildState,
     StoreLayout,
     copy_composites,
+    drop_empty_composites,
     fingerprint,
     manifest_composites,
     manifest_digest,
@@ -104,7 +103,7 @@ __all__ = [
     "copy_composites",
     "data_key",
     "discover_composites",
-    "export_geoparquet",
+    "drop_empty_composites",
     "fingerprint",
     "index_from_items",
     "is_tile_item",
@@ -131,4 +130,5 @@ __all__ = [
     "write_stac_geoparquet",
     "year_catalog_document",
     "year_child_link",
+    "year_index_document",
 ]

@@ -1,40 +1,73 @@
-# The identity and prose of the published GLACE catalog.
+# Title, description and other prose of the published GLACE catalog.
 #
-# `scripts/render-catalog.py` renders `catalog/` from this file, `assets.yaml`
-# and the templates beside them: the root catalog, both collections, the style
-# and every README and AGENTS.md. Edit here, never there; `tests/test_render.py`
-# fails when the tracked tree and a fresh render differ.
+# `scripts/render-catalog.py` writes everything in `catalog/` from this file,
+# `assets.yaml` and `templates/`. Edit these sources, then re-render;
+# `tests/test_render.py` checks that `catalog/` matches them.
 #
-# Prose fields are Jinja2 templates over: region, first_year, last_year,
-# n_assets (twelve), n_viz (fourteen), max_zoom, analysis_resolution, and
-# `year` where a field describes one year. Ids and grids come from
-# `src/glace_catalog/scopes.py` for the scope named here; the markdown
-# templates under templates/ see a wider context, listed in documents.py.
+# Prose fields may use these Jinja2 variables: region, first_year, last_year,
+# n_assets, n_viz, max_zoom, analysis_resolution, and `year` in fields that
+# describe one year. Collection ids and grids come from
+# `src/glace_catalog/scopes.py`, for the scope named below.
 
-scope: ch
+scope: alps
 region: the Alpine Convention perimeter
-# Years the tracked tree claims. `finalize-catalog` replaces the temporal
-# extent with the measured compositing windows at publication; these bound it
-# in the tracked tree and name the series in the prose.
+# The years the catalog covers, used in the prose and as the temporal extent
+# of the tracked collections. Publication sets the exact extent from the
+# compositing windows.
 years:
-  first: 2021
-  last: 2024
+  first: 2015
+  last: 2026
 
-title: GLACE Switzerland (preliminary)
+title: GLACE Alps
 subtitle: Sentinel-1 Glacier Coherence and Backscatter
-# The subtitle under the wordmark and heading at the top of both READMEs.
+# Shown under the title at the top of the READMEs.
 tagline: >-
   Sentinel-1 interferometric coherence and backscatter composites of the
   European Alps
 
-# Shown once, in the root README and AGENTS.md. Drop it with the "(preliminary)"
-# in the title when the Alpine catalog replaces this one.
-preliminary_notice: >-
-  This is a preliminary release over the Swiss Alps, published to exercise
-  the GLACE publication pipeline while the full dataset is produced. The
-  dataset is GLACE Alps, over {{ region }}, which uses this same pipeline and
-  supersedes this catalog. These URLs are provisional: do not cite them, and
-  expect the coverage, the years and the identifiers to change.
+# A release-status note for the root README and AGENTS.md, shown when
+# non-empty.
+preliminary_notice: ""
+
+# Pitfalls that give plausible but wrong results, and known gaps in the data,
+# for the root README and AGENTS.md. The wording and numbers of the first four
+# follow the Usage Notes of the data paper.
+usage_notes:
+  - title: Composite quality
+    text: >-
+      Lower `*_qa_cqm` values indicate a lower local resolution of the
+      composite: the closer to 0, the fewer favourable viewing geometries
+      contributed. In the validation, glacier and non-glacier pixels with a
+      CQM below 0.5 (linear, about −3 dB) separate worse (AUC 0.87) than
+      elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of
+      the glacier outlines and 1.5% of the glacier pixels. Mask or downweight
+      them, or use the CQM as an additional model input.
+  - title: Coherence bias
+    text: >-
+      Coherence is estimated over a 35 × 7 (range × azimuth) window. The
+      finite window biases the estimate upwards, so fully decorrelated
+      surfaces do not reach 0: over large lakes, the mean is about 0.09.
+      Absolute values therefore differ from products that use larger windows,
+      such as the global seasonal Sentinel-1 coherence of
+      [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6).
+      Do not compare values across products, and choose thresholds on GLACE
+      itself.
+  - title: Low coherence outside glaciers
+    text: >-
+      Other surfaces also decorrelate over 12 days and can have similarly low
+      coherence, such as snow patches, lakes and unstable slopes.
+  - title: Validated scope
+    text: >-
+      The validation covers glacier mapping in Switzerland only. Its scores
+      do not describe glacier mapping performance in other parts of the Alps,
+      or farther than 250 m from the glacier outlines. Other applications may
+      also benefit from the composites, but were not validated.
+  - title: 2015 coverage
+    text: >-
+      In 2015, coherence is missing on 91 MGRS squares in the north-central
+      Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because
+      Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and
+      32TNT24, have no 2015 items. Every other year covers all squares.
 
 description: >-
   Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
@@ -51,14 +84,23 @@ description: >-
   (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
   one fixed equal-area grid (ETRS89-LAEA, 40 m grid spacing). Every
   cloud-optimized GeoTIFF is LERC-compressed and carries its processing
-  record in its own tags. In addition, raster PMTiles (WebP) in Web Mercator
-  are provided for web maps, such as the
-  [GLACE Viewer](https://lqgentner.github.io/glace-viewer).
-
-
-  {{ preliminary_notice }}
+  record in its own tags. For web maps, such as the
+  [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles
+  in Web Mercator hold 8-bit value-encoded WebP tiles.
 
 license: CC-BY-4.0
+
+# The dataset's DOIs at LaRS. `canonical` names every version; `versions` maps
+# each DATASET_VERSION to its own DOI, the collections' sci:doi. Rendering
+# fails if the current version has none. `citation` may use `version` and
+# `doi` (the version DOI).
+doi:
+  canonical: 10.48656/d4r9-fj97
+  versions:
+    "1.0": 10.48656/60er-3j55
+citation: >-
+  Gentner, L. Q. (2026). GLACE Alps (Version {{ version }}) [Data set]. LaRS –
+  Language Repository of Switzerland. https://doi.org/{{ doi }}
 
 keywords:
   - Sentinel-1
@@ -85,20 +127,28 @@ providers:
     roles: [producer, processor, licensor, host]
     url: https://www.geo.uzh.ch/en.html
 
+# External links of the root catalog, by name; the templates refer to them by
+# name. Each carries its link relation; `preview` is also repeated on both
+# collections.
 links:
-  about:
-    href: https://source.coop/lqgentner/glace-ch
-    title: Dataset on Source Cooperative
+  source_coop:
+    rel: via
+    href: https://source.coop/giuz/glace-alps
+    title: This catalog on Source Cooperative
   vcs:
+    rel: vcs
     href: https://github.com/lqgentner/glace-catalog
     title: Source repository
   issues:
+    rel: issues
     href: https://github.com/lqgentner/glace-catalog/issues
     title: Issue tracker
-  related:
+  viewer:
+    rel: preview
     href: https://lqgentner.github.io/glace-viewer
-    title: GLACE Viewer, a web map over the PMTiles archives
-  via:
+    title: GLACE Viewer, an interactive web map
+  pipeline:
+    rel: via
     href: https://github.com/lqgentner/glace-production
     title: Production pipeline
 
@@ -112,10 +162,11 @@ collections:
       10 m grid spacing, one item per square and year. Each item carries
       {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
       backscatter in VV and VH, and for each of the four a
-      contributing-observations count and a composite quality map. Stored values are linear; the decibel display
-      conversion (`10*log10(x)`) is declared in the renders. Query the tiles
-      with the item mirror `items.parquet`.
-    # One year sub-catalog, rendered with `year`.
+      contributing-observations count and a composite quality map. Stored
+      values are linear; the renders declare the decibel conversion
+      (`10*log10(x)`) for display. Search the tiles with the item index
+      `items.parquet`.
+    # Description of each year sub-catalog.
     year_description: >-
       The MGRS squares composited in {{ year }}, one item each, every item
       carrying that square's {{ n_assets }} single-band composites.
@@ -123,26 +174,27 @@ collections:
     title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
-    # The style asset. Rendered with `year` for a published per-year copy and
-    # without one for the tracked template.
+    # Description of the style assets: with `year` for the style on that
+    # year's mosaic item, without it for the collection's style.
     style_description: >-
       {% if year is defined %}Every published web-map layer of {{ year }}, the
-      first visible and the rest hidden.{% else %}The template every published
-      year's style is written from, one copy per year as styles/{year}.json.
-      Every web-map layer of one year, the first visible and the rest
-      hidden.{% endif %} Each layer's metadata.portolan:legend carries the color
-      ramp and value range baked into its archive.
+      first visible and the rest hidden.{% else %}Every web-map layer of the
+      latest published year, the first visible and the rest hidden. Each
+      year's mosaic item carries the style of its own year, as
+      styles/default.json beside its archives.{% endif %} Each archive is a
+      raster-dem source whose custom encoding decodes its values, drawn by a
+      color-relief layer with a default color ramp that a client can change.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.
-      The grid is equal-area to support area statistics. Every year shares the
-      same extent, so multitemporal stacks need no alignment step.
+      The grid is equal-area, for area statistics, and every year shares the
+      same extent, so years stack directly.
       {{ n_assets | capitalize }} single-band
       analysis rasters per year, in linear units, each a Cloud-Optimized
-      GeoTIFF with internal overviews. Drawing is served separately by
-      {{ n_viz }} PMTiles archives per year, tiled on the WebMercatorQuad grid
-      at zoom {{ max_zoom }}.
-    # One mosaic item, rendered with `year`.
+      GeoTIFF with internal overviews. For web maps, each year also has
+      {{ n_viz }} PMTiles archives on the WebMercatorQuad grid up to zoom
+      {{ max_zoom }}.
+    # Description of each annual mosaic item.
     item_description: >-
       Annual mosaics of the GLACE composites for {{ year }}, on a fixed
       equal-area grid (ETRS89-LAEA, {{ analysis_resolution }} m) every year of

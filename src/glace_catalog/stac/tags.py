@@ -1,15 +1,13 @@
-"""What one composite says about itself, and whether that is enough to publish.
+"""Read the provenance a composite records about itself, and check it.
 
-Everything the catalogue asserts about how a composite was made and how its
-pixels are to be read comes from that file's own GeoTIFF tags, which ``s1bursts``
-writes on the branch that actually ran. The vocabulary follows the CEOS-ARD
-Product Family Specification for SAR v1.3.1 so that terms can be looked up
-there.
+Everything the catalogue states about how a composite was made, and how its
+pixels are read, comes from the file's own GeoTIFF tags, written by
+``s1bursts``. The vocabulary follows the CEOS-ARD Product Family Specification
+for SAR v1.3.1, so terms can be looked up there.
 
-Nothing here is optional: a composite that cannot say how it was made is a gap
-in the archive rather than a field to omit, and a raster storing decibels is
-refused outright, because the specification asks for that conversion to be
-declared rather than applied.
+Every provenance tag is required, and a composite missing one is reported as a
+gap in the archive. Rasters must store linear values: the specification leaves
+the conversion to decibels to the user, so a raster in decibels is rejected.
 """
 
 from __future__ import annotations
@@ -39,15 +37,13 @@ METADATA_VOCABULARY_NOTE = (
     "Specification for SAR v1.3.1, so that terms can be looked up there. "
     "Full conformance is neither assessed nor claimed. "
 )
-"""What the collection says about its relationship to the specification.
+"""The collection's statement about its relationship to the specification.
 
-The products state the same thing per file in their ``METADATA_VOCABULARY``
-tag. Saying it once here is what a reader of the catalogue encounters.
+Each product file states the same in its ``METADATA_VOCABULARY`` tag.
 """
 
-# Tags whose presence means the raster stores decibels. The specification asks
-# for the conversion to be declared rather than applied, so the published
-# dataset is linear and the catalogue refuses to describe anything else.
+# Tags whose presence means the raster stores decibels. Published rasters must
+# be linear (see the module docstring).
 _DECIBEL_TAGS = ("BACKSCATTER_SCALING", "CQM_SCALING")
 
 PROVENANCE_EXPECTATION = (
@@ -58,17 +54,14 @@ PROVENANCE_EXPECTATION = (
 """Why a raster was refused, appended to every provenance failure."""
 
 UNKNOWN_TAG_VALUE = "N/A"
-"""``s1bursts`` sentinel for a provenance tag it considered but could not fill.
+"""``s1bursts`` placeholder for a provenance tag it could not fill.
 
-Meaningful in a standalone file, where it separates "asked and unanswered" from
-"never written". The catalogue refuses it: a published archive whose composites
-cannot say which SNAP built them has a provenance gap, and the catalogue is
-where that gap should surface rather than be papered over with an absent field.
+In a standalone file it marks a value as unknown. The catalogue treats it as a
+provenance gap and rejects the raster, so the gap is reported.
 """
 
-# Tags every composite and QA layer carries, whatever it is. Absence means the
-# raster was written by a pipeline older than the tag, which is exactly the
-# drift the build is meant to catch.
+# Tags every composite and QA layer carries. A missing tag means the raster
+# came from an older pipeline version.
 _REQUIRED_TAGS = (
     "METADATA_VOCABULARY",
     "PIPELINE_SOFTWARE",
@@ -94,20 +87,20 @@ _REQUIRED_TAGS = (
     "LAYER_NAME",
     "LAYER_DESCRIPTION",
 )
-# A pass composite applies no weighting, so it cites no method reference; only
-# it carries a pass direction, the LRW composites spanning both.
+# LRW composites cite their weighting method; pass composites record their
+# pass direction.
 _REQUIRED_LRW_TAGS = ("COMPOSITING_METHOD_REFERENCE",)
 _REQUIRED_PASS_TAGS = ("PASS_DIRECTION",)
-# Measurement vocabulary, on the data layers only: a QA layer describes the
-# composite rather than the quantity, and carries neither set.
+# Measurement tags, on data layers only. QA layers describe the composite
+# itself and carry the QA tags below.
 _REQUIRED_BACKSCATTER_TAGS = (
     "BACKSCATTER_MEASUREMENT",
     "BACKSCATTER_CONVENTION",
     "BACKSCATTER_CONVERSION_EQ",
 )
-# The estimation window reaches a composite only through its inputs' tags, so
-# requiring it here is what proves that route stayed connected. The coherence
-# statistics are not required: an all-nodata tile legitimately has none.
+# A composite inherits the estimation window from its inputs' tags, so
+# requiring it checks that those tags were passed on. The coherence statistics
+# are optional, because an all-nodata tile has none.
 _REQUIRED_COHERENCE_TAGS = (
     "MEASUREMENT_TYPE",
     "TEMPORAL_BASELINE_DAYS",
@@ -133,16 +126,12 @@ _TAG_FIELDS: dict[str, str] = {
     "PIXEL_COORDINATE_CONVENTION": "glace:pixel_coordinate_convention",
     "COMPOSITE_START_DATE": "glace:composite_start_date",
     "COMPOSITE_END_DATE": "glace:composite_end_date",
-    # The window above is the sampling frame, shared by every tile of a year;
-    # these two are the acquisitions that actually contributed to this file.
+    # The window above is the same for every tile of a year; these two dates
+    # bound the acquisitions that contributed to this file.
     "FIRST_ACQUISITION_DATE": "glace:first_acquisition_date",
     "LAST_ACQUISITION_DATE": "glace:last_acquisition_date",
-    # The sat extension's `sat:orbit_state` would be the standard home for
-    # this, but its schema requires at least one `sat:` field in the item
-    # properties, and a GLACE item mixes LRW composites (both directions) with
-    # per-pass ones. An asset-level-only declaration is schema-invalid. The
-    # tag follows CEOS-ARD PFS SAR, which says "pass direction"; `s1bursts`
-    # renamed it from `ORBIT_DIRECTION` for that reason.
+    # An asset field, because one item mixes LRW composites (both directions)
+    # with per-pass ones. The name follows CEOS-ARD PFS SAR.
     "PASS_DIRECTION": "glace:pass_direction",
     "PRODUCT_TYPE": "glace:product_type",
     "SOURCE_DATA_PRODUCT_LEVEL": "glace:source_data_product_level",
@@ -184,9 +173,9 @@ PROVENANCE_TAGS: tuple[str, ...] = tuple(
 )
 """Every provenance tag a composite may carry, in declaration order.
 
-The manifest reserves one column per tag, so a run's record and the raster's own
-tags can be compared field by field. Which of them a given raster must carry is
-:func:`required_tags`; the rest are legitimately absent on some products.
+The manifest has one column per tag, so a run's record can be compared with the
+raster's own tags field by field. :func:`required_tags` gives the tags a given
+raster must carry; the others apply to some products only.
 """
 
 _INT_TAGS = frozenset(
@@ -205,19 +194,17 @@ _STATISTICS_TAGS = {
     "stddev": "STATISTICS_STDDEV",
     "valid_percent": "STATISTICS_VALID_PERCENT",
 }
-"""The GDAL band-tag items the writer embeds, keyed as :class:`BandStatistics` field."""
+"""GDAL band tag of each :class:`BandStatistics` field."""
 
 
 @dataclass(frozen=True)
 class BandStatistics:
     """The five statistics one band publishes, under the raster extension's names.
 
-    A record rather than a mapping because the five travel together: Portolan
-    raises them to a MUST (``PTL-DAT-009``, and ``PTL-DAT-010`` for the valid
-    percent wherever a band declares nodata), so a band that carries four of
-    them is a writer bug. Naming them here turns that into a ``ValueError``
-    where the manifest or the header is read, rather than a ``KeyError`` at
-    publication.
+    Portolan requires all five (``PTL-DAT-009``, and ``PTL-DAT-010`` for the
+    valid percent on bands with a nodata value). :func:`band_statistics`
+    builds this record and raises ``ValueError`` on a partial set, as soon as
+    the manifest or header is read.
 
     Parameters
     ----------
@@ -255,19 +242,18 @@ def band_statistics(
     Parameters
     ----------
     values
-        The statistics that were found, keyed by :class:`BandStatistics` field.
-        Absent fields are simply absent from the mapping.
+        The statistics found, keyed by :class:`BandStatistics` field.
     names
-        Field name to the name it carries in the source — a GDAL band tag or a
-        manifest column — so the error names what the reader looked for.
+        Each field's name in the source (a GDAL band tag or a manifest
+        column), used in the error message.
     source
         What was read, named in the error.
 
     Returns
     -------
     BandStatistics or None
-        The record, or ``None`` when the source carries none of the five: an
-        all-nodata band legitimately has no statistics.
+        The record, or ``None`` when the source has none of the five, as for
+        an all-nodata band.
 
     Raises
     ------
@@ -290,9 +276,8 @@ def band_statistics(
 class RasterInfo:
     """What one raster says about itself: its tags, band and file layout.
 
-    Read once per file and reused for every catalogue field that describes the
-    pixels, so the catalogue cannot assert a convention the pipeline did not
-    write.
+    Read once per file. Every catalogue field that describes the pixels comes
+    from here, so the catalogue states only what the file records.
     """
 
     tags: dict[str, str] = field(default_factory=dict)
@@ -307,11 +292,10 @@ class RasterInfo:
     checksum: str | None = None
     """Multihash-encoded sha256 of the file, as ``file:checksum`` requires."""
     statistics: BandStatistics | None = None
-    """Embedded band statistics, or ``None`` for a band that carries none.
+    """Embedded band statistics, or ``None`` if the band has none.
 
-    Portolan raises these to a MUST (``PTL-DAT-009``, and ``PTL-DAT-010`` for the
-    valid percent wherever a band declares nodata), so ``None`` here is a raster
-    that cannot be published, not a field that happens to be absent.
+    Portolan requires them (``PTL-DAT-009`` and ``PTL-DAT-010``), so a raster
+    with ``None`` here cannot be published.
     """
 
     @property
@@ -387,11 +371,11 @@ def survey_tags(
     by_tile: dict[str, list[CompositeFile]],
     raster_info: Mapping[str, Mapping[str, RasterInfo]],
 ) -> list[RasterProblems]:
-    """Check the provenance of every discovered composite, without building anything.
+    """Check the provenance of every discovered composite.
 
-    Where :func:`build_item` stops at the first raster it cannot describe, this
-    walks the whole archive and returns one record per bad raster, so a single
-    pass says everything that needs fixing.
+    The item builders stop at the first bad raster; this checks the whole
+    archive and returns one record per bad raster, so one pass lists
+    everything to fix.
 
     Parameters
     ----------
@@ -444,11 +428,9 @@ def tag_problems(file: CompositeFile, info: RasterInfo) -> list[str]:
     builders, which refuse to describe a raster that fails here.
     """
     if "PIPELINE_SOFTWARE" not in info.tags:
-        # An untagged raster predates the tagged products altogether. Listing
-        # every absent tag on top of that would bury the one fact that matters.
-        # PIPELINE_SOFTWARE is the sentinel because `s1bursts` stamps it fresh
-        # on every write and never inherits it, so its absence is unambiguous
-        # and it survives any rewording of the vocabulary tag.
+        # A raster without PIPELINE_SOFTWARE carries no provenance tags at all,
+        # so report that one fact. `s1bursts` writes this tag on every write,
+        # which makes it a reliable marker.
         return ["untagged: no PIPELINE_SOFTWARE, so nothing states how its pixels are scaled"]
     problems = []
     if info.is_decibel:
@@ -469,8 +451,8 @@ def require_valid(file: CompositeFile, info: RasterInfo) -> None:
     Raises
     ------
     ValueError
-        If :func:`tag_problems` finds anything. Use :func:`survey_tags` to see
-        every bad raster in an archive rather than stopping at the first.
+        If :func:`tag_problems` finds anything. Use :func:`survey_tags` to list
+        every bad raster in an archive.
     """
     problems = tag_problems(file, info)
     if problems:
@@ -497,9 +479,9 @@ def tag_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:
 def standard_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:
     """Map the GeoTIFF tags onto fields published extensions already define.
 
-    Kept apart from :func:`tag_fields` because ``processing:software`` is
-    somebody else's vocabulary with somebody else's shape: a name-to-version
-    map built from two tags, not a string copied across.
+    ``processing:software`` is a map from software name to version, built from
+    pairs of tags, so it is assembled here separately from
+    :func:`tag_fields`.
     """
     fields: dict[str, Any] = {}
     software = {}

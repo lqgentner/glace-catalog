@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Gate on the in-tree PMTiles tiler.
+"""Checks the in-tree PMTiles tiler.
 
-The tiler is adapted from rio-pmtiles, and what can go wrong is what went wrong
-there: the wrong tile enumerated, an empty tile kept, an edge tile dropped, and
-above all the overview state leak — the upstream worker kept the overview level
-it chose for one tile and reused it for every finer tile after it, so the
-max-zoom tiles of a source with overviews were read from the 2x level and
-upsampled. That last failure is silent: the archive is valid and merely blurred.
+The tiler is adapted from rio-pmtiles. This gate checks which tiles it
+enumerates, that it skips empty tiles and keeps edge tiles, and that it reads
+each tile at the right resolution. The last matters most. The tiler picks an
+overview level for each tile, and a choice carried over from one tile to the
+finer tiles after it would read max-zoom tiles from a coarser overview and
+upsample them. The archive would be valid, only blurred.
 
-So this builds a synthetic RGBA raster whose every pixel is known — a 0/255
-checkerboard on the z13 pixel grid, one 2x2 tile block of it transparent — and
-tiles it two ways: as written, and with average overviews, which turn the
-checkerboard flat grey. Every z13 tile of both archives must come back as the
-checkerboard; the transparent block must be absent; the enumeration must match
-the scope's own arithmetic. PNG tiles, so the comparison is exact.
+The test builds a synthetic RGBA raster with known pixels: a 0/255
+checkerboard on the z13 pixel grid, with one 2x2 block of tiles transparent. It
+tiles the raster twice, once as written and once with average overviews, which
+turn the checkerboard flat grey. Every z13 tile of both archives must be the
+checkerboard, the transparent block must be absent, and the enumeration must
+match the scope's grid. Tiles are PNG, so comparisons are exact.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
@@ -123,7 +123,7 @@ def check_archive(checks: dict[str, bool], label: str, archive: Path) -> None:
     checks[f"{label}: the transparent block is dropped and nothing else"] = (
         at_max == expected_z13_tiles()
     )
-    # The leak would turn these into flat 128 grey; the source is 0/255.
+    # The source is 0/255; a tile read from an overview would be flat 128 grey.
     checks[f"{label}: every max-zoom tile is the checkerboard, not an overview"] = all(
         set(np.unique(tiles[zxy][..., 0]).tolist()) == {0, 255} for zxy in at_max
     )
@@ -175,8 +175,8 @@ def check_enumeration(checks: dict[str, bool]) -> None:
     checks["tile_bounds of the origin tile touches the grid corner"] = (
         abs(left - grid.bounds[0]) < 1e-6 and abs(top - grid.bounds[3]) < 1e-6 and bottom < top
     )
-    # Per zoom, the counts `mercantile.tiles` gives over the same box (checked
-    # 2026-09-08): one tile at z5 and z6, then 4, 12, 24, 77, 286, 1050, 4200.
+    # Per zoom, the tile counts `mercantile.tiles` gives for the same box: one
+    # tile at z5 and z6, then 4, 12, 24, 77, 286, 1050, 4200.
     per_zoom = [len(tiles_covering(grid.bounds, [zoom])) for zoom in range(5, MOSAIC_ZOOM + 1)]
     checks["ch at z5..z13 enumerates what mercantile does"] = per_zoom == [
         1,
@@ -194,8 +194,34 @@ def check_enumeration(checks: dict[str, bool]) -> None:
     )
 
 
+def check_declared_bounds(checks: dict[str, bool], source: Path, work: Path) -> None:
+    """Check that the header declares the bounds the writer is given."""
+    bounds = [8.21, 46.41, 8.33, 46.49]
+    declared = work / "declared.pmtiles"
+    write_archive(
+        source,
+        declared,
+        min_zoom=MIN_ZOOM,
+        max_zoom=MOSAIC_ZOOM,
+        spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format="PNG"),
+        name="bounds",
+        bounds=bounds,
+    )
+    header, _ = read_archive(declared)
+    west, south, east, north = bounds
+    checks["the header declares the bounds it is given"] = all(
+        abs(header[key] / 1e7 - value) < 2e-7
+        for key, value in (
+            ("min_lon_e7", west),
+            ("min_lat_e7", south),
+            ("max_lon_e7", east),
+            ("max_lat_e7", north),
+        )
+    )
+
+
 def check_all_transparent_refused(work: Path) -> bool:
-    """Refuse an archive without a single tile: a broken build, not an empty file."""
+    """Check that a source with no visible pixels is refused: zero tiles means a broken build."""
     blank = work / "blank.tif"
     write_source(blank, overviews=False)
     with rasterio.open(blank, "r+") as dst:
@@ -244,9 +270,10 @@ def main() -> int:
             check_archive(checks, label, archive)
 
         checks["a fully transparent source is refused"] = check_all_transparent_refused(work)
+        check_declared_bounds(checks, plain, work)
 
-    # Fifteen workers at GDAL's default cache of 5 % of RAM each ran a 60 GB
-    # machine dry on 2026-09-11; every worker must start with a bounded cache.
+    # Each worker sets a bounded GDAL cache. GDAL's default of 5 % of RAM per
+    # process adds up quickly across a pool of workers.
     with spawn_pool(2) as pool:
         caches = set(pool.map(worker_gdal_cache, range(4)))
     checks["every tiler worker bounds its GDAL cache"] = caches == {str(WORKER_GDAL_CACHE_MB)}

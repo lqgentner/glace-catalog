@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run every gate. Exit non-zero if any fails.
 
-The list is explicit rather than globbed so that the gates are visible in one
-place and adding one is a deliberate edit. Run from anywhere:
+The list is explicit, so that every gate is visible in one place and adding
+one is a conscious edit. Run from anywhere:
 
     uv run tests/run_all.py
 
@@ -23,6 +23,7 @@ TESTS = [
     "test_version.py",
     "test_grids.py",
     "test_styles.py",
+    "test_encoding.py",
     "test_manifest_contract.py",
     "test_items.py",
     "test_mosaic_stats.py",
@@ -30,9 +31,12 @@ TESTS = [
     "test_thumbnails.py",
     "test_tiler.py",
     "test_webmap.py",
+    "test_grid.py",
     "test_finalize.py",
     "test_links.py",
-    "test_sync_data.py",
+    "test_links_remote.py",
+    "test_public_base.py",
+    "test_publish.py",
     "test_stac_valid.py",
     "test_conformance.py",
 ]

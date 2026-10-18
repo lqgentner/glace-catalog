@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
-"""Gate on the canonical mosaic grids in ``glace_catalog.scopes``.
+"""Checks the mosaic grids defined in ``glace_catalog.scopes``.
 
-Every ``Scope.grid`` is a **hand-committed constant**, so nothing at build time
-recomputes it and nothing at build time would notice if it drifted. The extent
-is also load-bearing three times over: the VRT chain warps onto it, the mosaic
-COG is written on it, and ``stac/items.py`` copies it into ``proj:shape`` and
-``proj:transform``. A digit lost in a hand edit would move all three together
-and stay invisible until a client tried to stack two years.
+Each scope's grids are constants written by hand, and the build uses them as
+given. The display grid matters in three places: the VRT chain warps onto it,
+the mosaic COG is written on it, and ``stac/items.py`` copies it into
+``proj:shape`` and ``proj:transform``. A typo would shift all three together,
+and would only show when someone compared two years.
 
-What is checked, per scope:
+Checked for each scope:
 
-- the CRS is WebMercator and the resolution is the WebMercatorQuad resolution at
+- the analysis grid uses the equal-area CRS at the analysis resolution, with
+  its bounds on the analysis alignment;
+- the display grid is WebMercator at the WebMercatorQuad resolution for
   :data:`~glace_catalog.scopes.MOSAIC_ZOOM`;
-- the extent is already on the z13 tile grid, i.e. ``snap_to_tiles`` is the
-  identity on it, and the shape is a whole number of 256 px tiles;
-- the origin is additionally aligned at z12, so the first internal overview is
-  still on the tile grid.
+- its extent lies on the z13 tile grid (``snap_to_tiles`` leaves it unchanged)
+  and its size is a whole number of 256 px tiles;
+- its origin is also aligned at z12, so the first overview stays on the tile
+  grid. GDAL's COG driver calls this ``ALIGNED_LEVELS=2``.
 
-That last one is the property GDAL's COG driver spells ``ALIGNED_LEVELS=2``.
-Checked against GDAL 3.12.2: feeding a deliberately misaligned source through
-``-of COG -co TILING_SCHEME=GoogleMapsCompatible -co ZOOM_LEVEL=13`` reproduces
-``snap_to_tiles``'s output exactly, down to the last digit of the ``ch`` left
-bound (753363.350778698921204). So this gate holds the constants to the same
-rule GDAL applies, without a GDAL dependency or a byte of raster.
+``snap_to_tiles`` matches GDAL's own snapping to the last digit (checked with
+GDAL 3.12.2 and ``-of COG -co TILING_SCHEME=GoogleMapsCompatible -co
+ZOOM_LEVEL=13``), so this gate applies GDAL's rule using plain arithmetic.
 
-Alignment below z12 is *not* required, and deliberately: the extent would have
-to grow to whole tiles at the coarsest aligned zoom, which for the Alps at z4
-means padding 69120x41984 out to 131072x131072 -- 5.9x the pixels, because one
-z4 tile is wider than the whole mosaic.
+Two aligned levels keep the extent close to the data. Aligning coarser levels
+means padding the extent to whole tiles at that zoom: for the Alps at z4, one
+tile is wider than the whole mosaic, and the padding would multiply the pixel
+count by 5.9.
 
 Reads no data and needs no network.
 
@@ -51,10 +49,7 @@ from glace_catalog.scopes import (
 TOLERANCE_M = 1e-6
 """Slack allowed when comparing two extents, in metres.
 
-The constants and ``snap_to_tiles`` reach the same number by the same
-arithmetic, so they agree bit for bit today. A tolerance twelve orders of
-magnitude below a pixel keeps the gate about the grid rather than about the last
-bit of a float, while still catching any edit a human could make.
+Far below a pixel, so it ignores floating-point noise but catches any hand edit.
 """
 
 MIN_ALIGNED_LEVELS = 2
@@ -67,8 +62,8 @@ def aligned_levels(grid: Grid) -> int:
     Counts the way GDAL's ``ALIGNED_LEVELS`` does, with the full-resolution
     level as the first: the return value is 1 when only the mosaic itself is
     aligned, 2 when its first overview is too, and so on. Only the origin is
-    examined, since that is what decides whether a decimated level's blocks
-    coincide with the tiles of the scheme.
+    checked, because it decides whether each overview's blocks line up with the
+    tiles of the scheme.
 
     Parameters
     ----------
@@ -94,7 +89,7 @@ def aligned_levels(grid: Grid) -> int:
 problems: list[str] = []
 
 for key, scope in sorted(SCOPES.items()):
-    # --- the analysis grid: equal-area, and that is the whole requirement ---
+    # --- the analysis grid: equal-area, on the analysis alignment ---
     analysis = scope.analysis_grid
     if analysis.crs != LAEA:
         problems.append(f"{key}: analysis crs is {analysis.crs}, not {LAEA}")
@@ -112,15 +107,14 @@ for key, scope in sorted(SCOPES.items()):
                 f"{key}: analysis {name} bound {value!r} is not on the "
                 f"{ANALYSIS_ALIGNMENT:g} m alignment",
             )
-    # No tile-alignment requirement here, deliberately: nothing tiles this grid.
-    # M-25 keeps the web map on its own WebMercator grid rather than warping out
-    # of this one, so an equal-area extent owes the XYZ pyramid nothing.
+    # Equal-area alignment is all this grid needs: the web map is built on the
+    # separate WebMercator display grid below.
     print(
         f"OK: {key} analysis {analysis.width}x{analysis.height} px at "
         f"{ANALYSIS_RESOLUTION:g} m, {LAEA}",
     )
 
-    # --- the display grid: has to be a tile pyramid ---
+    # --- the display grid: must form a tile pyramid ---
     grid = scope.display_grid
 
     if grid.crs != WEB_MERCATOR:

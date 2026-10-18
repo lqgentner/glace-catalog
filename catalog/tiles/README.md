@@ -1,8 +1,10 @@
 # GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
 
-One item per (MGRS square, year), each carrying twelve single-band
-Cloud-Optimized GeoTIFFs on the 10 km MGRS grid at 10 m grid spacing, in that
-square's own UTM zone. Agents: read [`AGENTS.md`](AGENTS.md).
+Each item contains one year of data for a 10 km MGRS square: twelve
+single-band Cloud-Optimized GeoTIFFs (COGs) at 10 m grid spacing, in the
+square's UTM zone. Search the item index with
+[rustac](https://stac-utils.github.io/rustac-py/), as shown below.
+For agent guidance, see [`AGENTS.md`](AGENTS.md).
 
 ## The twelve assets
 
@@ -21,35 +23,96 @@ square's own UTM zone. Agents: read [`AGENTS.md`](AGENTS.md).
 | `rtc_vh_qa_num` | Backscatter VH – Contributing Observations | uint16 | 0 |
 | `rtc_vh_qa_cqm` | Backscatter VH – Composite Quality Map | float32 | NaN |
 
-The asset key is the filename stem. Dates are in the item properties and the GeoTIFF tags.
+Each asset key is its filename without `.tif`. Dates are recorded in the STAC
+item and GeoTIFF tags.
 
 ## Reading the data
 
-Query the item mirror rather than walking the tree. `items.parquet` holds every
-item of every year, so one range request replaces one HTTP fetch per tile:
+Use `items.parquet` to search all tiles and years in one file. Rustac
+searches this static STAC-GeoParquet index directly. Install it with
+`pip install rustac`.
 
 ```python
-import duckdb
+import rustac
 
-duckdb.sql("INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;")
-duckdb.sql("""
-    SELECT id, datetime, "glace:glacier_fraction"
-    FROM read_parquet('https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet')
-    WHERE "glace:glacier_fraction" > 0.2
-    ORDER BY "glace:glacier_fraction" DESC
-""").show()
+items = rustac.search_sync(
+    "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
+    bbox=[7.9, 46.4, 8.2, 46.6],
+    datetime="2026-01-01/2027-01-01",
+)
+for item in items:
+    print(item["id"], item["assets"]["coh12_vv"]["href"])
 ```
 
-The item JSON under each year sub-catalog stays the normative representation;
-the mirror is a derived copy of it.
+The index is generated from the individual STAC item JSON files, which remain
+the authoritative records.
+
+## Build a data cube
+
+Search an area and load its tiles with
+[odc-stac](https://odc-stac.readthedocs.io/) to compare years:
+
+```python
+import odc.stac
+import pystac
+import rustac
+
+tiles = "https://data.source.coop/giuz/glace-alps/tiles/items.parquet"
+
+bbox = [7.9, 46.4, 8.2, 46.6]
+items = rustac.search_sync(tiles, bbox=bbox)
+cube = odc.stac.load(
+    [pystac.Item.from_dict(item) for item in items],
+    bands=["coh12_vv", "rtc_vv"],
+    bbox=bbox,
+    chunks={},
+)
+change = cube.coh12_vv.sel(time="2026") - cube.coh12_vv.sel(time="2015")
+```
+
+## Open the tiles in QGIS
+
+Create a virtual raster for one year and measurement. QGIS then streams only
+the parts of the COGs it displays:
+
+```python
+from osgeo import gdal
+import rustac
+
+tiles = "https://data.source.coop/giuz/glace-alps/tiles/items.parquet"
+bbox = [7.9, 46.4, 8.2, 46.6]
+
+items = rustac.search_sync(tiles, bbox=bbox, datetime="2026-01-01/2027-01-01")
+gdal.BuildVRT(
+    "coh12_vv_2026.vrt",
+    ["/vsicurl/" + item["assets"]["coh12_vv"]["href"] for item in items],
+)
+```
+
+Tiles from different UTM zones need one VRT per zone; the index's `proj:code`
+column gives each tile's zone.
+
+Open the resulting `.vrt` file as a raster layer in QGIS.
+
+## Tile grid
+
+`grid.pmtiles` holds every tile of any year as a polygon in the vector layer
+`mgrs`, with its MGRS code and glacier fractions: the share of the tile within
+RGI7-C-11 glacier outlines, plain and buffered by 250 m.
+`styles/grid.json` draws it, each tile filled by its buffered fraction.
 
 ## Units
 
-`rtc_*` is **linear power, not decibels**. Convert with `10*log10(x)`, which
-the collection's `renders` block declares.
+- Coherence (`coh12_vv`, `coh12_vh`) is dimensionless and linear.
+- Backscatter (`rtc_vv`, `rtc_vh`) is linear power. Use `10*log10(x)` to display
+  it in decibels.
+- Observation counts (`*_qa_num`) are integers; 0 is nodata.
+- Composite quality maps (`*_qa_cqm`) are dimensionless linear ratios of local
+  resolution. Higher values indicate better resolution. Use `10*log10(x)` for
+  decibel display.
 
-`*_qa_cqm` is a linear ratio. It is a weighted average of the observations' local resolution
-and does not carry a unit. For visualization, convert to decibels with `10*log10(x)`.
+Average backscatter and quality ratios in linear units. Float rasters use NaN
+for nodata.
 
 ## License
 

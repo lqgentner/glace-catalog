@@ -7,11 +7,14 @@
     "https://stac-extensions.github.io/raster/v2.0.0/schema.json",
     "https://stac-extensions.github.io/file/v2.1.0/schema.json",
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
-    "https://stac-extensions.github.io/version/v1.2.0/schema.json"
+    "https://stac-extensions.github.io/version/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+    "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json",
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
-  "id": "glace-ch-tiles",
+  "id": "glace-alps-tiles",
   "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
-  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the decibel display conversion (`10*log10(x)`) is declared in the renders. Query the tiles with the item mirror `items.parquet`.",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -23,7 +26,9 @@
     "Alps",
     "MGRS"
   ],
-  "version": "0.1",
+  "version": "1.0",
+  "sci:doi": "10.48656/60er-3j55",
+  "sci:citation": "Gentner, L. Q. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55",
   "providers": [
     {
       "name": "European Space Agency / Copernicus",
@@ -50,18 +55,18 @@
     "spatial": {
       "bbox": [
         [
-          6.7676,
-          45.8288,
-          10.459,
-          47.3388
+          4.7461,
+          43.3891,
+          16.6113,
+          48.4
         ]
       ]
     },
     "temporal": {
       "interval": [
         [
-          "2021-01-01T00:00:00Z",
-          "2025-01-01T00:00:00Z"
+          "2015-01-01T00:00:00Z",
+          "2027-01-01T00:00:00Z"
         ]
       ]
     }
@@ -75,7 +80,7 @@
       "rescale": [
         [
           0.1,
-          0.75
+          0.7
         ]
       ],
       "colormap_name": "magma",
@@ -90,7 +95,7 @@
       "rescale": [
         [
           0.0,
-          90.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -105,8 +110,8 @@
       "expression": "10*log10(coh12_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -3.0,
-          10.0
+          -2.5,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -136,7 +141,7 @@
       "rescale": [
         [
           0.0,
-          90.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -151,8 +156,8 @@
       "expression": "10*log10(coh12_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -3.0,
-          10.0
+          -2.5,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -167,8 +172,8 @@
       "expression": "10*log10(rtc_vv_b1)",
       "rescale": [
         [
-          -16.5,
-          -4.0
+          -14.5,
+          -3.5
         ]
       ],
       "colormap_name": "gray",
@@ -183,7 +188,7 @@
       "rescale": [
         [
           0.0,
-          90.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -198,8 +203,8 @@
       "expression": "10*log10(rtc_vv_qa_cqm_b1)",
       "rescale": [
         [
-          -4.0,
-          8.0
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -214,8 +219,8 @@
       "expression": "10*log10(rtc_vh_b1)",
       "rescale": [
         [
-          -23.5,
-          -11.0
+          -22.5,
+          -10.5
         ]
       ],
       "colormap_name": "gray",
@@ -230,7 +235,7 @@
       "rescale": [
         [
           0.0,
-          90.0
+          70.0
         ]
       ],
       "colormap_name": "viridis",
@@ -245,8 +250,8 @@
       "expression": "10*log10(rtc_vh_qa_cqm_b1)",
       "rescale": [
         [
-          -4.0,
-          8.0
+          -3.0,
+          4.0
         ]
       ],
       "colormap_name": "viridis",
@@ -360,7 +365,7 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -411,7 +416,7 @@
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. The decibel conversion, 10*log10, is declared in the collection's renders and not applied to the stored pixels.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -462,41 +467,190 @@
   },
   "assets": {
     "items": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
       "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
       "roles": [
         "collection-mirror"
       ],
+      "table:primary_geometry": "geometry",
+      "table:columns": [
+        {
+          "name": "type",
+          "description": "Always `Feature`."
+        },
+        {
+          "name": "stac_version",
+          "description": "STAC version of the item."
+        },
+        {
+          "name": "stac_extensions",
+          "description": "Schema URIs of the STAC extensions the item uses."
+        },
+        {
+          "name": "id",
+          "description": "Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`."
+        },
+        {
+          "name": "geometry",
+          "description": "Footprint of the MGRS square in WGS84 (EPSG:4326), as WKB: its four corners."
+        },
+        {
+          "name": "bbox",
+          "description": "Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups."
+        },
+        {
+          "name": "links",
+          "description": "The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification."
+        },
+        {
+          "name": "assets",
+          "description": "One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null."
+        },
+        {
+          "name": "collection",
+          "description": "Id of the collection, `glace-{scope}-tiles`."
+        },
+        {
+          "name": "start_datetime",
+          "description": "First day of the year's compositing window, at 00:00 UTC."
+        },
+        {
+          "name": "end_datetime",
+          "description": "The day after the window's last day, at 00:00 UTC."
+        },
+        {
+          "name": "constellation",
+          "description": "Always `sentinel-1`."
+        },
+        {
+          "name": "instruments",
+          "description": "Always `[c-sar]`."
+        },
+        {
+          "name": "sar:instrument_mode",
+          "description": "Always `IW`, Interferometric Wide swath."
+        },
+        {
+          "name": "sar:frequency_band",
+          "description": "Always `C`."
+        },
+        {
+          "name": "sar:polarizations",
+          "description": "Polarizations with at least one composite, `VV` and `VH`."
+        },
+        {
+          "name": "version",
+          "description": "Dataset version the item belongs to."
+        },
+        {
+          "name": "glace:mgrs_tile",
+          "description": "The 10 km MGRS square, such as `32TMS55`."
+        },
+        {
+          "name": "grid:code",
+          "description": "The MGRS square in the STAC grid extension's form, `MGRS-32TMS55`."
+        },
+        {
+          "name": "mgrs:utm_zone",
+          "description": "UTM zone of the square."
+        },
+        {
+          "name": "mgrs:latitude_band",
+          "description": "MGRS latitude band of the square."
+        },
+        {
+          "name": "mgrs:grid_square",
+          "description": "MGRS 100 km grid square identifier, the two letters after the band."
+        },
+        {
+          "name": "proj:code",
+          "description": "CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`."
+        },
+        {
+          "name": "proj:shape",
+          "description": "Raster shape of the item's COGs, `[rows, columns]`."
+        },
+        {
+          "name": "proj:transform",
+          "description": "Affine transform of the item's COGs, six coefficients in `proj:code` units."
+        },
+        {
+          "name": "glace:coh_first_acquisition",
+          "description": "Date of the first acquisition in the square's coherence composites, `YYYY-MM-DD`."
+        },
+        {
+          "name": "glace:coh_last_acquisition",
+          "description": "Date of the last acquisition in the square's coherence composites. About twelve days before the last backscatter date, because both images of a pair must fall in the window."
+        },
+        {
+          "name": "glace:rtc_first_acquisition",
+          "description": "Date of the first acquisition in the square's backscatter composites."
+        },
+        {
+          "name": "glace:rtc_last_acquisition",
+          "description": "Date of the last acquisition in the square's backscatter composites."
+        },
+        {
+          "name": "glace:glacier_fraction",
+          "description": "Share of the square inside RGI7-C-11 glacier outlines, 0 to 1. The same every year."
+        },
+        {
+          "name": "glace:glacier_fraction_buffered",
+          "description": "Share of the square inside the same outlines buffered by 250 m, 0 to 1. The same every year."
+        },
+        {
+          "name": "processing:level",
+          "description": "Always `L3`, a composite over many acquisitions."
+        },
+        {
+          "name": "glace:dem",
+          "description": "DEM used for terrain correction and geocoding."
+        },
+        {
+          "name": "datetime",
+          "description": "Midpoint of the compositing window."
+        }
+      ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/items.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/items.parquet",
           "alternate:name": "S3"
         }
       }
     },
-    "glacier-fractions": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
-      "type": "application/vnd.apache.parquet",
-      "title": "Per-tile glacier cover fractions (RGI7)",
-      "description": "The share of each MGRS tile covered by RGI7 region 11 outlines, plain and buffered by 250 m, computed once per scope: the lookup behind the glace:glacier_fraction properties on every item.",
+    "grid": {
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Tile grid with glacier fractions",
+      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs, with the properties mgrs_tile, glacier_fraction and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
       "roles": [
-        "metadata"
+        "visual"
       ],
       "alternate": {
         "s3": {
-          "href": "s3://eu-central-1.opendata.source.coop/lqgentner/glace-ch/tiles/glacier-fractions.parquet",
+          "href": "s3://eu-central-1.opendata.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
           "alternate:name": "S3"
         }
       }
     },
     "thumbnail": {
-      "href": "https://data.source.coop/lqgentner/glace-ch/tiles/thumbnail.png",
-      "type": "image/png",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/thumbnail.webp",
+      "type": "image/webp",
       "title": "GLACE tiles preview",
       "roles": [
         "thumbnail"
+      ]
+    },
+    "style-grid": {
+      "href": "./styles/grid.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Map style – tile grid",
+      "description": "Draws the tile grid, each tile filled by its buffered glacier fraction.",
+      "roles": [
+        "style",
+        "default"
       ]
     }
   },
@@ -505,13 +659,13 @@
       "rel": "root",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "parent",
       "href": "../catalog.json",
       "type": "application/json",
-      "title": "GLACE Switzerland (preliminary)"
+      "title": "GLACE Alps"
     },
     {
       "rel": "describedby",
@@ -530,6 +684,33 @@
       "href": "https://creativecommons.org/licenses/by/4.0/",
       "type": "text/html",
       "title": "CC-BY-4.0"
+    },
+    {
+      "rel": "cite-as",
+      "href": "https://doi.org/10.48656/60er-3j55",
+      "type": "text/html",
+      "title": "DOI of version 1.0"
+    },
+    {
+      "rel": "related",
+      "href": "https://doi.org/10.48656/d4r9-fj97",
+      "type": "text/html",
+      "title": "Canonical DOI, every version"
+    },
+    {
+      "rel": "preview",
+      "href": "https://lqgentner.github.io/glace-viewer",
+      "type": "text/html",
+      "title": "GLACE Viewer, an interactive web map"
+    },
+    {
+      "rel": "pmtiles",
+      "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
+      "type": "application/vnd.pmtiles",
+      "title": "Tile grid with glacier fractions",
+      "pmtiles:layers": [
+        "mgrs"
+      ]
     }
   ]
 }

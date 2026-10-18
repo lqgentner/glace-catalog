@@ -1,37 +1,29 @@
 #!/usr/bin/env python3
-"""Stream the built store to Source Cooperative, object to object.
+"""Upload the built store to Source Cooperative.
 
-The store on the UZH gateway *is* the published tree: ``publish-year`` writes
-its items and rasters there and ``finalize-catalog`` patches its collection
-documents with the year links, the extent and the PMTiles registrations. So
-publication copies that tree and nothing else -- no staging directory, no second
-walk over the tracked ``catalog/``, which would put the unpatched documents over
-the patched ones.
+The store at ``GLACE_STORE_ROOT``, a local directory or an ``s3://`` prefix, is
+the complete published tree: ``build-year.py`` writes the items and rasters,
+and ``finalize-catalog.py`` writes the collection documents. This script copies
+that tree to the ``write_prefix`` in ``catalog.publish.yaml``, using the
+``profile`` named there; the profile's AWS configuration supplies the endpoint.
+Each object streams from source to target in chunks. Files whose name starts
+with a dot are build state and stay local.
 
-Both sides are :class:`~upath.UPath` roots. The source is the store root the
-build wrote to, with the ``GLACE_S3_*`` profile, endpoint and checksum settings
-every other step uses. The target is the ``write_prefix`` in
-``catalog.publish.yaml`` opened with the ``profile`` named there, and nothing
-else: that profile's config section carries the Source Cooperative endpoint,
-and botocore reads it from there. Bytes never touch local disk. Each object is
-read from one root and written to the other in chunks, and the retry budget
-``freezebase`` puts on every S3 path covers both sides.
+An object is uploaded when it is new or changed. Changes are judged from one
+listing per side:
 
-Change detection is three steps from one listing per side, and reads no bytes.
-A different size is a change. At an equal size, two single-part ETags are two
-MD5s and settle it either way; a multipart upload lists an ETag that is not an
-MD5, and a side may list none, so the ETag is never required, only used when
-both sides have one. What that leaves is decided the way ``aws s3 sync``
-decides everything: the build writes the store before publication copies it,
-so a source object newer than its published copy was rewritten since, and one
-that is not has not been touched. ``--force`` is the way out when a truncated
-object of the right size has to be replaced, or when the two services' clocks
-are not to be trusted. Nothing is ever deleted: removing a file from the store
-leaves the object published.
+1. A different size means changed.
+2. At equal size, when both sides list an MD5 ETag (single-part uploads), the
+   ETags decide.
+3. Otherwise, the object is uploaded when the source copy is newer.
 
-    uv run --env-file .env tools/sync_data.py                 # dry run
-    uv run --env-file .env tools/sync_data.py --confirm       # upload
-    uv run --env-file .env tools/sync_data.py --prefix tiles/2024 --confirm
+``--force`` uploads every object, for example to replace a truncated object
+that has the right size. Publishing only adds and overwrites objects; removing
+one from the target is a separate, manual action.
+
+    make publish-plan  # dry run
+    make publish       # upload
+    uv run --env-file .env tools/publish.py --prefix tiles/2024 --confirm
 """
 
 from __future__ import annotations
@@ -48,7 +40,8 @@ import sys
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
-from freezebase.s3 import content_type_for, make_s3_upath
+from freezebase.s3 import content_type_for as default_content_type_for
+from freezebase.s3 import make_s3_upath
 from tqdm import tqdm
 from upath import UPath
 import yaml
@@ -61,11 +54,19 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 
-DEFAULT_WORKERS = 8
+DEFAULT_WORKERS = 32
+"""Concurrent transfers; most objects are tile COGs of about 1 MB, bound by request latency."""
 COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
 SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
 """An ETag that is the object's MD5: one hex digest, no part count after it."""
+
+
+def content_type_for(path: str) -> str:
+    """Freezebase's content type for ``path``, plus ``image/webp`` for thumbnails."""
+    if PurePosixPath(path).suffix.lower() == ".webp":
+        return "image/webp"
+    return default_content_type_for(path)
 
 
 def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
@@ -79,12 +80,10 @@ def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
     Returns
     -------
     UPath
-        The ``write_prefix``, authenticated with the ``profile``. No endpoint is
-        passed: the profile's config section carries it. The checksum policy
-        is freezebase's ``when_required``, which sends no ``x-amz-checksum``
-        trailers, the setting an S3-compatible proxy is least likely to
-        reject; boto3's own default, ``when_supported``, was what the proxy
-        was originally tried with.
+        The ``write_prefix``, opened with ``profile``. The endpoint comes from
+        that profile's AWS configuration. Checksums follow freezebase's
+        ``when_required`` policy, which S3-compatible proxies such as Source
+        Cooperative accept.
 
     Raises
     ------
@@ -104,44 +103,16 @@ def read_target(path: Path = PUBLISH_CONFIG) -> UPath:
     return make_s3_upath(uri, profile=str(config["profile"]))
 
 
-def bucket_root(root: Path | UPath) -> UPath:
-    """Check that the store root is on object storage, and return it.
-
-    There is no staging step: what publication reads is the bucket the build
-    wrote to, so a local root is a configuration mistake rather than a mode.
-
-    Parameters
-    ----------
-    root
-        Resolved store root.
-
-    Returns
-    -------
-    UPath
-        The same root, as an S3 path.
-
-    Raises
-    ------
-    ValueError
-        If the root is not an ``s3://`` location.
-    """
-    path = UPath(root)
-    if path.protocol != "s3":
-        msg = (
-            f"GLACE_STORE_ROOT is {root}, which is not on object storage. "
-            "Publication streams from the bucket the build wrote to; set it to "
-            "the s3:// prefix that holds the store."
-        )
-        raise ValueError(msg)
-    return path
+def store_root() -> UPath:
+    """Open the built store, on local disk or object storage, as the source root."""
+    return UPath(settings.store_root)
 
 
 def is_build_state(relative: str) -> bool:
-    """Whether a store-relative path is build state rather than published content.
+    """Whether a store-relative path is build state, which stays local.
 
-    ``.build-state.json`` and ``.items.parquet`` sit beside the documents they
-    were built from. The leading dot is what marks them, and it is the only
-    thing that does.
+    Build state files, such as ``.build-state.json`` and ``.items.parquet``,
+    are exactly the files whose name starts with a dot.
     """
     return PurePosixPath(relative).name.startswith(".")
 
@@ -158,9 +129,9 @@ class Entry:
     def md5(self) -> str | None:
         """The ETag when it is the MD5 of the bytes, else ``None``.
 
-        A single-part upload lists its MD5; a multipart upload lists the MD5
-        of its part digests with the part count after a dash, and a side may
-        list nothing. Only the first kind says anything about the content.
+        A single-part upload lists its MD5. A multipart upload lists the MD5
+        of its part digests followed by a dash and the part count, which says
+        nothing about the content.
         """
         if self.etag is None:
             return None
@@ -170,11 +141,10 @@ class Entry:
 
 @dataclass(frozen=True)
 class Plan:
-    """What one sync would do, before it does any of it.
+    """What one upload would do, before it does any of it.
 
-    Every field holds store-relative paths, sorted. ``upload`` is what actually
-    transfers: ``new`` and ``changed``, or everything published when the run
-    was forced.
+    Every field holds store-relative paths, sorted. ``upload`` lists the paths
+    to transfer: ``new`` and ``changed``, plus ``unchanged`` when forced.
     """
 
     new: tuple[str, ...]
@@ -190,13 +160,15 @@ class Plan:
 
 
 def is_unchanged(source: Entry, target: Entry) -> bool:
-    """Whether a published object still matches the store's, from the listings.
+    """Whether a published object matches the store's copy, judged from the listings.
 
-    Three steps, each final when it applies: a different size is a change;
-    two single-part ETags are two MD5s and settle it either way; and what is
-    left is unchanged only when the source is no newer than its published
-    copy, since the build writes before publication copies. A side that lists
-    no time cannot clear an object: the safe answer is to upload it.
+    The first rule that applies decides:
+
+    1. Different sizes: changed.
+    2. Both sides list an MD5 ETag: unchanged when the two match.
+    3. Unchanged when the source is no newer than the published copy, since
+       the build writes the store before publication copies it. When either
+       side lists no time, the object counts as changed.
     """
     if source.size != target.size:
         return False
@@ -207,7 +179,7 @@ def is_unchanged(source: Entry, target: Entry) -> bool:
     return source.modified <= target.modified
 
 
-def plan_sync(
+def plan_upload(
     source: Mapping[str, Entry],
     target: Mapping[str, Entry],
     *,
@@ -218,7 +190,7 @@ def plan_sync(
     Parameters
     ----------
     source
-        Store-relative path to entry, from the private gateway.
+        Store-relative path to entry, from the store.
     target
         Store-relative path to entry, from Source Cooperative.
     force
@@ -311,12 +283,11 @@ def listed_time(info: Mapping[str, Any]) -> datetime | None:
 
 
 def list_objects(directory: UPath) -> dict[str, Entry]:
-    """List everything below a prefix as relative path to entry, from one call.
+    """List everything below a prefix as relative path to entry, in one call.
 
-    The same walk as freezebase's ``list_object_sizes``, keeping the ETag and
-    the write time the listing carries beside the size; that helper drops
-    them on purpose, and the plan here needs them. Empty when the prefix does
-    not exist.
+    Works like freezebase's ``list_object_sizes``, but each entry also keeps
+    the ETag and write time that :func:`is_unchanged` uses. Returns an empty
+    dict when the prefix is absent.
     """
     prefix = str(directory.path).rstrip("/") + "/"
     try:
@@ -356,8 +327,8 @@ def list_subtree(root: UPath, subtree: str) -> dict[str, Entry]:
     Returns
     -------
     dict
-        Store-relative path to entry. Relative to ``root``, not to the subtree,
-        so the two sides compare and copy by the same names.
+        Store-relative path to entry. Paths are relative to ``root``, so both
+        sides compare and copy by the same names.
     """
     listed = list_objects(root / subtree if subtree else root)
     if not subtree:
@@ -386,26 +357,24 @@ class TwoPhaseFile(Protocol):
 
 
 def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
-    """Stream one object from the private gateway to Source Cooperative.
+    """Stream one object from the store to Source Cooperative.
 
-    The content type goes with the write, from freezebase's table of what a
-    cloud-native object is served as: Source Cooperative serves what the upload
-    declared, which is what makes a COG open by range request instead of
-    downloading and a README render instead of saving. s3fs hands
-    ``ContentType`` to the upload it starts. The write is committed by hand rather than on close,
-    because an fsspec file closed by a ``with`` block commits whatever it has
-    even when the block is leaving on an exception: a read that failed
-    half-way through a COG would otherwise complete the multipart upload and
-    publish a truncated object under the right name. With ``autocommit`` off,
-    closing only uploads the last part; ``commit`` completes the object and
-    ``discard`` aborts it, so a failure leaves nothing behind.
+    The upload declares the object's content type, and Source Cooperative
+    serves it back, so COGs open by range request and READMEs render in a
+    browser.
+
+    The upload is committed explicitly. An fsspec file closed by a ``with``
+    block commits even when an exception is leaving the block, which would
+    publish a truncated object. With ``autocommit=False``, ``close`` uploads
+    the last part, ``commit`` completes the object and ``discard`` aborts it,
+    so a failed transfer leaves the target as it was.
     """
     reader_path = source_root / relative
     writer_path = target_root / relative
     # The reader opens first: a source that cannot be read starts no upload.
     with reader_path.open("rb") as reader:
-        # fsspec types the handle as a plain binary file; the two-phase calls
-        # are what every AbstractBufferedFile, and so every S3File, provides.
+        # fsspec types the handle as a plain binary file; S3File, like every
+        # AbstractBufferedFile, also provides commit and discard.
         writer = cast(
             "TwoPhaseFile",
             writer_path.open("wb", ContentType=content_type_for(relative), autocommit=False),
@@ -415,7 +384,7 @@ def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
             writer.close()
             writer.commit()
         except BaseException:
-            # The library's own order: a file is closed before it is discarded.
+            # fsspec's own order: close the file, then discard it.
             with suppress(Exception):
                 writer.close()
             with suppress(Exception):
@@ -432,8 +401,8 @@ def transfer(
 ) -> list[str]:
     """Stream every named object, returning the paths that failed.
 
-    A failure is reported rather than raised so that one unreadable object does
-    not abandon the other twenty-six thousand.
+    Each failure is printed to stderr, and the remaining objects still
+    transfer.
     """
 
     def move(relative: str) -> str | None:
@@ -449,8 +418,7 @@ def transfer(
             pool.map(move, relatives),
             total=len(relatives),
             unit="obj",
-            # A publication run is long enough to need a progress bar and gets
-            # read from a terminal; in a log or a gate it would be noise.
+            # Show the progress bar on an interactive terminal only.
             disable=not sys.stderr.isatty(),
         )
         return [name for name in moved if name is not None]
@@ -481,12 +449,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Stream the built store to Source Cooperative.",
         epilog="Dry run by default. Never deletes.",
     )
-    parser.add_argument("--confirm", action="store_true", help="actually upload")
-    parser.add_argument("--force", action="store_true", help="upload every object again")
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="upload; without this flag, only print the plan",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="upload every object, changed or not",
+    )
     parser.add_argument(
         "--prefix",
         default="",
-        help="sync only this subtree of the store, e.g. tiles/2024",
+        help="publish only this subtree of the store, e.g. tiles/2024",
     )
     parser.add_argument(
         "--workers",
@@ -498,17 +474,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Plan the sync, print it, and run it when confirmed."""
+    """Plan the upload, print it, and run it when confirmed."""
     args = parse_args(argv)
     subtree = args.prefix.strip("/")
 
-    # Everything up to the plan is configuration and two remote listings, and
-    # every way they fail -- an absent profile, a rejected credential, an
-    # unreachable endpoint -- is a message for the person running this, not a
-    # traceback.
+    # Configuration and listing errors (a missing profile, rejected
+    # credentials, an unreachable endpoint) print as one-line messages.
     try:
         target = read_target()
-        root = bucket_root(settings.store_root)
+        root = store_root()
         source = list_subtree(root, subtree)
         published = list_subtree(target, subtree)
     except (BotoCoreError, ClientError, OSError, ValueError) as error:
@@ -516,7 +490,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     listing_root = root / subtree if subtree else root
-    plan = plan_sync(source, published, force=args.force)
+    plan = plan_upload(source, published, force=args.force)
     for line in summary_lines(plan, str(listing_root), target):
         print(line)
     if not source:

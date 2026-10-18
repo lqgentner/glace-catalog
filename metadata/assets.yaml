@@ -1,60 +1,54 @@
-# The asset vocabulary of the GLACE catalog.
+# The twelve assets of the GLACE catalog and their web-map archives.
 #
-# This is the one place the twelve assets and their renderings are named,
-# described and given a display stretch. `glace_catalog.metadata` reads it;
-# from it come the `item_assets` and `renders` of both collections, the style's
-# legends, the titles on every tile and mosaic item, the `visual` assets and
-# the `rel: "pmtiles"` links, and the tables in every README and AGENTS.md.
-# Nothing else in the repository types an asset title or a stretch.
+# This file is the single source of asset names, descriptions, colour ramps
+# and value ranges. The build and `scripts/render-catalog.py` read it (through
+# `glace_catalog.metadata`) to write the collections, items, styles and the
+# asset tables in the READMEs and AGENTS.md files.
 #
-# Every rendered document is regenerated from this file by
-# `scripts/render-catalog.py`; `tests/test_render.py` fails when the tracked
-# `catalog/` and a fresh render differ.
+# stretch:   the default display range, drawn with `cmap`.
+# transport: the value range a web-map archive encodes into codes 1-255
+#            (0 is nodata). Changing it requires re-tiling every year.
 
 products:
   coh12:
     name: Coherence
     long: 12-day repeat-pass interferometric coherence
     sar_product_type: COH
-    # The one sentence on what the stored values are, appended to every data
-    # asset's description on both grids.
+    # What the stored values are; appended to each data asset's description.
     value: Dimensionless, in [0, 1].
-    # cmc.lipari is the designed ramp (perceptually uniform, Crameri); magma is
-    # the portable stand-in a client without cmcrameri can resolve (M-10).
+    # cmap is the intended Scientific colour map (cmcrameri); portable_cmap is
+    # the matplotlib equivalent named in `renders`, for generic clients.
     cmap: cmc.lipari
     portable_cmap: magma
     decibel: false
-    # Stretches remeasured 2026-09-09 on the warped z13 display mosaics of
-    # 2021-2024 (25 native-resolution windows per band per year, 2-98 %),
-    # averaged over the years and rounded to 0.05.
     stretch:
-      vv: [0.1, 0.75]
+      vv: [0.1, 0.7]
       vh: [0.1, 0.55]
-    false_color:
-      title: Coherence False Color
-      channels: [VV, VH, VV / VH]
-      # Red and green repeat the single-band stretches; blue is the co- to
-      # cross-polarized ratio, measured on the rgb chain's third band.
-      blue: [0.8, 2.6]
-    cqm: [-3.0, 10.0]
+    transport:
+      vv: [0.0, 1.0]
+      vh: [0.0, 1.0]
+    cqm:
+      stretch: [-2.5, 4.0]
+      transport: [-20.0, 14.0]
   rtc:
     name: Backscatter
     long: Radiometrically terrain-corrected gamma-nought backscatter
     sar_product_type: RTC
     value: >-
-      Linear power. The decibel conversion, 10*log10, is declared in the
-      collection's renders and not applied to the stored pixels.
+      Linear power. For display, the collection's renders declare the decibel
+      conversion, 10*log10.
     cmap: cmc.grayC
     portable_cmap: gray
     decibel: true
     stretch:
-      vv: [-16.5, -4.0]
-      vh: [-23.5, -11.0]
-    false_color:
-      title: Backscatter False Color
-      channels: [VV, VH, VV − VH]
-      blue: [3.5, 10.5]
-    cqm: [-4.0, 8.0]
+      vv: [-14.5, -3.5]
+      vh: [-22.5, -10.5]
+    transport:
+      vv: [-25.0, 10.0]
+      vh: [-31.0, 2.0]
+    cqm:
+      stretch: [-3.0, 4.0]
+      transport: [-20.0, 12.0]
 
 polarizations:
   vv: co-polarized
@@ -63,14 +57,14 @@ polarizations:
 qa:
   num:
     name: Contributing Observations
-    # One range for both products
+    # The same ranges for coherence and backscatter.
     cmap: cmc.glasgow
     portable_cmap: viridis
-    range: [0.0, 90.0]
+    stretch: [0.0, 70.0]
+    transport: [0.0, 253.0]
     decibel: false
-    # The band name is the asset key on every grid; only the pixel type
-    # differs. An integer count on the 10 m tiles; warping to 40 m averages
-    # sixteen source pixels, so the mosaic band is a float mean of the counts.
+    # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen
+    # 10 m pixels, so the mosaics store a float mean count.
     band:
       tiles: {data_type: uint16, nodata: 0}
       mosaics: {data_type: float32, nodata: nan}
@@ -78,15 +72,14 @@ qa:
     name: Composite Quality Map
     cmap: cmc.glasgow
     portable_cmap: viridis
-    # The range is per product: `products.*.cqm`.
+    # Ranges are set per product, under `products.*.cqm`.
     decibel: true
     band:
       tiles: {data_type: float32, nodata: nan}
       mosaics: {data_type: float32, nodata: nan}
 
-# Description sentences, Jinja2 templates over: long, product (short name),
-# POL, pol_word, value, source_title, stretch, cmap, channels, min_zoom,
-# max_zoom.
+# Asset descriptions. Jinja2 variables: long, product (short name), POL,
+# pol_word, value, source_title, transport, min_zoom, max_zoom.
 descriptions:
   data:
     tiles: >-
@@ -115,10 +108,138 @@ descriptions:
       averaged onto the 40 m grid. Linear scaling; the decibel conversion is
       declared in the collection's renders.
   viz: >-
-    Pre-styled 8-bit WebP rendering of {{ source_title }} on WebMercatorQuad
-    z{{ min_zoom }}-z{{ max_zoom }}, stretched {{ stretch }} through {{ cmap }}.
-    For analysis, read the COGs with the "data" role instead.
-  viz_rgb: >-
-    Pre-styled 8-bit WebP false-color rendering ({{ channels }}) on WebMercatorQuad
-    z{{ min_zoom }}-z{{ max_zoom }}, stretched {{ stretch }}.
-    For analysis, read the COGs with the "data" role instead.
+    Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad
+    z{{ min_zoom }}-z{{ max_zoom }}: an 8-bit code in all three channels,
+    linear over {{ transport }} and clipped to it, with code 0 as nodata.
+    Decode with the band's raster:scale and raster:offset; the year's style
+    decodes it as a raster-dem source and colours it with a color-relief
+    layer. Lossy (WebP quality 90): for analysis, read the COGs with the
+    "data" role.
+
+# The columns of each collection's item mirror, `items.parquet`, in the order
+# the files hold them. The collections publish them as `table:columns` and the collection AGENTS.md
+# files as a table; finalization adds each column's type from the written file
+# and refuses a file whose columns differ from this list. A description is one
+# string, or one per collection, and may name the scope's glacier_inventory and
+# glacier_buffer_m. `collections` limits a column to one of them.
+mirror_columns:
+  - name: type
+    description: Always `Feature`.
+  - name: stac_version
+    description: STAC version of the item.
+  - name: stac_extensions
+    description: Schema URIs of the STAC extensions the item uses.
+  - name: id
+    description:
+      tiles: Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`.
+      mosaics: Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`.
+  - name: geometry
+    description:
+      tiles: >-
+        Footprint of the MGRS square in WGS84 (EPSG:4326), as WKB: its four
+        corners.
+      mosaics: >-
+        Footprint of the year's mosaic in WGS84 (EPSG:4326), as WKB: the
+        union of the year's tiles, simplified.
+  - name: bbox
+    description: >-
+      Bounds of the footprint in WGS84. The GeoParquet covering column, with
+      statistics per row group, so a bounding-box filter skips row groups.
+  - name: links
+    description: >-
+      The item document's links, with absolute hrefs: root, collection,
+      parent and the CEOS-ARD specification.
+  - name: assets
+    description:
+      tiles: >-
+        One struct per asset key, with absolute https hrefs. An asset a tile
+        lacks, such as coherence on the 2015 gap tiles, is null.
+      mosaics: One struct per asset key, with absolute https hrefs.
+  - name: collection
+    description:
+      tiles: Id of the collection, `glace-{scope}-tiles`.
+      mosaics: Id of the collection, `glace-{scope}-mosaics`.
+  - name: start_datetime
+    description: First day of the year's compositing window, at 00:00 UTC.
+  - name: end_datetime
+    description: The day after the window's last day, at 00:00 UTC.
+  - name: constellation
+    description: Always `sentinel-1`.
+  - name: instruments
+    description: Always `[c-sar]`.
+  - name: sar:instrument_mode
+    description: Always `IW`, Interferometric Wide swath.
+  - name: sar:frequency_band
+    description: Always `C`.
+  - name: sar:polarizations
+    description: Polarizations with at least one composite, `VV` and `VH`.
+  - name: version
+    collections: [tiles]
+    description: Dataset version the item belongs to.
+  - name: glace:mgrs_tile
+    collections: [tiles]
+    description: The 10 km MGRS square, such as `32TMS55`.
+  - name: grid:code
+    collections: [tiles]
+    description: The MGRS square in the STAC grid extension's form, `MGRS-32TMS55`.
+  - name: mgrs:utm_zone
+    collections: [tiles]
+    description: UTM zone of the square.
+  - name: mgrs:latitude_band
+    collections: [tiles]
+    description: MGRS latitude band of the square.
+  - name: mgrs:grid_square
+    collections: [tiles]
+    description: MGRS 100 km grid square identifier, the two letters after the band.
+  - name: proj:code
+    description:
+      tiles: CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`.
+      mosaics: CRS of the item's COGs, `EPSG:3035`.
+  - name: proj:shape
+    description: Raster shape of the item's COGs, `[rows, columns]`.
+  - name: proj:transform
+    description: Affine transform of the item's COGs, six coefficients in `proj:code` units.
+  - name: version
+    collections: [mosaics]
+    description: Dataset version the item belongs to.
+  - name: glace:build_fingerprint
+    collections: [mosaics]
+    description: >-
+      Fingerprint of the inputs and settings the year's mosaics were built
+      from. It changes when any of them change.
+  - name: description
+    collections: [mosaics]
+    description: Description of the item.
+  - name: glace:coh_first_acquisition
+    collections: [tiles]
+    description: Date of the first acquisition in the square's coherence composites, `YYYY-MM-DD`.
+  - name: glace:coh_last_acquisition
+    collections: [tiles]
+    description: >-
+      Date of the last acquisition in the square's coherence composites. About
+      twelve days before the last backscatter date, because both images of a
+      pair must fall in the window.
+  - name: glace:rtc_first_acquisition
+    collections: [tiles]
+    description: Date of the first acquisition in the square's backscatter composites.
+  - name: glace:rtc_last_acquisition
+    collections: [tiles]
+    description: Date of the last acquisition in the square's backscatter composites.
+  - name: glace:glacier_fraction
+    collections: [tiles]
+    description: >-
+      Share of the square inside {{ glacier_inventory }} glacier outlines,
+      0 to 1. The same every year.
+  - name: glace:glacier_fraction_buffered
+    collections: [tiles]
+    description: >-
+      Share of the square inside the same outlines buffered by
+      {{ glacier_buffer_m }} m, 0 to 1. The same every year.
+  - name: processing:level
+    collections: [tiles]
+    description: Always `L3`, a composite over many acquisitions.
+  - name: glace:dem
+    collections: [tiles]
+    description: DEM used for terrain correction and geocoding.
+  - name: datetime
+    description: Midpoint of the compositing window.

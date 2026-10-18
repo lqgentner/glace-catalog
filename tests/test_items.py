@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Gate on the dates a tile item publishes.
+"""Checks the dates and assets of tile and mosaic items.
 
-Every tile of a year is composited from the same search window, and that window
-is what the filename and ``COMPOSITE_*_DATE`` tags carry, so every tile item of
-a year gets the same ``start_datetime``, ``end_datetime`` and ``datetime`` and a
-reader stacking them gets one time coordinate. Which acquisitions actually
-contributed varies per tile and product; that is the ``FIRST_ACQUISITION_DATE``
-and ``LAST_ACQUISITION_DATE`` tags, published per product as
-``glace:{coh,rtc}_first_acquisition`` / ``_last_acquisition``.
+All tiles of a year are composited from the same search window, which the
+filename and the ``COMPOSITE_*_DATE`` tags record. Every tile item of a year
+therefore has the same ``start_datetime``, ``end_datetime`` and ``datetime``,
+so a reader stacking them gets one time coordinate. The acquisitions that
+actually contributed vary by tile and product. They come from the
+``FIRST_ACQUISITION_DATE`` and ``LAST_ACQUISITION_DATE`` tags and are published
+per product as ``glace:{coh,rtc}_first_acquisition`` and ``_last_acquisition``.
 
-A tile whose files disagree about the window is refused rather than widened,
-and the window-to-range translation is checked once, since every item uses it.
+A tile whose files disagree about the window is refused. The conversion from
+window to time range is checked once, since every item uses it.
 
-The mosaic item is checked for what its web-map archives are: assets with the
-``visual`` role beside the COGs they render, and never a link — the link with
-``pmtiles:layers`` stays on the collection.
+The mosaic item carries its web-map archives only as assets with the
+``visual`` role, beside the COGs they render. Its footprint is simplified to a
+few vertices per tile edge and still covers every tile.
+
+The item mirrors written from both kinds of item hold exactly the columns
+``mirror_columns`` in ``metadata/assets.yaml`` documents.
 
 Reads no data and needs no network.
 
@@ -29,9 +32,17 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
+
+from freezebase.mgrs import MGRSGeoBox
+import pyarrow.parquet as pq
+import pystac
+from shapely import get_num_coordinates
+from shapely.geometry import shape
 
 from glace_catalog.metadata import vocabulary
+from glace_catalog.mosaics import data_footprint
 from glace_catalog.scopes import get_scope
 from glace_catalog.stac.items import (
     MosaicAsset,
@@ -46,14 +57,19 @@ from glace_catalog.stac.naming import (
     viz_filename,
     viz_key,
 )
+from glace_catalog.stac.save import (
+    concat_indexes,
+    index_from_items,
+    item_document,
+    write_stac_geoparquet,
+    year_index_document,
+)
 from glace_catalog.stac.store import BuildState, StoreLayout
 from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import ModuleType
-
-    import pystac
 
 TILE = "32TPS05"
 WINDOW = "20230718_20231015"
@@ -102,7 +118,7 @@ def _info(first: str, last: str, **extra: str) -> RasterInfo:
 
 
 def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
-    """Check that a stale file from a different window refuses the tile, never widens it."""
+    """Check that a stale file from a different window makes the tile fail."""
     info = {
         "coh12_vv": _info("2023-07-21", "2023-09-30"),
         "rtc_vv": _info("2023-07-21", "2023-10-12", COMPOSITE_END_DATE="2023-10-20"),
@@ -138,19 +154,19 @@ def _mosaic_item(
     )
 
 
-def _publisher() -> ModuleType:
-    """Load ``scripts/publish-year.py`` as a module.
+def _build_year() -> ModuleType:
+    """Load ``scripts/build-year.py`` as a module.
 
-    The script resolves its store root at import; a local value keeps this gate
-    off object storage, and nothing here reads or writes it.
+    The script resolves its store root on import, so the gate first points it
+    at a local placeholder path.
     """
     os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
     spec = importlib.util.spec_from_file_location(
-        "publish_year",
-        Path(__file__).resolve().parents[1] / "scripts" / "publish-year.py",
+        "build_year",
+        Path(__file__).resolve().parents[1] / "scripts" / "build-year.py",
     )
     if spec is None or spec.loader is None:
-        msg = "scripts/publish-year.py did not load"
+        msg = "scripts/build-year.py did not load"
         raise RuntimeError(msg)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -158,58 +174,131 @@ def _publisher() -> ModuleType:
 
 
 def _pmtiles_state() -> BuildState:
-    """Build a state holding one archive, as the ``pmtiles`` step records it."""
+    """Build a state holding two archives, as the ``pmtiles`` step records them."""
     state = BuildState(path=Path("/nowhere/.build-state.json"))
-    state.details["pmtiles"] = {
-        "coh12_vv_viz": {
-            "url": "coh12_vv_viz.pmtiles",
+    archives: dict[str, dict[str, Any]] = {}
+    for key, polarization in (("coh12_vv", "VV"), ("rtc_vv", "VV")):
+        encoding = vocabulary().display(key).encoding
+        archives[f"{key}_viz"] = {
+            "url": f"{key}_viz.pmtiles",
             "size_bytes": 10,
             "checksum": "1220" + "ab" * 32,
-            "cmap": "cmc.lipari",
-            "vmin": 0.1,
-            "vmax": 0.75,
+            "scale": encoding.scale,
+            "offset": encoding.offset,
             "units": "",
             "min_zoom": 5,
             "max_zoom": 12,
             "bounds": [5.9, 45.8, 10.5, 47.8],
-            "product": "COH12",
-            "polarization": "VV",
+            "product": key.split("_")[0].upper(),
+            "polarization": polarization,
             "year": 2024,
-            "id": "coh12_vv_2024",
+            "id": f"{key}_2024",
             "start_date": "2024-07-09",
             "end_date": "2024-10-07",
-        },
-        "coh12_rgb_viz": {
-            "url": "coh12_rgb_viz.pmtiles",
-            "size_bytes": 12,
-            "checksum": "1220" + "cd" * 32,
-            "cmap": "",
-            "vmin": 0.1,
-            "vmax": 0.75,
-            "units": "",
-            "min_zoom": 5,
-            "max_zoom": 12,
-            "bounds": [5.9, 45.8, 10.5, 47.8],
-            "product": "COH12",
-            "polarization": "RGB",
-            "year": 2024,
-            "id": "coh12_rgb_2024",
-            "start_date": "2024-07-09",
-            "end_date": "2024-10-07",
-        },
-    }
+        }
+    state.details["pmtiles"] = archives
     return state
 
 
-def _staging_is_cleared() -> bool:
-    """Check that an earlier build's archives leave staging and other files stay."""
+def _staging_checks() -> dict[str, bool]:
+    """Check the staging directories and the scratch estimate of the year script."""
+    build_year = _build_year()
     with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp)
-        (staged / "coh12_vv.pmtiles").write_bytes(b"old")
-        (staged / "coh12_vv_viz.pmtiles").write_bytes(b"old too")
-        (staged / "notes.txt").write_bytes(b"keep")
-        removed = _publisher().clear_stale_archives(staged)
-        return removed == 2 and sorted(p.name for p in staged.iterdir()) == ["notes.txt"]
+        args = SimpleNamespace(cache=Path(tmp), year=2023)
+        killed = Path(tmp) / "glace-store" / "2023" / "pmtiles-killed"
+        killed.mkdir(parents=True)
+        (killed / "coh12_vv_viz.pmtiles").write_bytes(b"partial")
+        with build_year.staging(args, "pmtiles") as staged:
+            leftover_cleared = not killed.exists()
+            empty = not any(staged.iterdir())
+            (staged / "coh12_vv_viz.pmtiles").write_bytes(b"built")
+        with build_year.staging(args, "pmtiles") as again:
+            fresh = again != staged and not any(again.iterdir())
+        removed = not any((Path(tmp) / "glace-store" / "2023").iterdir())
+        too_little = False
+        try:
+            build_year.require_scratch_space(Path(tmp), 1 << 60)
+        except SystemExit as error:
+            too_little = "FREEZEBASE_CACHE" in str(error)
+    alps = get_scope("alps")
+    every = SimpleNamespace(layers=None, concurrent_layers=12)
+    one = SimpleNamespace(layers=["coh12_vv"], concurrent_layers=12)
+    pmtiles = build_year.scratch_needed(every, alps, ["pmtiles"])
+    return {
+        "a step stages into an empty directory": empty,
+        "a killed run's staging is cleared": leftover_cleared,
+        "a rerun stages into a new directory": fresh,
+        "staging is removed after the step": removed,
+        "too little scratch space stops the build": too_little,
+        "the Alpine web maps need 15 to 40 GB of scratch": 15e9 < pmtiles < 40e9,
+        "one layer needs less scratch than twelve": (
+            build_year.scratch_needed(one, alps, ["pmtiles"]) < pmtiles
+        ),
+        "an up-to-date year needs no scratch": build_year.scratch_needed(every, alps, []) == 0,
+    }
+
+
+def _footprint_checks() -> dict[str, bool]:
+    """Check the mosaic footprint of a block of tiles that spans two UTM zones."""
+    tiles = [f"31TGK{e}{n}" for e in "789" for n in "012"] + ["32TLQ02", "32TLQ12"]
+    files = [
+        file
+        for tile in tiles
+        if (file := parse_composite_name(Path(f"/a/S1_RTC_LRW_{tile}_VV_{WINDOW}.tif")))
+    ]
+    geometry, bbox = data_footprint(files)
+    footprint = shape(geometry)
+    return {
+        "the footprint fixture parsed": len(files) == len(tiles),
+        "the footprint is valid": footprint.is_valid,
+        "the footprint covers every tile": all(
+            footprint.covers(MGRSGeoBox.from_mgrs(tile).geographic_extent.geom) for tile in tiles
+        ),
+        "the footprint is simplified": int(get_num_coordinates(footprint)) < 10 * len(tiles),
+        "the mosaic bbox is the footprint's": bbox == list(footprint.bounds),
+    }
+
+
+def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
+    """Write both mirrors as the build and finalization do; check their columns and links."""
+    base = "https://example.org/glace"
+    mosaic = _mosaic_item()
+    mosaic.properties["glace:build_fingerprint"] = "0" * 64
+    mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
+    # Finalization reads the mosaic items back from the store, as written.
+    stored = pystac.Item.from_dict(item_document(mosaic, "glace-ch-mosaics", scope_title="GLACE"))
+    with tempfile.TemporaryDirectory() as tmp:
+        year, tiles = Path(tmp) / ".items.parquet", Path(tmp) / "tiles.parquet"
+        mosaics = Path(tmp) / "mosaics.parquet"
+        row = year_index_document(tile_item, "glace-ch-tiles", scope_title="GLACE")
+        write_stac_geoparquet([row], year)
+        concat_indexes([year], tiles, base_url=base)
+        index_from_items([stored], mosaics, base_url=base)
+        tables = {"tiles": pq.read_table(tiles), "mosaics": pq.read_table(mosaics)}
+    checks = {
+        f"the {name} mirror holds the documented columns": set(table.column_names)
+        == {column["name"] for column in vocabulary().mirror_columns(name)}
+        for name, table in tables.items()
+    }
+    for name, table in tables.items():
+        links = {link["rel"]: link["href"] for link in table.column("links").to_pylist()[0]}
+        checks[f"the {name} mirror links the root absolutely"] = (
+            links.get("root") == f"{base}/catalog.json"
+        )
+        checks[f"the {name} mirror names the collection"] = (
+            table.column("collection").to_pylist()[0].endswith(name)
+        )
+    tile_links = {
+        link["rel"]: link["href"] for link in tables["tiles"].column("links").to_pylist()[0]
+    }
+    checks["a tile row's parent is its year catalog"] = (
+        tile_links.get("parent") == f"{base}/tiles/2023/catalog.json"
+    )
+    asset = tables["tiles"].column("assets").to_pylist()[0]["coh12_vv"]["href"]
+    checks["a tile row's asset href is absolute"] = (
+        asset == f"{base}/tiles/2023/{TILE}/coh12_vv.tif"
+    )
+    return checks
 
 
 def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
@@ -252,7 +341,9 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
             props.get("glace:rtc_last_acquisition"),
         )
         == ("2023-07-21", "2023-10-12"),
-        "the filename-derived span fields are gone": "glace:coh_start" not in props
+        "the tile names its MGRS square in the grid extension": props.get("grid:code")
+        == f"MGRS-{TILE}",
+        "no filename-derived span fields": "glace:coh_start" not in props
         and "glace:rtc_end" not in props,
         "acquisition tags reach the asset": item.assets["coh12_vv"].extra_fields.get(
             "glace:first_acquisition_date",
@@ -260,22 +351,19 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         == "2023-07-21",
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
-    # The item carries the archives as `visual` assets; the link with
-    # `pmtiles:layers` stays on the collection (PORTO-FMT-011), which is
-    # `finalize-catalog`'s job. So the item declares no web-map-links extension,
-    # whose version the collection alone is the source of. Checked on the item
-    # that actually carries the renderings, since that is where a link or an
-    # extension declaration would creep in.
-    built = _publisher().visual_assets(_pmtiles_state())
+    # The archives are reached through `visual` assets alone, a recorded
+    # deviation from `PORTO-FMT-011` (docs/conformance.md). Check this on an
+    # item that carries the renderings.
+    built = _build_year().visual_assets(_pmtiles_state())
     rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()
     checks["the mosaic item links no PMTiles archive"] = not rendered.get_links("pmtiles")
     checks["the mosaic item declares no web-map-links extension"] = not any(
         "web-map-links" in uri for uri in rendered.stac_extensions
     )
-    # PTL-AST-003 wants a digest on every asset whose bytes the run wrote; the
-    # mosaics are hashed as they are staged, and an unmeasured asset says nothing
-    # rather than guessing.
+    # Portolan rule PTL-AST-003 asks for a checksum on every asset the run wrote.
+    # Mosaics are hashed as they are staged; an asset with no measured checksum
+    # omits the field.
     digest = "1220" + "ab" * 32
     checks["a measured mosaic asset publishes its digest"] = (
         _mosaic_item(digest).assets["coh12_vv"].extra_fields.get("file:checksum") == digest
@@ -291,7 +379,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         viz_filename("rtc_vh_qa_cqm") == "rtc_vh_qa_cqm_viz.pmtiles"
     )
     checks["the data stem is recoverable from the rendering key"] = (
-        data_key("coh12_rgb_viz") == "coh12_rgb"
+        data_key("rtc_vh_qa_cqm_viz") == "rtc_vh_qa_cqm"
     )
     try:
         data_key("coh12_vv")
@@ -302,10 +390,10 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering sits in its year's item directory"] = layout.viz(2024, "coh12_vv") == Path(
         "/store/mosaics/2024/coh12_vv_viz.pmtiles"
     )
-    checks["the layout no longer has a pmtiles directory"] = not hasattr(layout, "pmtiles")
+    checks["the layout has no pmtiles directory"] = not hasattr(layout, "pmtiles")
     checks["visual_assets keys by rendering key"] = list(built) == [
-        "coh12_rgb_viz",
         "coh12_vv_viz",
+        "rtc_vv_viz",
     ]
     viz = rendered.assets["coh12_vv_viz"]
     checks["a rendering is an item asset with the visual role"] = viz.roles == ["visual"]
@@ -319,11 +407,20 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering says what it is"] = 'read the COGs with the "data" role' in (
         viz.description or ""
     )
+    band = viz.extra_fields.get("bands", [{}])[0]
+    checks["a rendering's band decodes its codes"] = (
+        band.get("data_type") == "uint8"
+        and band.get("nodata") == 0
+        and band.get("raster:scale") == vocabulary().display("coh12_vv").encoding.scale
+    )
+    checks["a decibel rendering's band carries its unit"] = (
+        rendered.assets["rtc_vv_viz"].extra_fields["bands"][0].get("unit") == "dB"
+    )
     checks["a tile band is named by its asset key"] = (
         item.assets["coh12_vv"].extra_fields["bands"][0]["name"] == "coh12_vv"
     )
-    # Every title is the vocabulary's, so an item and its collection's
-    # `item_assets` cannot name one file two ways.
+    # Titles come from the vocabulary, so an item and its collection's
+    # `item_assets` always name a file the same way.
     words = vocabulary()
     checks["a tile asset is titled by the vocabulary"] = (
         item.assets["coh12_vv"].title == words.asset_title("coh12_vv") == "Coherence VV"
@@ -338,16 +435,24 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     checks["a rendering's description carries the tiled zoom range"] = "z5-z12" in (
         viz.description or ""
     )
-    checks["a rebuild starts from a staging directory without archives"] = _staging_is_cleared()
-    # A state file that outlived a stretch change describes an archive that was
-    # baked with other numbers; the description must not state the new ones.
+    checks.update(
+        _mirror_checks(
+            build_tile_item(
+                TILE, files, info, glacier_fraction=0.1, glacier_fraction_buffered=0.2
+            ),
+        ),
+    )
+    checks.update(_staging_checks())
+    checks.update(_footprint_checks())
+    # A build state recorded before the transport range changed describes an
+    # archive encoded with the old range, so publishing it must fail.
     stale = _pmtiles_state()
-    stale.details["pmtiles"]["coh12_vv_viz"]["vmax"] = 0.8
+    stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
     try:
-        _publisher().visual_assets(stale)
-        checks["an archive baked with a stale stretch is refused"] = False
+        _build_year().visual_assets(stale)
+        checks["an archive encoded over a stale range is refused"] = False
     except SystemExit:
-        checks["an archive baked with a stale stretch is refused"] = True
+        checks["an archive encoded over a stale range is refused"] = True
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

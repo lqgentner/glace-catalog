@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
-"""Mirror the store's catalog documents into a local directory for ``rashid``.
+r"""Copy the store's catalog documents into a local directory for ``rashid``.
 
-``rashid check`` takes a local catalog directory and nothing else, while the
-built tree lives on the object store. The documents are small — every
-``*.json`` and ``*.md`` under the root, a few hundred files — and their asset
-hrefs are absolute public URLs, so a local copy of the documents alone is enough
-for ``--schema``, ``--data`` and ``--live`` to check what is actually published::
+``rashid check`` reads a local directory, and the built store may sit on
+object storage. The mirror holds every ``*.json`` and ``*.md``, about 26 500
+files for the Alps. The collection assets' hrefs are absolute public URLs, so
+``--data`` and ``--live`` check those published bytes and their server; the
+item assets' relative hrefs do not resolve in the mirror and go unread. Run it
+through ``make conformance`` or ``make conformance-live``.
 
-    uv run --env-file .env tools/mirror_docs.py /tmp/glace-docs
-    uv run rashid check /tmp/glace-docs --schema --data --live
-        --live-base-url https://data.source.coop/lqgentner/glace-ch
-
-Build state (anything whose name starts with a dot) is not mirrored: it is not
-part of the published tree.
+Paths with a dot-prefixed part are build state and are skipped.
 """
 
 from __future__ import annotations
@@ -49,10 +45,9 @@ def main() -> None:
     """Mirror the configured store's documents to the directory given."""
     parser = argparse.ArgumentParser(description="Mirror the store's catalog documents locally.")
     parser.add_argument("out", type=Path, help="local directory to write the documents into")
-    parser.add_argument("--root", default=None, help="store root; defaults to GLACE_STORE_ROOT")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    root = UPath(settings.resolve_path(args.root) if args.root else settings.store_root)
+    root = UPath(settings.store_root)
     count = mirror_documents(root, args.out)
     logger.info("Mirrored %d document(s) from %s to %s", count, root, args.out)
 
