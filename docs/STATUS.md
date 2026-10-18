@@ -1,6 +1,6 @@
 # Where the catalog stands
 
-**As of 2026-10-17.** Update this file in the same commit as the change it
+**As of 2026-10-18.** Update this file in the same commit as the change it
 describes: the next person will trust it. The design and its reasons are in
 [`DESIGN.md`](DESIGN.md).
 
@@ -13,24 +13,16 @@ describes: the next person will trust it. The design and its reasons are in
 | gates | ruff, pyrefly `strict`, JSON/YAML canonical form, the render gate, the release version, grids, styles, the manifest contract, items, mosaic statistics and overview depth, the item mirror, thumbnails, the tiler, the web-map build, the tile grid, finalize, links and their remote mode, the public prefix, publishing, stac-check, rashid |
 | source composites | 2015–2026 at `/mnt/data/alps-total/{year}/s1-comp-mean`, written by s1bursts 0.6.0 with mean aggregation. Every manifest passes `load_and_verify_manifest` (2026-10-16): 2 210 tiles of 12 files a year, except 2015, whose gaps the "2015 coverage" usage note in `metadata/catalog.yaml` describes. The 2015 backscatter of `32TNT24` holds no valid pixel; the build leaves it out (S-5 in [`UPSTREAM.md`](UPSTREAM.md)) |
 | glacier fractions | `tiles/.glacier-fractions.parquet`, a build input that is not published; the items and the tile grid `tiles/grid.pmtiles` (2 210 tiles, 534 kB, z0–10) carry its values. Derived once from the inventories (AGENTS.md step 1), on the bucket at `s3://s1-bursts/data/glace-alps` and copied into the local store |
-| store | Built locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`), 2026-10-16, reindexed and finalized 2026-10-17: 26 518 tile items, twelve mosaic items, 144 mosaic COGs and 144 web-map archives. The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents. `make conformance` gives 0 errors and twelve `PTL-CAT-001` warnings, one per year catalog ([`conformance.md`](conformance.md)) |
+| store | Built locally at `/mnt/data/glace-alps` (`GLACE_STORE_ROOT`), 2026-10-16, reindexed 2026-10-17 and finalized 2026-10-18: 26 518 tile items, twelve mosaic items, 144 mosaic COGs and 144 web-map archives. The composites are hard links into the source archives, so the store adds only the mosaics, archives and documents. `make conformance` gives 0 errors and twelve `PTL-CAT-001` warnings, one per year catalog ([`conformance.md`](conformance.md)) |
 | web maps | Twelve value-encoded archives a year, over the transport ranges remeasured on the mean composites (`metadata/assets.yaml`); finalization refuses archives whose recorded encoding differs. Each header declares the mosaic item's bbox rather than the tile-aligned grid. Each year's style is an asset of its mosaic item, and the collection's style is the latest year's (`PORTO-CORE-069`, [`conformance.md`](conformance.md)). A year takes 54 min on 15 cores (AGENTS.md) |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks. Its columns are described once, in `metadata/assets.yaml`, and published as `table:columns` and in the collection guides; finalization adds the types and row count and refuses an undocumented column |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
-| publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. `giuz/glace-alps` does not exist yet. The Swiss test catalog is still at `lqgentner/glace-ch` |
+| publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. The store is published at `giuz/glace-alps` (2026-10-18, 344 565 objects, 357.7 GiB): `make links-live` finds every href with its recorded size, and `make conformance-live` gives 0 errors and the twelve `PTL-CAT-001` warnings. The Swiss test catalog is still at `lqgentner/glace-ch` |
 
 ## Open
 
 Ordered by what blocks what. Everything not listed here is done.
 
-- **P-20 — Publish `glace-alps`.** The local store is ready: every year's
-  items are rebuilt, `tiles/2015/32TNT24/` is gone, the archive headers
-  declare the item bbox (set once by hand, 2026-10-17), and finalization
-  and `make conformance` pass. Upload the store to `giuz/glace-alps`
-  (AGENTS.md, "Publish the store"). *Verified when* `make links-live`
-  finds every published href with its recorded size and `make
-  conformance-live` over the mirrored store reports 0 errors and no
-  `PTL-DAT-005` warning on the web-map archives.
 - **P-2 — Remove the Swiss test publication.** `lqgentner/glace-ch` on Source
   Cooperative holds the old Swiss tree. Publishing never deletes, and the
   proxy deletes one object at a time (it answers the bulk `DeleteObjects` call

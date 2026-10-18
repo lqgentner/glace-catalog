@@ -35,9 +35,9 @@ neither target reads the COGs or archives. `make links-live` requests each of
 them instead. rashid's `--live-base-url` would also request them, one at a
 time: about ten hours for the Alps.
 
-The last run over a built store, on 2026-10-16 over the Alpine years
-2015–2026 before publication (`make conformance`, 26 546 files), gave 0 errors
-and only the twelve `PTL-CAT-001` warnings accepted below.
+The last run over the published catalog, on 2026-10-18 over the Alpine years
+2015–2026 (`make conformance-live`, 26 545 files), gave 0 errors and only the
+twelve `PTL-CAT-001` warnings accepted below.
 
 ## Accepted Deviations
 

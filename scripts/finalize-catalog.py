@@ -8,8 +8,8 @@ years and writes what spans them:
 - each year's MapLibre styles, ``mosaics/{year}/styles/``, registered on its
   mosaic item;
 - ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
-  year and the temporal extent; the mosaics collection's style draws the
-  latest year;
+  year and the temporal extent; the tiles collection's spatial extent bounds
+  its tiles, and the mosaics collection's style draws the latest year;
 - the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
@@ -36,6 +36,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 import json
 import logging
+import math
 from pathlib import Path
 import re
 import tempfile
@@ -71,10 +72,15 @@ from glace_catalog.thumbnails import DEFAULT_BASEMAP, write_collection_thumbnail
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    import geopandas as gpd
+
 logger = logging.getLogger(Path(__file__).stem)
 
 SOURCE_DIR = Path(__file__).resolve().parent.parent / "catalog"
 """The tracked documents, rendered from ``metadata/``."""
+
+EXTENT_DECIMALS = 4
+"""Decimals of the tiles collection's bbox, about ten metres."""
 
 
 def built_years(layout: stac.StoreLayout) -> list[int]:
@@ -169,17 +175,37 @@ def _keep(links: Sequence[Document], drop: set[str]) -> list[Document]:
     return [link for link in links if link.get("rel") not in drop]
 
 
+def tiles_bbox(grid: gpd.GeoDataFrame) -> list[float]:
+    """Return the WGS84 bbox of every tile, rounded outward to :data:`EXTENT_DECIMALS`.
+
+    The tile grid archive declares the bounds of the same polygons in its
+    header, so the collection and the archive agree.
+    """
+    scale = 10**EXTENT_DECIMALS
+    # Rounding the product first keeps a bound already on the grid, such as
+    # 46.3, from floating to the step below it.
+    west, south, east, north = (round(float(value) * scale, 6) for value in grid.total_bounds)
+    return [
+        math.floor(west) / scale,
+        math.floor(south) / scale,
+        math.ceil(east) / scale,
+        math.ceil(north) / scale,
+    ]
+
+
 def patch_collections(
     source_dir: Path,
     years: Sequence[int],
     mosaic_items: Sequence[pystac.Item],
+    tiles_extent: Sequence[float],
 ) -> dict[str, Document]:
     """Add the built years to the tracked collection documents.
 
     ``scripts/render-catalog.py`` renders these documents from ``metadata/``,
     and they are reviewed in git. This function adds only what depends on the
-    published data: a link to each year and the temporal extent. Prose,
-    providers, license and ``item_assets`` stay as rendered.
+    published data: a link to each year, the temporal extent and the tiles'
+    spatial extent. Prose, providers, license and ``item_assets`` stay as
+    rendered.
 
     Parameters
     ----------
@@ -189,6 +215,9 @@ def patch_collections(
         Published years, ascending.
     mosaic_items
         The mosaic items, read back from the store, for the temporal extent.
+    tiles_extent
+        The bbox of every tile, from :func:`tiles_bbox`. The rendered extent
+        is the mosaic grid's, which reaches past the outermost tiles.
 
     Returns
     -------
@@ -208,6 +237,7 @@ def patch_collections(
         for key, asset in tiles.get("assets", {}).items()
         if not key.startswith(("manifest-", "config-"))
     }
+    tiles["extent"]["spatial"]["bbox"] = [list(tiles_extent)]
     patched["tiles"] = tiles
 
     mosaics = _load(source_dir / MOSAICS_DIR / "collection.json")
@@ -782,11 +812,7 @@ def main() -> None:
         _load(SOURCE_DIR / MOSAICS_DIR / "collection.json").get("item_assets", {}),
     )
     mosaic_items = read_mosaic_items(layout, years)
-    documents = patch_collections(
-        SOURCE_DIR,
-        years,
-        mosaic_items,
-    )
+    documents = patch_collections(SOURCE_DIR, years, mosaic_items, tiles_bbox(grid))
 
     # Write the indexes and thumbnails first: the collection documents record
     # their size and checksum.

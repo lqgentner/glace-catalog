@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks what ``finalize-catalog`` writes for the published years.
 
-Five steps belong to this script alone, and a mistake in any of them is easy
+Six steps belong to this script alone, and a mistake in any of them is easy
 to miss:
 
 - it writes one style per year from the tracked template, beside the year's
@@ -14,7 +14,9 @@ to miss:
   metadata's, since every year style decodes with the current ranges;
 - it refuses to start from a ``catalog/`` that differs from a fresh render of
   ``metadata/``, since the styles it copies must decode the archives with the
-  ranges the build used.
+  ranges the build used;
+- it bounds the tiles collection by its tiles, as the tile grid archive's
+  header does, rather than by the wider mosaic grid it is rendered with.
 
 Runs the script's own functions against a temporary store of empty files.
 Writes only into the temporary directory, reads no data and needs no network.
@@ -33,6 +35,7 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+import geopandas as gpd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import shapely
@@ -387,6 +390,31 @@ def check_stale_year_index(checks: dict[str, bool], fin: ModuleType) -> None:
         )
 
 
+def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+    """Check that the tiles collection is bounded by its tiles, rounded outward."""
+    grid = gpd.GeoDataFrame(
+        geometry=[
+            shapely.box(8.00004, 46.40006, 8.13001, 46.49),
+            shapely.box(8.1, 46.3, 8.12, 46.4),
+        ],
+        crs="EPSG:4326",
+    )
+    bbox = fin.tiles_bbox(grid)
+    checks["the tiles bbox is rounded outward"] = bbox == [8.0, 46.3, 8.1301, 46.49]
+    source = work / "extent-source"
+    (source / "tiles").mkdir(parents=True)
+    shutil.copy(SOURCE / "tiles" / "collection.json", source / "tiles" / "collection.json")
+    shutil.copytree(SOURCE / "mosaics", source / "mosaics")
+    documents = fin.patch_collections(source, [2024], [], bbox)
+    checks["the tiles collection takes the tiles bbox"] = documents["tiles"]["extent"]["spatial"][
+        "bbox"
+    ] == [bbox]
+    rendered = json.loads((SOURCE / "mosaics" / "collection.json").read_text())
+    checks["the mosaics collection keeps the mosaic grid bbox"] = (
+        documents["mosaics"]["extent"]["spatial"] == rendered["extent"]["spatial"]
+    )
+
+
 def check_grid_conflict_before_writes(
     checks: dict[str, bool], fin: ModuleType, work: Path
 ) -> None:
@@ -456,6 +484,7 @@ def main() -> int:
         check_mirror_description(checks, fin, store)
         check_grid_style_staged(checks, fin, work)
         check_stale_year_index(checks, fin)
+        check_tiles_extent(checks, fin, work)
         check_grid_conflict_before_writes(checks, fin, work)
 
     failed = [name for name, ok in checks.items() if not ok]
