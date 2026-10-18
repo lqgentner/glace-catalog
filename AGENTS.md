@@ -272,8 +272,13 @@ make conformance-live   # rashid: the catalog, its collection assets and its ser
 
 `make links-live` sends a HEAD request to each document in the store and to
 every href under `public_base` that the documents name, about 345 000 for the
-Alps. Each must answer 200 with the asset's `file:size`. It takes about
-15 minutes; `ARGS="--workers 64"` raises the concurrency.
+Alps. Each must answer 200 with the asset's `file:size`. With
+`ARGS="--workers 64"` it takes about 4 minutes.
+
+`make conformance-live` reads the collection assets, whose hrefs are absolute,
+and probes their server for range requests and CORS. It leaves the item assets
+to `make links-live`: rashid's `--live-base-url` would request them one at a
+time, about ten hours for the Alps.
 
 `tests/test_public_base.py` keeps every Source Cooperative URL in the
 repository under the prefixes in `catalog.publish.yaml`. When the catalog

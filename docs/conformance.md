@@ -31,7 +31,9 @@ make conformance-live   # after publication: also the collection assets' bytes a
 The collection asset hrefs are absolute public URLs, so `make conformance-live`
 reads the published collection assets and probes the server's range and CORS
 support. Item asset hrefs are relative and do not resolve in the mirror, so
-neither target reads the COGs or archives.
+neither target reads the COGs or archives. `make links-live` requests each of
+them instead. rashid's `--live-base-url` would also request them, one at a
+time: about ten hours for the Alps.
 
 The last run over a built store, on 2026-10-16 over the Alpine years
 2015–2026 before publication (`make conformance`, 26 546 files), gave 0 errors

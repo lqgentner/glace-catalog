@@ -4,7 +4,6 @@
 
 RUN := uv run --env-file .env
 DOCS := .cache/glace-docs
-PUBLIC_BASE = $(shell awk '/^public_base:/ {print $$2}' catalog.publish.yaml)
 
 .DEFAULT_GOAL := help
 .PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live
@@ -40,7 +39,7 @@ publish:  ## Upload the store to Source Cooperative.
 conformance-live:  ## Check the published catalog, its collection assets and its server.
 	rm -rf $(DOCS)
 	$(RUN) tools/mirror_docs.py $(DOCS)
-	uv run rashid check $(DOCS) --schema --data --live --live-base-url $(PUBLIC_BASE)
+	uv run rashid check $(DOCS) --schema --data --live
 
 links-live:  ## Request every published href and compare its size with the store's.
 	rm -rf $(DOCS)

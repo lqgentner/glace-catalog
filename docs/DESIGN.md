@@ -338,8 +338,8 @@ reach the file's header.
 uv run tests/run_all.py                                    # every gate
 uv run rashid check catalog/ --schema --no-data            # conformance, tracked tree
 uv run rashid check "$GLACE_STORE_ROOT" --schema --data    # the real claim
-uv run rashid check "$GLACE_STORE_ROOT" --live \
-    --live-base-url https://data.source.coop/giuz/glace-alps
+make conformance-live                                      # collection assets and server
+make links-live                                            # every published href
 ```
 
 `tests/run_all.py` lists its gates by name rather than globbing, so adding one
@@ -391,7 +391,7 @@ The release procedure, run by hand:
    `metadata/catalog.yaml`, and re-render.
 2. Build and finalize the store, and run `make conformance`.
 3. `make publish-plan`, then `make publish`.
-4. `make conformance-live`.
+4. `make links-live` and `make conformance-live`.
 5. Commit `date-released` in `CITATION.cff`.
 6. `git tag v{version}` and push the tag.
 7. Create the GitHub release with the rashid summary in its notes.
