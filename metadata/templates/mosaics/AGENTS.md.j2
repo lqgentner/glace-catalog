@@ -33,13 +33,12 @@ counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata
 
 ## Item index
 
-`items.parquet` has one row per year and these columns, also listed with their
-types as `table:columns` on the collection's `items` asset:
+`items.parquet` has one row per year. The collection's `items` asset lists
+every column with its type and description as `table:columns`. These are the
+ones queries use:
 
-| Column | Description |
-| --- | --- |
-{% for column in mirror_columns.mosaics %}
-| `{{ column.name }}` | {{ column.description }} |
+{% for column in mirror_columns.mosaics | selectattr("name", "in", ["id", "assets", "datetime", "glace:build_fingerprint"]) %}
+- `{{ column.name }}`: {{ column.description }}
 {% endfor %}
 
 ## Web maps
