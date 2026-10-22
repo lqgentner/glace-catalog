@@ -18,7 +18,9 @@ Sentinel data.
 
 **UZH is both producer and host**, in one provider entry carrying every role.
 Portolan compares the producer and host names to decide whether a catalog is
-official or a mirror, and a mirror owes a `via` link to its source. Source
+official or a mirror, and a mirror owes a `via` link to its source. An
+official catalog carries none, so the root links its Source Cooperative page as
+`alternate` and the production pipeline as `related`. Source
 Cooperative is the storage vendor, not the host: the spec defines the host as
 the organization operating this copy, "not the underlying cloud vendor whose
 storage it happens to sit on". Listing it as host triggers `PTL-PRO-001` and

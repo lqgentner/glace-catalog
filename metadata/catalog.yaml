@@ -129,10 +129,11 @@ providers:
 
 # External links of the root catalog, by name; the templates refer to them by
 # name. Each carries its link relation; `preview` is also repeated on both
-# collections.
+# collections. The catalog is official, so none is a `via` link: Portolan
+# keeps that relation for a mirror's upstream source.
 links:
   source_coop:
-    rel: via
+    rel: alternate
     href: https://source.coop/giuz/glace-alps
     title: This catalog on Source Cooperative
   vcs:
@@ -148,7 +149,7 @@ links:
     href: https://lqgentner.github.io/glace-viewer
     title: GLACE Viewer, an interactive web map
   pipeline:
-    rel: via
+    rel: related
     href: https://github.com/lqgentner/glace-production
     title: Production pipeline
 
