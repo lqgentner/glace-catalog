@@ -17,16 +17,12 @@ describes: the next person will trust it. The design and its reasons are in
 | web maps | Twelve value-encoded archives a year, over the transport ranges remeasured on the mean composites (`metadata/assets.yaml`); finalization refuses archives whose recorded encoding differs. Each header declares the mosaic item's bbox rather than the tile-aligned grid. Each year's style is an asset of its mosaic item, and the collection's style is the latest year's (`PORTO-CORE-069`, [`conformance.md`](conformance.md)). A year takes 54 min on 15 cores (AGENTS.md) |
 | item mirror | Hilbert-ordered, float64 covering column, 2 048-row groups, gated by `tests/test_mirror.py` against rashid's own checks. Its columns are described once, in `metadata/assets.yaml`, and published as `table:columns` and in the collection guides; finalization adds the types and row count and refuses an undocumented column |
 | thumbnails | Drawn from the latest year's mosaic and the Aletsch tile's `coh12_vv.tif` over muted OSM, 1400 × 933 WebP at quality 90 (R-9); gated by `tests/test_thumbnails.py`. Finalization needs network access to the tile service |
-| publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. The store is published at `giuz/glace-alps` (2026-10-18, 344 565 objects, 357.7 GiB); the local store has since changed (P-29): `make links-live` finds every href with its recorded size, and `make conformance-live` gives 0 errors and the twelve `PTL-CAT-001` warnings. The Swiss test publication `lqgentner/glace-ch` is deleted (2026-10-18) |
+| publication | `tools/publish.py`, store to Source Cooperative, gated offline by `tests/test_publish.py`. The store is published at `giuz/glace-alps` (2026-10-18, 344 565 objects, 357.7 GiB; 26 594 changed objects, 472 MiB, republished 2026-10-22): `make links-live` finds every href with its recorded size, and `make conformance-live` (rashid 0.3.0) gives 0 errors and the twelve `PTL-CAT-001` warnings, both on 2026-10-22. The Swiss test publication `lqgentner/glace-ch` is deleted (2026-10-18) |
 
 ## Open
 
 Ordered by what blocks what. Everything not listed here is done.
 
-- **P-29 — Republish the store** after the 2026-10-22 changes: the item
-  documents and indexes, the collections, the tiles styles and the root
-  catalog. Then run `make links-live` and `make conformance-live`. *Verified
-  when* both pass against the published catalog.
 - **P-10 — Register in the Portolan registry** once published
   (`portolan:register-catalog`). *Verified when* the catalog appears in the
   registry.
