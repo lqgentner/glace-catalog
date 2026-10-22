@@ -67,7 +67,9 @@ cube = odc.stac.load(
     bbox=bbox,
     chunks={},
 )
-change = cube.coh12_vv.sel(time="2026") - cube.coh12_vv.sel(time="2015")
+# One time step per year; index the years by number.
+coherence = cube.coh12_vv.groupby("time.year").first()
+change = coherence.sel(year=2026) - coherence.sel(year=2015)
 ```
 
 ## Open the tiles in QGIS

@@ -18,13 +18,15 @@ STAC-GeoParquet index has the `collection-mirror` role and holds the item
 properties as columns; each collection's guide lists them. Individual item
 JSON files are the authoritative records.
 
-This DuckDB query finds tiles with more than 20% glacier cover:
+This DuckDB query finds the 2026 tiles with more than 20% glacier
+cover. The index holds one row per tile and year, so filter by year:
 
 ```sql
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
 SELECT id, datetime, "glace:glacier_fraction"
 FROM read_parquet('https://data.source.coop/giuz/glace-alps/tiles/items.parquet')
-WHERE "glace:glacier_fraction" > 0.2;
+WHERE "glace:glacier_fraction" > 0.2
+  AND year(datetime) = 2026;
 ```
 
 Read COGs over HTTPS with rasterio. Use raster windows for small areas and

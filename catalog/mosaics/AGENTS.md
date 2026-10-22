@@ -21,7 +21,11 @@ cube = odc.stac.load(
     bands=["coh12_vv", "coh12_vh"],
     chunks={},
 )
-change = cube.sel(time="2026") - cube.sel(time="2015")
+# Index the years by number. Subtracting two `sel(time="YYYY")` slices
+# instead gives an empty result: each keeps its own date, and xarray aligns
+# on the dates before subtracting.
+yearly = cube.groupby("time.year").first()
+change = yearly.sel(year=2026) - yearly.sel(year=2015)
 ```
 
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
