@@ -119,6 +119,15 @@ from another window stops the year rather than widening its extent.
 `start_datetime` / `end_datetime`. The observed span is published per product
 as `glace:*_first_acquisition` / `_last_acquisition`.
 
+**A tile asset carries only what is its file's own** (M-40). Most provenance
+tags have one value per asset key across every tile and year: the compositing
+method, the coherence window, the pipeline. `metadata/assets.yaml` declares
+them once, the tiles collection's `item_assets` publish them, and the build
+refuses a raster whose tags differ. Each asset keeps its observation count and,
+for coherence, the tile's coherence statistics. The window and acquisition
+dates are item properties already, and `processing:software` is one item
+property. Before this, the repeated fields were 45 % of every tile item's bytes.
+
 **Dotfiles are build state.** `.build-state.json` and `.items.parquet` (the
 year's slice of the mirror, before `finalize-catalog` combines them) start
 with a dot so publishing skips them.
@@ -478,6 +487,7 @@ rather than struck through; git keeps them.
 | M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | M-38 | **The tile grid is one vector PMTiles on the tiles collection**, `tiles/grid.pmtiles`, layer `mgrs`, properties `mgrs_tile`, `glacier_fraction`, `glacier_fraction_buffered`, zooms 0–10, written by `finalize-catalog` from the item indexes and registered per `PORTO-FMT-011` (`grid` asset, `rel: "pmtiles"` link, style `style-grid`). The glacier-fraction table is a build input (`tiles/.glacier-fractions.parquet`), not a published asset | 2, 3 |
 | M-39 | **The tiles collection's default style is coherence VV**, `style-default` at `tiles/styles/default.json`: the latest year's `coh12_vv_viz.pmtiles` from the mosaics collection, drawn as the mosaics style draws it, under the tile grid's outlines. `style-grid` stays, without the `default` role. `finalize-catalog` points the style at the latest year | 2, 3 |
+| M-40 | **The provenance a tile asset key shares is stated once**, as `glace:*` fields of the tiles collection's `item_assets`, declared in `metadata/assets.yaml` and checked against each raster's tags by the build. A tile asset keeps `glace:contributing_observations` and, for coherence, `glace:coherence_average` / `glace:coherence_std`; `processing:software` is an item property | 2 |
 | R-1 | `src/glace_catalog/__init__.py` exists: a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` is the type checker, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link; `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |

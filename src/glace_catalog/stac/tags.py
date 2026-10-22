@@ -119,20 +119,24 @@ _SOFTWARE_TAGS = (
     ("PROCESSING_SOFTWARE", "PROCESSING_SOFTWARE_VERSION"),
 )
 
-# GeoTIFF tag -> STAC asset field
-_TAG_FIELDS: dict[str, str] = {
-    "METADATA_VOCABULARY": "glace:metadata_vocabulary",
-    "PRODUCT_FAMILY": "glace:product_family",
-    "PIXEL_COORDINATE_CONVENTION": "glace:pixel_coordinate_convention",
-    "COMPOSITE_START_DATE": "glace:composite_start_date",
-    "COMPOSITE_END_DATE": "glace:composite_end_date",
-    # The window above is the same for every tile of a year; these two dates
-    # bound the acquisitions that contributed to this file.
-    "FIRST_ACQUISITION_DATE": "glace:first_acquisition_date",
-    "LAST_ACQUISITION_DATE": "glace:last_acquisition_date",
+# GeoTIFF tag -> STAC asset field, for the tags whose value is this file's own.
+# The compositing window and the acquisition dates are published as item
+# properties instead.
+_FILE_TAG_FIELDS: dict[str, str] = {
     # An asset field, because one item mixes LRW composites (both directions)
     # with per-pass ones. The name follows CEOS-ARD PFS SAR.
     "PASS_DIRECTION": "glace:pass_direction",
+    "CONTRIBUTING_OBSERVATIONS": "glace:contributing_observations",
+    "COHERENCE_AVERAGE": "glace:coherence_average",
+    "COHERENCE_STD": "glace:coherence_std",
+}
+# GeoTIFF tag -> STAC asset field, for the tags every raster of an asset key
+# carries with the same value. The tiles collection's item_assets declare them
+# once (metadata/assets.yaml), and the build checks each raster against them.
+SHARED_TAG_FIELDS: dict[str, str] = {
+    "METADATA_VOCABULARY": "glace:metadata_vocabulary",
+    "PRODUCT_FAMILY": "glace:product_family",
+    "PIXEL_COORDINATE_CONVENTION": "glace:pixel_coordinate_convention",
     "PRODUCT_TYPE": "glace:product_type",
     "SOURCE_DATA_PRODUCT_LEVEL": "glace:source_data_product_level",
     "PIPELINE_SOFTWARE_URL": "glace:pipeline_software_url",
@@ -144,7 +148,6 @@ _TAG_FIELDS: dict[str, str] = {
     "COMPOSITING_METHOD": "glace:compositing_method",
     "COMPOSITING_METHOD_REFERENCE": "glace:compositing_method_reference",
     "COMPOSITING_PARAMETERS": "glace:compositing_parameters",
-    "CONTRIBUTING_OBSERVATIONS": "glace:contributing_observations",
     "MEASUREMENT_TYPE": "glace:measurement_type",
     "TEMPORAL_BASELINE_DAYS": "glace:temporal_baseline_days",
     "PHASE_QUALITY_METHOD": "glace:phase_quality_method",
@@ -152,8 +155,6 @@ _TAG_FIELDS: dict[str, str] = {
     "COHERENCE_WINDOW_RANGE": "glace:coherence_window_range",
     "COHERENCE_WINDOW_AZIMUTH": "glace:coherence_window_azimuth",
     "COHERENCE_WEIGHTING_SHAPE": "glace:coherence_weighting_shape",
-    "COHERENCE_AVERAGE": "glace:coherence_average",
-    "COHERENCE_STD": "glace:coherence_std",
 }
 PROVENANCE_TAGS: tuple[str, ...] = tuple(
     dict.fromkeys(
@@ -460,10 +461,10 @@ def require_valid(file: CompositeFile, info: RasterInfo) -> None:
         raise ValueError(msg)
 
 
-def tag_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:
-    """Map the GeoTIFF tags onto ``glace:`` asset fields, typing the numeric ones."""
+def _typed_fields(raster_tags: Mapping[str, Any], names: Mapping[str, str]) -> dict[str, Any]:
+    """Map the tags in ``names`` onto their STAC fields, typing the numeric ones."""
     fields: dict[str, Any] = {}
-    for tag, name in _TAG_FIELDS.items():
+    for tag, name in names.items():
         value = raster_tags.get(tag)
         if value is None:
             continue
@@ -472,8 +473,37 @@ def tag_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:
         elif tag in _FLOAT_TAGS:
             fields[name] = float(value)
         else:
-            fields[name] = value
+            fields[name] = str(value)
     return fields
+
+
+def tag_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:
+    """Map the tags whose value is the file's own onto ``glace:`` asset fields."""
+    return _typed_fields(raster_tags, _FILE_TAG_FIELDS)
+
+
+def shared_tag_fields(raster_tags: Mapping[str, Any]) -> dict[str, Any]:
+    """Map the tags every raster of an asset key shares onto ``glace:`` asset fields.
+
+    The tiles collection's ``item_assets`` carry these; :func:`shared_mismatches`
+    compares one raster's tags with them.
+    """
+    return _typed_fields(raster_tags, SHARED_TAG_FIELDS)
+
+
+def shared_mismatches(raster_tags: Mapping[str, str], declared: Mapping[str, Any]) -> list[str]:
+    """List each shared field where a raster's tags differ from the declared value.
+
+    A field the raster lacks, or one it carries and ``declared`` omits, counts
+    as a difference: the collection would otherwise state something the file
+    does not.
+    """
+    found = shared_tag_fields(raster_tags)
+    return [
+        f"{name} is {found.get(name)!r}, the collection declares {declared.get(name)!r}"
+        for name in sorted(set(found) | set(declared))
+        if found.get(name) != declared.get(name)
+    ]
 
 
 def standard_fields(raster_tags: Mapping[str, str]) -> dict[str, Any]:

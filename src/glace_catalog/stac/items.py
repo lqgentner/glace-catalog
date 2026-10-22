@@ -31,6 +31,7 @@ from glace_catalog.stac.naming import (
 from glace_catalog.stac.tags import (
     SPECIFICATION_URL,
     require_valid,
+    shared_mismatches,
     standard_fields,
     tag_fields,
 )
@@ -208,10 +209,26 @@ def _asset(
 
     Title, description and roles come from the collection's ``item_assets``
     entry for the same key, so the item and its collection describe the file
-    identically. The raster's own ``LAYER_DESCRIPTION`` stays in its tags.
+    identically. That entry also states the provenance every raster of the key
+    shares, so the asset carries only the tags whose value is this file's own.
+    The raster's own ``LAYER_DESCRIPTION`` stays in its tags.
+
+    Raises
+    ------
+    ValueError
+        If the raster's tags fail :func:`require_valid`, or state a shared
+        provenance field other than the collection declares.
     """
     require_valid(file, info)
-    entry = metadata.vocabulary().item_asset(file.asset_key, "tiles")
+    vocabulary = metadata.vocabulary()
+    mismatches = shared_mismatches(info.tags, vocabulary.provenance(file.asset_key))
+    if mismatches:
+        msg = (
+            f"{file.path}: {'; '.join(mismatches)}. Update the provenance in "
+            "metadata/assets.yaml if the pipeline changed, then re-render."
+        )
+        raise ValueError(msg)
+    entry = vocabulary.item_asset(file.asset_key, "tiles")
     asset = pystac.Asset(
         # Relative to the item, so the store can move by changing its self
         # href alone.
@@ -246,7 +263,6 @@ def _asset(
     if info.checksum is not None:
         asset.extra_fields["file:checksum"] = info.checksum
     asset.extra_fields.update(tag_fields(info.tags))
-    asset.extra_fields.update(standard_fields(info.tags))
     return asset
 
 
@@ -296,10 +312,28 @@ def _unanimous_raster_tag(
     raise ValueError(msg)
 
 
+def _unanimous_software(item_id: str, raster_info: Mapping[str, RasterInfo]) -> dict[str, str]:
+    """Return the ``processing:software`` every asset of an item records.
+
+    Raises
+    ------
+    ValueError
+        If the assets record different software versions.
+    """
+    found = {
+        tuple(sorted(standard_fields(info.tags).get("processing:software", {}).items()))
+        for info in raster_info.values()
+    }
+    if len(found) != 1:
+        msg = f"{item_id}: assets disagree on their software ({sorted(found)})"
+        raise ValueError(msg)
+    return dict(found.pop())
+
+
 def _apply_processing_metadata(item: pystac.Item, raster_info: Mapping[str, RasterInfo]) -> None:
     """Hoist common processing metadata and declare the extensions in use.
 
-    Both values classify the whole item, so they belong in searchable item
+    These values classify the whole item, so they belong in searchable item
     properties and every asset must agree on them.
     """
     item_fields = {
@@ -308,11 +342,12 @@ def _apply_processing_metadata(item: pystac.Item, raster_info: Mapping[str, Rast
     }
     for tag, property_name in item_fields.items():
         item.properties[property_name] = _unanimous_raster_tag(item.id, raster_info, tag)
+    if software := _unanimous_software(item.id, raster_info):
+        item.properties["processing:software"] = software
 
-    item.stac_extensions.extend([SAR_EXTENSION_URI, RASTER_EXTENSION_URI, FILE_EXTENSION_URI])
-    fields = [key for asset in item.assets.values() for key in asset.extra_fields]
-    if "processing:level" in item.properties or "processing:software" in fields:
-        item.stac_extensions.append(PROCESSING_EXTENSION_URI)
+    item.stac_extensions.extend(
+        [SAR_EXTENSION_URI, RASTER_EXTENSION_URI, FILE_EXTENSION_URI, PROCESSING_EXTENSION_URI],
+    )
 
 
 def build_tile_item(

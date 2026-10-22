@@ -57,6 +57,7 @@ types as `table:columns` on the collection's `items` asset:
 | `glace:glacier_fraction_buffered` | Share of the square inside the same outlines buffered by 250 m, 0 to 1. The same every year. |
 | `processing:level` | Always `L3`, a composite over many acquisitions. |
 | `glace:dem` | DEM used for terrain correction and geocoding. |
+| `processing:software` | Versions of the software that made the square's composites, such as `{"s1bursts": "0.6.0", "ESA SNAP": "14.0.0"}`. |
 | `datetime` | Midpoint of the compositing window. |
 
 ## Tile grid
@@ -99,9 +100,20 @@ default display ranges and colormaps.
 ## Processing and dates
 
 GeoTIFF tags record the processing chain: `PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`,
-`COMPOSITING_*`, `BACKSCATTER_*` and `COHERENCE_*`. Item properties copy these
-under `glace:*` and `processing:*` for filtering. The GeoTIFF tags are the
-source of truth.
+`COMPOSITING_*`, `BACKSCATTER_*` and `COHERENCE_*`. The GeoTIFF tags are the
+source of truth; the STAC metadata copies them in three places:
+
+- The collection's `item_assets` hold, per asset key, the `glace:*` fields
+  that are the same on every tile and in every year, such as
+  `glace:compositing_method` and `glace:coherence_window_range`. The build
+  refuses a raster whose tags state otherwise.
+- Each item asset holds the values that are its file's own:
+  `glace:contributing_observations`, and for coherence `glace:coherence_average`
+  and `glace:coherence_std`. In `items.parquet` they are fields of the asset's
+  struct in the `assets` column.
+- Item properties hold what applies to the whole tile: `processing:level`,
+  `processing:software`, `glace:dem` and the acquisition dates below. These
+  are columns of `items.parquet`, so filter on them there.
 
 All tile items in a year share `start_datetime` and `end_datetime`, the
 compositing window selected for that year's lowest-snow period. Actual

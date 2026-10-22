@@ -28,6 +28,7 @@ from glace_catalog.scopes import (
     get_scope,
 )
 from glace_catalog.stac.naming import ASSET_KEYS, VIZ_SUFFIX, data_key, viz_key
+from glace_catalog.stac.tags import shared_tag_fields
 from glace_catalog.styles import LayerStyle
 
 if TYPE_CHECKING:
@@ -429,11 +430,36 @@ class Vocabulary:
             value=str(product["value"]),
         )
 
+    def provenance_tags(self, key: str) -> dict[str, str]:
+        """Return the GeoTIFF tags every raster of one tile asset key carries, with their values.
+
+        They are merged as ``assets.yaml`` describes. A QA layer's
+        ``PRODUCT_TYPE`` appends its metric to the product's, as in
+        ``COH_LRW_QA-NUM``.
+        """
+        ref = parse_key(key)
+        product = self._product(ref)["provenance"]
+        tags: dict[str, Any] = {**self._assets["provenance"], **product["all"]}
+        if ref.qa is None:
+            tags.update(product["data"])
+        else:
+            tags.update(self._qa(ref)["provenance"])
+            tags["PRODUCT_TYPE"] = f"{tags['PRODUCT_TYPE']}_QA-{ref.qa.upper()}"
+        return {tag: str(value) for tag, value in tags.items()}
+
+    def provenance(self, key: str) -> dict[str, Any]:
+        """Return :meth:`provenance_tags` as the ``glace:*`` fields of the tile ``item_assets``."""
+        return shared_tag_fields(self.provenance_tags(key))
+
     def item_asset(self, key: str, collection: Collection) -> dict[str, Any]:
-        """Build the ``item_assets`` entry of one raster on one grid."""
+        """Build the ``item_assets`` entry of one raster on one grid.
+
+        A tile asset also states the provenance its rasters share, which the
+        tile items then leave out.
+        """
         ref = parse_key(key)
         resolution = COMPOSITE_RESOLUTION if collection == "tiles" else ANALYSIS_RESOLUTION
-        return {
+        entry: dict[str, Any] = {
             "type": COG_MEDIA_TYPE,
             "title": self.asset_title(key),
             "description": self.asset_description(key, collection),
@@ -441,6 +467,9 @@ class Vocabulary:
             "raster:spatial_resolution": resolution,
             "bands": [self._band(ref, collection)],
         }
+        if collection == "tiles":
+            entry.update(self.provenance(key))
+        return entry
 
     def viz_asset(
         self,
