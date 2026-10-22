@@ -11,7 +11,7 @@ Reversed decisions are not kept here; git has them.
 
 ## 1. Identity, license and providers
 
-Conformance means passing **rashid 0.1.8** against spec v0.2.0. Its rule
+Conformance means passing **rashid 0.3.0** against spec v0.2.0. Its rule
 registry is the rule list, so it is not repeated here. The license is
 `CC-BY-4.0` (`PTL-LIC-001`), and the data contains modified Copernicus
 Sentinel data.
@@ -364,7 +364,7 @@ document must be in the canonical form the generator writes (two-space
 indent, declaration order, one trailing newline, non-ASCII kept as is), so a
 hand edit cannot hide a one-line change in a reindented diff. YAML must parse
 under `safe_load` and not indent with tabs. `tests/test_conformance.py`
-refuses a rashid outside `>=0.1.8,<0.2.0`, because a pass from a validator
+refuses a rashid outside `>=0.3.0,<0.4.0`, because a pass from a validator
 with the wrong rule set proves nothing.
 
 ---

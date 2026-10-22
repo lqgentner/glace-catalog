@@ -12,7 +12,7 @@ and the list never grows without a row here. A known deviation with an issue
 number is a debt someone can pay off; a silently widened allow-list is a false
 claim about conformance.
 
-Checked against **rashid 0.1.8** and spec **v0.2.0**.
+Checked against **rashid 0.3.0** and spec **v0.2.0**.
 
 ## What the gate reads
 
@@ -28,12 +28,19 @@ make conformance        # before publication: documents and schema, no asset byt
 make conformance-live   # after publication: also the collection assets' bytes and the server
 ```
 
+Both targets validate every object against the schemas of the extensions it
+declares. rashid bundles the ones its registry pins; `--schema-allow-network`
+fetches the four it does not (`sar`, `mgrs`, `grid` and `processing`, which
+rashid otherwise reports as `PTL-EXT-002` and leaves unchecked).
+
 The collection asset hrefs are absolute public URLs, so `make conformance-live`
 reads the published collection assets and probes the server's range and CORS
 support. Item asset hrefs are relative and do not resolve in the mirror, so
 neither target reads the COGs or archives. `make links-live` requests each of
-them instead. rashid's `--live-base-url` would also request them, one at a
-time: about ten hours for the Alps.
+them instead. rashid would also request them, one at a time, once it knows the
+publish base: about ten hours for the Alps. It reads that base from the root
+catalog's `self` link, so `make conformance-live` mirrors the documents
+without it (`tools/mirror_docs.py --drop-self`).
 
 The last run over the published catalog, on 2026-10-18 over the Alpine years
 2015–2026 (`make conformance-live`, 26 545 files), gave 0 errors and only the
@@ -44,6 +51,7 @@ twelve `PTL-CAT-001` warnings accepted below.
 | Rule | Where | Why accepted | Tracking |
 |---|---|---|---|
 | `PTL-COL-005` | both collections, tracked tree only | Each collection registers its `items.parquet` mirror, and a fresh clone holds no items for it to mirror. Not a metadata defect: the finding disappears against any built tree. | none; structural, see below |
+| `PTL-AST-007` | both collections, tracked tree only | `PORTO-CORE-082`: a collection refers to its primary data through a `data` asset on itself or its items. Both collections keep their data on their items, which a fresh clone does not hold. The finding disappears against any built tree. | none; structural, as above |
 
 `PTL-COL-005` reads: *"a collection whose scene files or item mirror imply
 items must publish them."* Both collections register a `collection-mirror`
