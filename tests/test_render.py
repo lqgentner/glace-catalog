@@ -21,6 +21,7 @@ Run: uv run tests/test_render.py
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 
 from glace_catalog.documents import stale_documents
@@ -91,6 +92,15 @@ for key in ASSET_KEYS:
 coh12_vv = vocabulary.display("coh12_vv")
 if coh12_vv.vmax != 0.7:
     problems.append("coh12_vv default vmax is not 0.7")
+
+# --- the READMEs link absolutely --------------------------------------------
+# Source Cooperative renders a README at a URL without a trailing slash, so a
+# relative link there resolves one directory too high.
+RELATIVE_LINK = re.compile(r"\]\((?!https?://|#)([^)]+)\)|href=\"(?!https?://|#)([^\"]+)\"")
+for readme in sorted(CATALOG.rglob("README.md")):
+    for match in RELATIVE_LINK.finditer(readme.read_text()):
+        target = match.group(1) or match.group(2)
+        problems.append(f"{readme.relative_to(ROOT)}: relative link {target!r}")
 
 # --- catalog/ matches a fresh render ---------------------------------------
 stale = stale_documents(vocabulary, CATALOG)

@@ -75,43 +75,29 @@ TILE = "32TPS05"
 WINDOW = "20230718_20231015"
 
 
-def _info(first: str, last: str, **extra: str) -> RasterInfo:
-    """Build a raster info carrying every required tag, with the given span."""
+def _info(key: str, first: str, last: str, **extra: str) -> RasterInfo:
+    """Build a raster info for one asset key carrying every required tag, with the given span.
+
+    The provenance every raster of the key shares comes from the vocabulary,
+    as the build checks it against.
+    """
     tags = {
-        "METADATA_VOCABULARY": "CEOS-ARD PFS SAR v1.3.1",
         "PIPELINE_SOFTWARE": "s1bursts",
         "PIPELINE_SOFTWARE_VERSION": "0.5.0",
-        "PIPELINE_SOFTWARE_URL": "https://github.com/lqgentner/s1bursts",
         "PROCESSING_SOFTWARE": "ESA SNAP",
         "PROCESSING_SOFTWARE_VERSION": "14.0.0",
         "DEM": "Copernicus GLO-30",
-        "PRODUCT_TYPE": "X",
-        "PRODUCT_FAMILY": "Composite",
         "PRODUCT_LEVEL": "L3",
-        "SOURCE_DATA_PRODUCT_LEVEL": "L2",
         "MGRS_TILE": TILE,
         "COMPOSITE_START_DATE": "2023-07-18",
         "COMPOSITE_END_DATE": "2023-10-15",
         "FIRST_ACQUISITION_DATE": first,
         "LAST_ACQUISITION_DATE": last,
         "POLARIZATION": "VV",
-        "PIXEL_COORDINATE_CONVENTION": "pixel centre",
-        "COMPOSITING_METHOD": "Local resolution weighting",
-        "COMPOSITING_METHOD_REFERENCE": "https://doi.org/x",
-        "COMPOSITING_PARAMETERS": "aggregation=median",
         "CONTRIBUTING_OBSERVATIONS": "40",
         "LAYER_NAME": "x",
         "LAYER_DESCRIPTION": "x",
-        "BACKSCATTER_MEASUREMENT": "Gamma-0",
-        "BACKSCATTER_CONVENTION": "Power",
-        "BACKSCATTER_CONVERSION_EQ": "dB = 10*log10(DN)",
-        "MEASUREMENT_TYPE": "coherence",
-        "TEMPORAL_BASELINE_DAYS": "12",
-        "PHASE_QUALITY_METHOD": "x",
-        "PHASE_QUALITY_REFERENCE": "x",
-        "COHERENCE_WINDOW_RANGE": "35",
-        "COHERENCE_WINDOW_AZIMUTH": "7",
-        "COHERENCE_WEIGHTING_SHAPE": "Rectangular",
+        **vocabulary().provenance_tags(key),
         **extra,
     }
     return RasterInfo(tags=tags, band_name="x", data_type="float32", nodata=float("nan"))
@@ -120,13 +106,26 @@ def _info(first: str, last: str, **extra: str) -> RasterInfo:
 def _refuses_mixed_windows(files: Sequence[CompositeFile]) -> bool:
     """Check that a stale file from a different window makes the tile fail."""
     info = {
-        "coh12_vv": _info("2023-07-21", "2023-09-30"),
-        "rtc_vv": _info("2023-07-21", "2023-10-12", COMPOSITE_END_DATE="2023-10-20"),
+        "coh12_vv": _info("coh12_vv", "2023-07-21", "2023-09-30"),
+        "rtc_vv": _info("rtc_vv", "2023-07-21", "2023-10-12", COMPOSITE_END_DATE="2023-10-20"),
     }
     try:
         build_tile_item(TILE, files, info)
     except ValueError as error:
         return "2023-10-20" in str(error)
+    return False
+
+
+def _refuses_other_provenance(files: Sequence[CompositeFile]) -> bool:
+    """Check that a raster whose shared tags differ from the vocabulary makes the tile fail."""
+    info = {
+        "coh12_vv": _info("coh12_vv", "2023-07-21", "2023-09-30", COHERENCE_WINDOW_RANGE="20"),
+        "rtc_vv": _info("rtc_vv", "2023-07-21", "2023-10-12"),
+    }
+    try:
+        build_tile_item(TILE, files, info)
+    except ValueError as error:
+        return "glace:coherence_window_range" in str(error)
     return False
 
 
@@ -313,13 +312,13 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         print("error  fixture filename did not parse")
         return 1
     for file in files:
-        missing = set(required_tags(file)) - set(_info("x", "x").tags)
+        missing = set(required_tags(file)) - set(_info(file.asset_key, "x", "x").tags)
         if missing:
             print(f"error  fixture lacks required tags {sorted(missing)}")
             return 1
     info = {
-        "coh12_vv": _info("2023-07-21", "2023-09-30"),  # coherence ends a pair earlier
-        "rtc_vv": _info("2023-07-21", "2023-10-12"),
+        "coh12_vv": _info("coh12_vv", "2023-07-21", "2023-09-30"),  # a pair ends earlier
+        "rtc_vv": _info("rtc_vv", "2023-07-21", "2023-10-12"),
     }
     item = build_tile_item(TILE, files, info)
     props = item.properties
@@ -345,12 +344,23 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
         == f"MGRS-{TILE}",
         "no filename-derived span fields": "glace:coh_start" not in props
         and "glace:rtc_end" not in props,
-        "acquisition tags reach the asset": item.assets["coh12_vv"].extra_fields.get(
-            "glace:first_acquisition_date",
+        "the asset carries its own observation count": item.assets["coh12_vv"].extra_fields.get(
+            "glace:contributing_observations",
         )
-        == "2023-07-21",
+        == 40,
+        "the asset leaves the shared provenance to item_assets": not any(
+            name in item.assets["coh12_vv"].extra_fields
+            for name in vocabulary().provenance("coh12_vv")
+        ),
+        "the asset leaves the dates to the item": not any(
+            "date" in name for name in item.assets["coh12_vv"].extra_fields
+        ),
+        "the item records its software once": props.get("processing:software")
+        == {"ESA SNAP": "14.0.0", "s1bursts": "0.5.0"}
+        and "processing:software" not in item.assets["rtc_vv"].extra_fields,
     }
     checks["a file from another window refuses the tile"] = _refuses_mixed_windows(files)
+    checks["a file stating other provenance refuses the tile"] = _refuses_other_provenance(files)
     # The archives are reached through `visual` assets alone, a recorded
     # deviation from `PORTO-FMT-011` (docs/conformance.md). Check this on an
     # item that carries the renderings.

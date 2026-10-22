@@ -1,0 +1,96 @@
+{
+  "version": 8,
+  "name": "GLACE – Coherence VV over the tile grid (2026)",
+  "metadata": {
+    "description": "The Coherence VV composite of one year, from the mosaics collection's web-map archive, with the MGRS tiles of the tiles collection outlined over it. Rendered by glace_catalog.documents."
+  },
+  "sources": {
+    "src-coh12_vv": {
+      "type": "raster-dem",
+      "url": "pmtiles://../../mosaics/2026/coh12_vv_viz.pmtiles",
+      "tileSize": 256,
+      "minzoom": 5,
+      "maxzoom": 13,
+      "attribution": "University of Zurich, Contains modified Copernicus Sentinel data 2026",
+      "encoding": "custom",
+      "redFactor": 0.003921629170755188,
+      "greenFactor": 1.5318863948262453e-05,
+      "blueFactor": 5.983931229790021e-08,
+      "baseShift": 0.003937007874015748
+    },
+    "grid": {
+      "type": "vector",
+      "url": "pmtiles://../grid.pmtiles",
+      "minzoom": 0,
+      "maxzoom": 10
+    }
+  },
+  "layers": [
+    {
+      "id": "glace-coh12_vv-2026",
+      "type": "color-relief",
+      "source": "src-coh12_vv",
+      "paint": {
+        "color-relief-opacity": 1,
+        "resampling": "nearest",
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          -0.001968503937007874,
+          "rgba(0, 0, 0, 0)",
+          -0.0019291338582677164,
+          "#031326",
+          0.1,
+          "#031326",
+          0.1375,
+          "#092844",
+          0.175,
+          "#183e61",
+          0.2125,
+          "#365176",
+          0.25,
+          "#525b7a",
+          0.2875,
+          "#655e77",
+          0.325,
+          "#785f72",
+          0.3625,
+          "#8d616d",
+          0.4,
+          "#a56267",
+          0.4375,
+          "#bf6561",
+          0.475,
+          "#da6f5e",
+          0.5125,
+          "#e98466",
+          0.55,
+          "#e99b74",
+          0.5875,
+          "#e5af84",
+          0.625,
+          "#e7c49a",
+          0.6625,
+          "#f1ddb9",
+          0.7,
+          "#fdf5da"
+        ]
+      }
+    },
+    {
+      "id": "glace-grid-outline",
+      "type": "line",
+      "source": "grid",
+      "source-layer": "mgrs",
+      "paint": {
+        "line-color": "#555555",
+        "line-width": 0.5
+      }
+    }
+  ]
+}

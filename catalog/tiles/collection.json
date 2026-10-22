@@ -275,7 +275,23 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:compositing_method": "Local resolution weighting (Small et al. 2022) applied to 12-day repeat-pass coherence",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5",
+      "glace:measurement_type": "Coherence",
+      "glace:temporal_baseline_days": 12,
+      "glace:phase_quality_method": "Coherence",
+      "glace:phase_quality_reference": "Magnitude of the complex correlation coefficient over the estimation window, as computed by the ESA SNAP Coherence operator.",
+      "glace:coherence_window_range": 35,
+      "glace:coherence_window_azimuth": 7,
+      "glace:coherence_weighting_shape": "Rectangular"
     },
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -292,7 +308,17 @@
           "data_type": "uint16",
           "nodata": 0
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW_QA-NUM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:qa_layer": "Contributing Observations Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -309,7 +335,18 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW_QA-CQM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:cqm_conversion_eq": "dB = 10*log10(DN)",
+      "glace:qa_layer": "Composite Quality Map Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "coh12_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -326,7 +363,23 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:compositing_method": "Local resolution weighting (Small et al. 2022) applied to 12-day repeat-pass coherence",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5",
+      "glace:measurement_type": "Coherence",
+      "glace:temporal_baseline_days": 12,
+      "glace:phase_quality_method": "Coherence",
+      "glace:phase_quality_reference": "Magnitude of the complex correlation coefficient over the estimation window, as computed by the ESA SNAP Coherence operator.",
+      "glace:coherence_window_range": 35,
+      "glace:coherence_window_azimuth": 7,
+      "glace:coherence_weighting_shape": "Rectangular"
     },
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -343,7 +396,17 @@
           "data_type": "uint16",
           "nodata": 0
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW_QA-NUM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:qa_layer": "Contributing Observations Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -360,7 +423,18 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Coherence",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "COH_LRW_QA-CQM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:cqm_conversion_eq": "dB = 10*log10(DN)",
+      "glace:qa_layer": "Composite Quality Map Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -377,7 +451,19 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:backscatter_measurement": "Gamma-0",
+      "glace:backscatter_convention": "Power",
+      "glace:backscatter_conversion_eq": "dB = 10*log10(DN)",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -394,7 +480,17 @@
           "data_type": "uint16",
           "nodata": 0
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW_QA-NUM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:qa_layer": "Contributing Observations Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -411,7 +507,18 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW_QA-CQM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:cqm_conversion_eq": "dB = 10*log10(DN)",
+      "glace:qa_layer": "Composite Quality Map Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -428,7 +535,19 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:backscatter_measurement": "Gamma-0",
+      "glace:backscatter_convention": "Power",
+      "glace:backscatter_conversion_eq": "dB = 10*log10(DN)",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -445,7 +564,17 @@
           "data_type": "uint16",
           "nodata": 0
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW_QA-NUM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:qa_layer": "Contributing Observations Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     },
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
@@ -462,7 +591,18 @@
           "data_type": "float32",
           "nodata": "nan"
         }
-      ]
+      ],
+      "glace:metadata_vocabulary": "CEOS-ARD PFS SAR v1.3.1; https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf",
+      "glace:product_family": "Composite Backscatter",
+      "glace:pixel_coordinate_convention": "pixel centre",
+      "glace:product_type": "RTC_LRW_QA-CQM",
+      "glace:source_data_product_level": "L2",
+      "glace:pipeline_software_url": "https://github.com/lqgentner/s1bursts",
+      "glace:cqm_conversion_eq": "dB = 10*log10(DN)",
+      "glace:qa_layer": "Composite Quality Map Image",
+      "glace:compositing_method": "Local resolution weighting",
+      "glace:compositing_method_reference": "https://doi.org/10.1109/TGRS.2021.3055562",
+      "glace:compositing_parameters": "aggregation=mean;clip_max_resolution=5"
     }
   },
   "assets": {
@@ -609,6 +749,10 @@
           "description": "DEM used for terrain correction and geocoding."
         },
         {
+          "name": "processing:software",
+          "description": "Versions of the software that made the square's composites, such as `{\"s1bursts\": \"0.6.0\", \"ESA SNAP\": \"14.0.0\"}`."
+        },
+        {
           "name": "datetime",
           "description": "Midpoint of the compositing window."
         }
@@ -643,14 +787,23 @@
         "thumbnail"
       ]
     },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Map style – Coherence VV, latest year",
+      "description": "Draws the latest year's Coherence VV composite, from the mosaics collection's web-map archive, with the tile grid outlined over it.",
+      "roles": [
+        "style",
+        "default"
+      ]
+    },
     "style-grid": {
       "href": "./styles/grid.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "Map style – tile grid",
       "description": "Draws the tile grid, each tile filled by its buffered glacier fraction.",
       "roles": [
-        "style",
-        "default"
+        "style"
       ]
     }
   },

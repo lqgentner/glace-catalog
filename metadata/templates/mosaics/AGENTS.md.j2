@@ -21,7 +21,11 @@ cube = odc.stac.load(
     bands=["coh12_vv", "coh12_vh"],
     chunks={},
 )
-change = cube.sel(time="{{ last_year }}") - cube.sel(time="{{ first_year }}")
+# Index the years by number. Subtracting two `sel(time="YYYY")` slices
+# instead gives an empty result: each keeps its own date, and xarray aligns
+# on the dates before subtracting.
+yearly = cube.groupby("time.year").first()
+change = yearly.sel(year={{ last_year }}) - yearly.sel(year={{ first_year }})
 ```
 
 Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
@@ -29,13 +33,12 @@ counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata
 
 ## Item index
 
-`items.parquet` has one row per year and these columns, also listed with their
-types as `table:columns` on the collection's `items` asset:
+`items.parquet` has one row per year. The collection's `items` asset lists
+every column with its type and description as `table:columns`. These are the
+ones queries use:
 
-| Column | Description |
-| --- | --- |
-{% for column in mirror_columns.mosaics %}
-| `{{ column.name }}` | {{ column.description }} |
+{% for column in mirror_columns.mosaics | selectattr("name", "in", ["id", "assets", "datetime", "glace:build_fingerprint"]) %}
+- `{{ column.name }}`: {{ column.description }}
 {% endfor %}
 
 ## Web maps

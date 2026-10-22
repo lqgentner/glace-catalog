@@ -3,7 +3,7 @@
 One item per year, each carrying twelve single-band analysis rasters on
 ETRS89-LAEA (EPSG:3035) at 40 m, plus twelve PMTiles archives
 for drawing them, beside the rasters in the same item directory. Agents: read
-[`AGENTS.md`](AGENTS.md).
+[`AGENTS.md`](https://source.coop/giuz/glace-alps/mosaics/AGENTS.md).
 
 The grid has two deliberate properties:
 
@@ -54,15 +54,21 @@ Each year's style sits beside its archives, at `{year}/styles/default.json`,
 and the collection's style draws the latest year.
 
 **To draw a map**, load a year's style in MapLibre GL JS, which decodes custom
-`raster-dem` encodings:
+`raster-dem` encodings. The style names its archives relative to itself, as
+Portolan styles do, while MapLibre and the PMTiles protocol resolve a source URL
+against the page, so resolve them against the style first:
 
 ```js
 const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
-new maplibregl.Map({
-  container: "map",
-  style: "https://data.source.coop/giuz/glace-alps/mosaics/2026/styles/default.json",
-});
+
+const styleUrl = "https://data.source.coop/giuz/glace-alps/mosaics/2026/styles/default.json";
+const style = await (await fetch(styleUrl)).json();
+for (const source of Object.values(style.sources)) {
+  const path = source.url.replace("pmtiles://", "");
+  source.url = "pmtiles://" + new URL(path, styleUrl).href;
+}
+new maplibregl.Map({ container: "map", style });
 ```
 
 ## License

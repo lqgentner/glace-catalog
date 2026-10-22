@@ -20,31 +20,25 @@
       "source-layer": "mgrs",
       "paint": {
         "fill-color": [
-          "interpolate",
-          [
-            "linear"
-          ],
+          "step",
           [
             "get",
             "glacier_fraction_buffered"
           ],
-          0.0,
           "#ffffff",
           0.125,
-          "#e4e2fa",
+          "#e1def9",
           0.25,
-          "#cac6f4",
+          "#c3bef3",
           0.375,
-          "#afaaee",
+          "#9e9ee9",
           0.5,
-          "#7d8edc",
+          "#597dcc",
           0.625,
-          "#4171bb",
+          "#2d609c",
           0.75,
-          "#28578e",
+          "#283b6e",
           0.875,
-          "#29376a",
-          1.0,
           "#2c1a4c"
         ],
         "fill-opacity": 0.6

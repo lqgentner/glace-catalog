@@ -5,9 +5,26 @@
 # `glace_catalog.metadata`) to write the collections, items, styles and the
 # asset tables in the READMEs and AGENTS.md files.
 #
-# stretch:   the default display range, drawn with `cmap`.
-# transport: the value range a web-map archive encodes into codes 1-255
-#            (0 is nodata). Changing it requires re-tiling every year.
+# stretch:    the default display range, drawn with `cmap`.
+# transport:  the value range a web-map archive encodes into codes 1-255
+#             (0 is nodata). Changing it requires re-tiling every year.
+# provenance: GeoTIFF tags every raster of an asset key carries with the same
+#             value, on every tile and in every year. The tiles collection's
+#             item_assets state them once, as glace:* fields, so its items do
+#             not repeat them; the build refuses a raster whose tags differ.
+#             An asset's set merges the top-level `provenance`, its product's
+#             `all`, then the product's `data` or its QA metric's set.
+
+provenance:
+  METADATA_VOCABULARY: >-
+    CEOS-ARD PFS SAR v1.3.1;
+    https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf
+  PIXEL_COORDINATE_CONVENTION: pixel centre
+  SOURCE_DATA_PRODUCT_LEVEL: L2
+  PIPELINE_SOFTWARE_URL: https://github.com/lqgentner/s1bursts
+  COMPOSITING_METHOD: Local resolution weighting
+  COMPOSITING_METHOD_REFERENCE: https://doi.org/10.1109/TGRS.2021.3055562
+  COMPOSITING_PARAMETERS: aggregation=mean;clip_max_resolution=5
 
 products:
   coh12:
@@ -30,6 +47,24 @@ products:
     cqm:
       stretch: [-2.5, 4.0]
       transport: [-20.0, 14.0]
+    # A QA layer's PRODUCT_TYPE appends its metric, as in COH_LRW_QA-NUM.
+    provenance:
+      all:
+        PRODUCT_FAMILY: Composite Coherence
+        PRODUCT_TYPE: COH_LRW
+      data:
+        COMPOSITING_METHOD: >-
+          Local resolution weighting (Small et al. 2022) applied to 12-day
+          repeat-pass coherence
+        MEASUREMENT_TYPE: Coherence
+        TEMPORAL_BASELINE_DAYS: 12
+        PHASE_QUALITY_METHOD: Coherence
+        PHASE_QUALITY_REFERENCE: >-
+          Magnitude of the complex correlation coefficient over the estimation
+          window, as computed by the ESA SNAP Coherence operator.
+        COHERENCE_WINDOW_RANGE: 35
+        COHERENCE_WINDOW_AZIMUTH: 7
+        COHERENCE_WEIGHTING_SHAPE: Rectangular
   rtc:
     name: Backscatter
     long: Radiometrically terrain-corrected gamma-nought backscatter
@@ -49,6 +84,14 @@ products:
     cqm:
       stretch: [-3.0, 4.0]
       transport: [-20.0, 12.0]
+    provenance:
+      all:
+        PRODUCT_FAMILY: Composite Backscatter
+        PRODUCT_TYPE: RTC_LRW
+      data:
+        BACKSCATTER_MEASUREMENT: Gamma-0
+        BACKSCATTER_CONVENTION: Power
+        BACKSCATTER_CONVERSION_EQ: dB = 10*log10(DN)
 
 polarizations:
   vv: co-polarized
@@ -68,6 +111,8 @@ qa:
     band:
       tiles: {data_type: uint16, nodata: 0}
       mosaics: {data_type: float32, nodata: nan}
+    provenance:
+      QA_LAYER: Contributing Observations Image
   cqm:
     name: Composite Quality Map
     cmap: cmc.glasgow
@@ -77,6 +122,9 @@ qa:
     band:
       tiles: {data_type: float32, nodata: nan}
       mosaics: {data_type: float32, nodata: nan}
+    provenance:
+      QA_LAYER: Composite Quality Map Image
+      CQM_CONVERSION_EQ: dB = 10*log10(DN)
 
 # Asset descriptions. Jinja2 variables: long, product (short name), POL,
 # pol_word, value, source_title, transport, min_zoom, max_zoom.
@@ -241,5 +289,10 @@ mirror_columns:
   - name: glace:dem
     collections: [tiles]
     description: DEM used for terrain correction and geocoding.
+  - name: processing:software
+    collections: [tiles]
+    description: >-
+      Versions of the software that made the square's composites, such as
+      `{"s1bursts": "0.6.0", "ESA SNAP": "14.0.0"}`.
   - name: datetime
     description: Midpoint of the compositing window.

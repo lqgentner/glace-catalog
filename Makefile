@@ -28,7 +28,7 @@ finalize:  ## Write the collections, indexes, styles and thumbnails over every y
 conformance:  ## Check the built store's documents with rashid.
 	rm -rf $(DOCS)
 	$(RUN) tools/mirror_docs.py $(DOCS)
-	uv run rashid check $(DOCS) --schema --no-data --summary
+	uv run rashid check $(DOCS) --schema --schema-allow-network --no-data --summary
 
 publish-plan:  ## List what publishing would upload, and why.
 	$(RUN) tools/publish.py
@@ -38,8 +38,8 @@ publish:  ## Upload the store to Source Cooperative.
 
 conformance-live:  ## Check the published catalog, its collection assets and its server.
 	rm -rf $(DOCS)
-	$(RUN) tools/mirror_docs.py $(DOCS)
-	uv run rashid check $(DOCS) --schema --data --live
+	$(RUN) tools/mirror_docs.py --drop-self $(DOCS)
+	uv run rashid check $(DOCS) --schema --schema-allow-network --data --live
 
 links-live:  ## Request every published href and compare its size with the store's.
 	rm -rf $(DOCS)

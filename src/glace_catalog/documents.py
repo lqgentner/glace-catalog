@@ -72,6 +72,11 @@ STYLE_TEMPLATE_NAME = "default"
 GRID_STYLE_NAME = "grid"
 GRID_CMAP = "cmc.devon_r"
 """Colour map the grid style fills the buffered glacier fraction with."""
+GRID_CLASSES = 8
+"""Classes of the grid fill, equal steps over 0–1. A stepped fill gives the
+Portolan browser a legend; an interpolated one gives none."""
+TILES_STYLE_LAYER = "coh12_vv"
+"""The layer the tiles collection's default style draws: the main product."""
 
 STYLE_LAYER_ORDER: tuple[str, ...] = (
     "coh12_vv",
@@ -286,14 +291,25 @@ def _collection_assets(
         "roles": ["thumbnail"],
     }
     if collection == TILES_DIR:
+        title = vocabulary.asset_title(TILES_STYLE_LAYER)
+        assets[f"style-{STYLE_TEMPLATE_NAME}"] = {
+            "href": f"./styles/{STYLE_TEMPLATE_NAME}.json",
+            "type": STYLE_MEDIA_TYPE,
+            "title": f"Map style{TITLE_SEPARATOR}{title}, latest year",
+            "description": (
+                f"Draws the latest year's {title} composite, from the mosaics collection's "
+                "web-map archive, with the tile grid outlined over it."
+            ),
+            "roles": ["style", "default"],
+        }
         assets[f"style-{GRID_STYLE_NAME}"] = {
             "href": f"./styles/{GRID_STYLE_NAME}.json",
             "type": STYLE_MEDIA_TYPE,
-            "title": "Map style – tile grid",
+            "title": f"Map style{TITLE_SEPARATOR}tile grid",
             "description": (
                 "Draws the tile grid, each tile filled by its buffered glacier fraction."
             ),
-            "roles": ["style", "default"],
+            "roles": ["style"],
         }
     if collection == MOSAICS_DIR:
         assets[f"style-{STYLE_TEMPLATE_NAME}"] = {
@@ -409,12 +425,13 @@ def grid_style_document() -> Document:
     """Build the MapLibre style of the tile grid.
 
     One vector source, the grid archive, drawn twice: a fill coloured by each
-    tile's buffered glacier fraction over 0–1, and an outline.
+    tile's buffered glacier fraction in :data:`GRID_CLASSES` equal classes over
+    0–1, and an outline.
     """
-    colors = ramp_colors(GRID_CMAP, 9)
-    stops: list[Any] = []
-    for index, color in enumerate(colors):
-        stops += [round(index / (len(colors) - 1), 3), color]
+    colors = ramp_colors(GRID_CMAP, GRID_CLASSES)
+    steps: list[Any] = [colors[0]]
+    for index, color in enumerate(colors[1:], start=1):
+        steps += [round(index / GRID_CLASSES, 3), color]
     return {
         "version": 8,
         "name": f"GLACE{TITLE_SEPARATOR}tile grid",
@@ -424,14 +441,7 @@ def grid_style_document() -> Document:
                 "fraction within the buffered outlines. Rendered by glace_catalog.documents."
             ),
         },
-        "sources": {
-            "grid": {
-                "type": "vector",
-                "url": f"pmtiles://../{GRID_ARCHIVE}",
-                "minzoom": GRID_MIN_ZOOM,
-                "maxzoom": GRID_MAX_ZOOM,
-            },
-        },
+        "sources": {"grid": _grid_source()},
         "layers": [
             {
                 "id": "glace-grid-fill",
@@ -439,24 +449,71 @@ def grid_style_document() -> Document:
                 "source": "grid",
                 "source-layer": GRID_LAYER,
                 "paint": {
-                    "fill-color": [
-                        "interpolate",
-                        ["linear"],
-                        ["get", "glacier_fraction_buffered"],
-                        *stops,
-                    ],
+                    "fill-color": ["step", ["get", "glacier_fraction_buffered"], *steps],
                     "fill-opacity": 0.6,
                 },
             },
-            {
-                "id": "glace-grid-outline",
-                "type": "line",
-                "source": "grid",
-                "source-layer": GRID_LAYER,
-                "paint": {"line-color": "#555555", "line-width": 0.5},
-            },
+            _grid_outline_layer(),
         ],
     }
+
+
+def _grid_source() -> Document:
+    """Name the tile grid archive as a vector source, from a style under ``tiles/styles/``."""
+    return {
+        "type": "vector",
+        "url": f"pmtiles://../{GRID_ARCHIVE}",
+        "minzoom": GRID_MIN_ZOOM,
+        "maxzoom": GRID_MAX_ZOOM,
+    }
+
+
+def _grid_outline_layer() -> Document:
+    """Outline each tile of the grid."""
+    return {
+        "id": "glace-grid-outline",
+        "type": "line",
+        "source": "grid",
+        "source-layer": GRID_LAYER,
+        "paint": {"line-color": "#555555", "line-width": 0.5},
+    }
+
+
+def _relief_source(vocabulary: Vocabulary, key: str, url: str, year: int) -> Document:
+    """One archive as a ``raster-dem`` source, decoded by its custom encoding."""
+    return {
+        "type": "raster-dem",
+        "url": url,
+        "tileSize": TILE_PX,
+        "minzoom": VIZ_MIN_ZOOM,
+        "maxzoom": MOSAIC_ZOOM,
+        "attribution": ATTRIBUTION.format(year=year),
+        **vocabulary.display(key).encoding.maplibre(),
+    }
+
+
+def _relief_layer(vocabulary: Vocabulary, key: str, year: int, *, visible: bool) -> Document:
+    """Draw one decoded archive as a ``color-relief`` layer over its default ramp."""
+    style = vocabulary.display(key)
+    layer: Document = {
+        "id": f"glace-{key}-{year}",
+        "type": "color-relief",
+        "source": f"src-{key}",
+    }
+    if not visible:
+        layer["layout"] = {"visibility": "none"}
+    layer["paint"] = {
+        "color-relief-opacity": 1,
+        # Nearest-neighbour keeps every drawn value a real code, also at
+        # nodata edges.
+        "resampling": "nearest",
+        "color-relief-color": style.encoding.ramp(
+            ramp_colors(style.cmap),
+            style.vmin,
+            style.vmax,
+        ),
+    }
+    return layer
 
 
 def style_document(vocabulary: Vocabulary, year: int) -> Document:
@@ -473,38 +530,16 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
     ``({year})`` in the name, ``-{year}`` at the end of each layer id, and the
     year at the end of the credit line.
     """
-    sources: Document = {}
-    layers: list[Document] = []
-    for index, key in enumerate(STYLE_LAYER_ORDER):
-        style = vocabulary.display(key)
-        sources[f"src-{key}"] = {
-            "type": "raster-dem",
-            "url": f"pmtiles://../{year}/{viz_filename(key)}",
-            "tileSize": TILE_PX,
-            "minzoom": VIZ_MIN_ZOOM,
-            "maxzoom": MOSAIC_ZOOM,
-            "attribution": ATTRIBUTION.format(year=year),
-            **style.encoding.maplibre(),
-        }
-        layer: Document = {
-            "id": f"glace-{key}-{year}",
-            "type": "color-relief",
-            "source": f"src-{key}",
-        }
-        if index > 0:
-            layer["layout"] = {"visibility": "none"}
-        layer["paint"] = {
-            "color-relief-opacity": 1,
-            # Nearest-neighbour keeps every drawn value a real code, also at
-            # nodata edges.
-            "resampling": "nearest",
-            "color-relief-color": style.encoding.ramp(
-                ramp_colors(style.cmap),
-                style.vmin,
-                style.vmax,
-            ),
-        }
-        layers.append(layer)
+    sources = {
+        f"src-{key}": _relief_source(
+            vocabulary, key, f"pmtiles://../{year}/{viz_filename(key)}", year
+        )
+        for key in STYLE_LAYER_ORDER
+    }
+    layers = [
+        _relief_layer(vocabulary, key, year, visible=index == 0)
+        for index, key in enumerate(STYLE_LAYER_ORDER)
+    ]
     return {
         "version": 8,
         "name": f"GLACE{TITLE_SEPARATOR}Sentinel-1 composites ({year})",
@@ -519,6 +554,34 @@ def style_document(vocabulary: Vocabulary, year: int) -> Document:
         },
         "sources": sources,
         "layers": layers,
+    }
+
+
+def tiles_style_document(vocabulary: Vocabulary, year: int) -> Document:
+    """Build the tiles collection's default style: one year's coherence under the tile grid.
+
+    The tiles have no web-map archive of their own, so the style draws the
+    mosaics collection's archive of :data:`TILES_STYLE_LAYER`, resampled from
+    these tiles, and outlines the tiles over it. ``finalize-catalog`` points it
+    at the latest year, as it does the mosaics collection's style.
+    """
+    key = TILES_STYLE_LAYER
+    url = f"pmtiles://../../{MOSAICS_DIR}/{year}/{viz_filename(key)}"
+    return {
+        "version": 8,
+        "name": f"GLACE{TITLE_SEPARATOR}{vocabulary.asset_title(key)} over the tile grid ({year})",
+        "metadata": {
+            "description": (
+                f"The {vocabulary.asset_title(key)} composite of one year, from the mosaics "
+                "collection's web-map archive, with the MGRS tiles of the tiles collection "
+                "outlined over it. Rendered by glace_catalog.documents."
+            ),
+        },
+        "sources": {
+            f"src-{key}": _relief_source(vocabulary, key, url, year),
+            "grid": _grid_source(),
+        },
+        "layers": [_relief_layer(vocabulary, key, year, visible=True), _grid_outline_layer()],
     }
 
 
@@ -543,6 +606,10 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "public_base": bases.https,
         "public_s3_base": bases.s3,
         "browser_url": PORTOLAN_BROWSER + bases.https.removeprefix("https://") + "/catalog.json",
+        # Source Cooperative serves a README page without a trailing slash, so
+        # a relative link in it resolves one directory too high. The READMEs
+        # link absolutely; the agent guides, read raw, stay relative.
+        "page_base": catalog.links["source_coop"]["href"].rstrip("/"),
         "utm_zones": "/".join(catalog.scope.utm_zones),
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],
@@ -648,6 +715,9 @@ def render_tree(
         f"{TILES_DIR}/collection.json": _json(collection_document(vocabulary, TILES_DIR, bases)),
         f"{MOSAICS_DIR}/collection.json": _json(
             collection_document(vocabulary, MOSAICS_DIR, bases),
+        ),
+        f"{TILES_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
+            tiles_style_document(vocabulary, vocabulary.catalog.last_year),
         ),
         f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": _json(grid_style_document()),
         f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(

@@ -11,14 +11,16 @@ Reversed decisions are not kept here; git has them.
 
 ## 1. Identity, license and providers
 
-Conformance means passing **rashid 0.1.8** against spec v0.2.0. Its rule
+Conformance means passing **rashid 0.3.0** against spec v0.2.0. Its rule
 registry is the rule list, so it is not repeated here. The license is
 `CC-BY-4.0` (`PTL-LIC-001`), and the data contains modified Copernicus
 Sentinel data.
 
 **UZH is both producer and host**, in one provider entry carrying every role.
 Portolan compares the producer and host names to decide whether a catalog is
-official or a mirror, and a mirror owes a `via` link to its source. Source
+official or a mirror, and a mirror owes a `via` link to its source. An
+official catalog carries none, so the root links its Source Cooperative page as
+`alternate` and the production pipeline as `related`. Source
 Cooperative is the storage vendor, not the host: the spec defines the host as
 the organization operating this copy, "not the underlying cloud vendor whose
 storage it happens to sit on". Listing it as host triggers `PTL-PRO-001` and
@@ -42,7 +44,7 @@ and the year sub-catalogs fit naturally.
 ├── tiles/
 │   ├── collection.json  README.md  AGENTS.md
 │   ├── items.parquet            ← collection-mirror, every year in one file
-│   ├── thumbnail.webp  grid.pmtiles  styles/grid.json
+│   ├── thumbnail.webp  grid.pmtiles  styles/{default,grid}.json
 │   ├── .glacier-fractions.parquet               ← build input, never published
 │   └── {year}/
 │       ├── catalog.json  README.md  AGENTS.md
@@ -92,8 +94,15 @@ assets would put 144 cards on one page.
 of any year and its two glacier fractions as properties. The grid does not
 change between years, so one archive serves all of them. It is registered as
 `PORTO-FMT-011` asks: a `visual` asset, a `rel: "pmtiles"` link and the
-default style `styles/grid.json`. A web map draws the grid from it without
-reading `items.parquet`, whose footer is most of what such a read costs.
+style `styles/grid.json`, whose stepped fill gives the Portolan browser a
+legend. A web map draws the grid from it without reading `items.parquet`,
+whose footer is most of what such a read costs.
+
+**The tiles collection's default style shows coherence, not the grid** (M-39).
+The grid is an index; coherence is the product. `styles/default.json` draws the
+latest year's `coh12_vv` from the mosaics collection's archive, resampled from
+these tiles, and outlines the tiles over it. The thumbnail draws the same layer
+with the same ramp and stretch, from one tile's COG.
 Finalization draws it from the item indexes; the fraction table it came from
 is a build input under a leading dot, so publishing skips it.
 
@@ -109,6 +118,15 @@ from another window stops the year rather than widening its extent.
 `published_time_range` is the one place that turns the inclusive days into
 `start_datetime` / `end_datetime`. The observed span is published per product
 as `glace:*_first_acquisition` / `_last_acquisition`.
+
+**A tile asset carries only what is its file's own** (M-40). Most provenance
+tags have one value per asset key across every tile and year: the compositing
+method, the coherence window, the pipeline. `metadata/assets.yaml` declares
+them once, the tiles collection's `item_assets` publish them, and the build
+refuses a raster whose tags differ. Each asset keeps its observation count and,
+for coherence, the tile's coherence statistics. The window and acquisition
+dates are item properties already, and `processing:software` is one item
+property. Before this, the repeated fields were 45 % of every tile item's bytes.
 
 **Dotfiles are build state.** `.build-state.json` and `.items.parquet` (the
 year's slice of the mirror, before `finalize-catalog` combines them) start
@@ -364,7 +382,7 @@ document must be in the canonical form the generator writes (two-space
 indent, declaration order, one trailing newline, non-ASCII kept as is), so a
 hand edit cannot hide a one-line change in a reindented diff. YAML must parse
 under `safe_load` and not indent with tabs. `tests/test_conformance.py`
-refuses a rashid outside `>=0.1.8,<0.2.0`, because a pass from a validator
+refuses a rashid outside `>=0.3.0,<0.4.0`, because a pass from a validator
 with the wrong rule set proves nothing.
 
 ---
@@ -468,6 +486,8 @@ rather than struck through; git keeps them.
 | M-36 | **The mosaics collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 144 links on one collection page serve nobody. The year items list the archives, the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
 | M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | M-38 | **The tile grid is one vector PMTiles on the tiles collection**, `tiles/grid.pmtiles`, layer `mgrs`, properties `mgrs_tile`, `glacier_fraction`, `glacier_fraction_buffered`, zooms 0–10, written by `finalize-catalog` from the item indexes and registered per `PORTO-FMT-011` (`grid` asset, `rel: "pmtiles"` link, style `style-grid`). The glacier-fraction table is a build input (`tiles/.glacier-fractions.parquet`), not a published asset | 2, 3 |
+| M-39 | **The tiles collection's default style is coherence VV**, `style-default` at `tiles/styles/default.json`: the latest year's `coh12_vv_viz.pmtiles` from the mosaics collection, drawn as the mosaics style draws it, under the tile grid's outlines. `style-grid` stays, without the `default` role. `finalize-catalog` points the style at the latest year | 2, 3 |
+| M-40 | **The provenance a tile asset key shares is stated once**, as `glace:*` fields of the tiles collection's `item_assets`, declared in `metadata/assets.yaml` and checked against each raster's tags by the build. A tile asset keeps `glace:contributing_observations` and, for coherence, `glace:coherence_average` / `glace:coherence_std`; `processing:software` is an item property | 2 |
 | R-1 | `src/glace_catalog/__init__.py` exists: a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` is the type checker, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link; `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |
