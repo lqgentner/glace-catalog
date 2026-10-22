@@ -28,8 +28,8 @@ Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 
 | Collection | One item per | Grid | Use it for |
 | --- | --- | --- | --- |
-| [Tiles](tiles/) | (MGRS square, year) | 10 m, UTM 31N/32N/33N | Detailed analysis, machine learning |
-| [Mosaics](mosaics/) | year | 40 m, ETRS89-LAEA | Regional analysis, inspection, time series |
+| [Tiles](https://source.coop/giuz/glace-alps/tiles) | (MGRS square, year) | 10 m, UTM 31N/32N/33N | Detailed analysis, machine learning |
+| [Mosaics](https://source.coop/giuz/glace-alps/mosaics) | year | 40 m, ETRS89-LAEA | Regional analysis, inspection, time series |
 
 Both represent the same source composites on different grids. The tiles hold
 the main product for scientific analysis. The mosaics put every year on one
@@ -70,15 +70,15 @@ print(coherence.shape, coherence.mean())
 
 The bounding box selects whole tiles, so this reads the full first tile.
 
-For more workflows, see [building a data cube](tiles/README.md#build-a-data-cube),
-[opening tiles in QGIS](tiles/README.md#open-the-tiles-in-qgis), and
-[working with mosaics](mosaics/README.md).
+For more workflows, see [building a data cube](https://source.coop/giuz/glace-alps/tiles/README.md#build-a-data-cube),
+[opening tiles in QGIS](https://source.coop/giuz/glace-alps/tiles/README.md#open-the-tiles-in-qgis), and
+[working with mosaics](https://source.coop/giuz/glace-alps/mosaics/README.md).
 
 ## Products
 
 Each tile or annual mosaic contains twelve analysis rasters: coherence
 and backscatter in VV and VH polarization, plus an observation count and a
-composite quality map for each measurement. See the [asset table](tiles/README.md#the-twelve-assets)
+composite quality map for each measurement. See the [asset table](https://source.coop/giuz/glace-alps/tiles/README.md#the-twelve-assets)
 for filenames, data types and nodata values.
 
 | Quantity | Stored values | Interpretation and display |
@@ -138,4 +138,4 @@ Report problems or suggest improvements through the
 [issue tracker](https://github.com/lqgentner/glace-catalog/issues). The catalog's metadata is
 maintained in the [metadata repository](https://github.com/lqgentner/glace-catalog).
 
-For programmatic agent guidance, see [`AGENTS.md`](AGENTS.md).
+For programmatic agent guidance, see [`AGENTS.md`](https://source.coop/giuz/glace-alps/AGENTS.md).

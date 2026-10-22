@@ -32,8 +32,8 @@ Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 
 | Collection | One item per | Grid | Use it for |
 | --- | --- | --- | --- |
-| [Tiles](tiles/) | (MGRS square, year) | 10 m, UTM {{ utm_zones }} | Detailed analysis, machine learning |
-| [Mosaics](mosaics/) | year | {{ analysis_grid.resolution | int }} m, ETRS89-LAEA | Regional analysis, inspection, time series |
+| [Tiles]({{ page_base }}/tiles) | (MGRS square, year) | 10 m, UTM {{ utm_zones }} | Detailed analysis, machine learning |
+| [Mosaics]({{ page_base }}/mosaics) | year | {{ analysis_grid.resolution | int }} m, ETRS89-LAEA | Regional analysis, inspection, time series |
 
 Both represent the same source composites on different grids. The tiles hold
 the main product for scientific analysis. The mosaics put every year on one
@@ -74,15 +74,15 @@ print(coherence.shape, coherence.mean())
 
 The bounding box selects whole tiles, so this reads the full first tile.
 
-For more workflows, see [building a data cube](tiles/README.md#build-a-data-cube),
-[opening tiles in QGIS](tiles/README.md#open-the-tiles-in-qgis), and
-[working with mosaics](mosaics/README.md).
+For more workflows, see [building a data cube]({{ page_base }}/tiles/README.md#build-a-data-cube),
+[opening tiles in QGIS]({{ page_base }}/tiles/README.md#open-the-tiles-in-qgis), and
+[working with mosaics]({{ page_base }}/mosaics/README.md).
 
 ## Products
 
 Each tile or annual mosaic contains {{ n_assets }} analysis rasters: coherence
 and backscatter in VV and VH polarization, plus an observation count and a
-composite quality map for each measurement. See the [asset table](tiles/README.md#the-{{ n_assets }}-assets)
+composite quality map for each measurement. See the [asset table]({{ page_base }}/tiles/README.md#the-{{ n_assets }}-assets)
 for filenames, data types and nodata values.
 
 | Quantity | Stored values | Interpretation and display |
@@ -142,4 +142,4 @@ Report problems or suggest improvements through the
 [issue tracker]({{ catalog.links.issues.href }}). The catalog's metadata is
 maintained in the [metadata repository]({{ catalog.links.vcs.href }}).
 
-For programmatic agent guidance, see [`AGENTS.md`](AGENTS.md).
+For programmatic agent guidance, see [`AGENTS.md`]({{ page_base }}/AGENTS.md).

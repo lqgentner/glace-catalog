@@ -543,6 +543,10 @@ def _prose_context(vocabulary: Vocabulary, bases: PublicBases) -> dict[str, Any]
         "public_base": bases.https,
         "public_s3_base": bases.s3,
         "browser_url": PORTOLAN_BROWSER + bases.https.removeprefix("https://") + "/catalog.json",
+        # Source Cooperative serves a README page without a trailing slash, so
+        # a relative link in it resolves one directory too high. The READMEs
+        # link absolutely; the agent guides, read raw, stay relative.
+        "page_base": catalog.links["source_coop"]["href"].rstrip("/"),
         "utm_zones": "/".join(catalog.scope.utm_zones),
         "tiles": catalog.collections[TILES_DIR],
         "mosaics": catalog.collections[MOSAICS_DIR],

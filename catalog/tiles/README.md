@@ -4,7 +4,7 @@ Each item contains one year of data for a 10 km MGRS square: twelve
 single-band Cloud-Optimized GeoTIFFs (COGs) at 10 m grid spacing, in the
 square's UTM zone. Search the item index with
 [rustac](https://stac-utils.github.io/rustac-py/), as shown below.
-For agent guidance, see [`AGENTS.md`](AGENTS.md).
+For agent guidance, see [`AGENTS.md`](https://source.coop/giuz/glace-alps/tiles/AGENTS.md).
 
 ## The twelve assets
 

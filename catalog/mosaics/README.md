@@ -3,7 +3,7 @@
 One item per year, each carrying twelve single-band analysis rasters on
 ETRS89-LAEA (EPSG:3035) at 40 m, plus twelve PMTiles archives
 for drawing them, beside the rasters in the same item directory. Agents: read
-[`AGENTS.md`](AGENTS.md).
+[`AGENTS.md`](https://source.coop/giuz/glace-alps/mosaics/AGENTS.md).
 
 The grid has two deliberate properties:
 
