@@ -364,6 +364,23 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
     checks["the grid style records its size"] = published.is_file() and asset.get(
         "file:size"
     ) == len(published.read_bytes())
+    default = store / "tiles" / "styles" / "default.json"
+    tiles_style: dict[str, Any] = json.loads(default.read_text()) if default.is_file() else {}
+    sources: dict[str, Any] = tiles_style.get("sources", {})
+    checks["the tiles style draws the latest mosaic year"] = sources.get("src-coh12_vv", {}).get(
+        "url"
+    ) == "pmtiles://../../mosaics/2024/coh12_vv_viz.pmtiles" and "(2024)" in tiles_style.get(
+        "name", ""
+    )
+    checks["the tiles style keeps the grid source"] = (
+        sources.get("grid", {}).get("url") == "pmtiles://../grid.pmtiles"
+    )
+    checks["the tiles style records its checksum"] = default.is_file() and collection[
+        "assets"
+    ].get("style-default", {}).get("file:checksum", "").startswith("1220")
+    checks["the grid style is published unchanged"] = (
+        published.read_bytes() == (source / "tiles" / "styles" / "grid.json").read_bytes()
+    )
     root = json.loads((store / "catalog.json").read_text())
     checks["the root and the collections carry the run's time"] = all(
         document.get("updated") == "2026-10-17T12:00:00Z"

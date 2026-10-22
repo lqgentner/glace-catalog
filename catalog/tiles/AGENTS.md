@@ -67,7 +67,10 @@ polygon has `mgrs_tile`, `glacier_fraction` and `glacier_fraction_buffered`,
 the share of the tile within RGI7-C-11 outlines,
 plain and buffered by 250 m. The grid is the same every year.
 Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
-`items.parquet` to query them.
+`items.parquet` to query them. The collection's default style,
+`styles/default.json`, draws the latest year's `coh12_vv` from the mosaics
+collection's archive, `mosaics/{year}/coh12_vv_viz.pmtiles`, under the grid's
+outlines.
 
 ## Assets and units
 

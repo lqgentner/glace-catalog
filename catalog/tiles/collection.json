@@ -643,14 +643,23 @@
         "thumbnail"
       ]
     },
+    "style-default": {
+      "href": "./styles/default.json",
+      "type": "application/vnd.mapbox.style+json",
+      "title": "Map style – Coherence VV, latest year",
+      "description": "Draws the latest year's Coherence VV composite, from the mosaics collection's web-map archive, with the tile grid outlined over it.",
+      "roles": [
+        "style",
+        "default"
+      ]
+    },
     "style-grid": {
       "href": "./styles/grid.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "Map style – tile grid",
       "description": "Draws the tile grid, each tile filled by its buffered glacier fraction.",
       "roles": [
-        "style",
-        "default"
+        "style"
       ]
     }
   },

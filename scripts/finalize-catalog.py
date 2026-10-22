@@ -13,7 +13,8 @@ years and writes what spans them:
 - the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
-  and its style ``tiles/styles/grid.json``;
+  and the tiles collection's styles: ``tiles/styles/grid.json``, and
+  ``tiles/styles/default.json``, which draws the latest year's coherence;
 - ``tiles/items.parquet``, the per-year indexes combined, and
   ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
   the public address, and described by their ``items`` assets' column types
@@ -260,12 +261,15 @@ def year_style(template: Document, year: int, archives: str) -> Document:
     The templates are rendered from ``metadata/assets.yaml`` and reviewed in
     git. Encoding and colour ramp are the same every year, so a copy changes
     only the year, in the attribution, the style name and the layer ids, and
-    points each source at the year's archive under ``archives``, a path
-    relative to the style file.
+    points each archive source at the year's archive under ``archives``, a path
+    relative to the style file. Other sources, such as the tile grid, are the
+    same every year and stay as they are.
     """
     style = deepcopy(template)
     # A style has one source per layer; clients switch layers by visibility.
     for source in style.get("sources", {}).values():
+        if source.get("type") != "raster-dem":
+            continue
         source["url"] = f"pmtiles://{archives}{source['url'].rsplit('/', 1)[-1]}"
         if source.get("attribution"):
             # The Copernicus credit names the year of the data.
@@ -494,7 +498,9 @@ def write_documents(
         # Write the styles first: the collections record their size and
         # checksum. The mosaics collection's styles draw the latest year.
         stamp_style_assets(documents, stage_collection_styles(source_dir, staged, max(years)))
-        stamp_style_assets(documents, stage_grid_styles(source_dir, staged), TILES_DIR)
+        stamp_style_assets(
+            documents, stage_tiles_styles(source_dir, staged, max(years)), TILES_DIR
+        )
 
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
@@ -535,8 +541,8 @@ def stamp_style_assets(
     """Fill ``file:size`` and ``file:checksum`` on one collection's MapLibre styles.
 
     Each value is measured on the staged copy, which is the file readers
-    download: the latest year's copies :func:`stage_collection_styles` wrote,
-    or the tile grid's style.
+    download: the latest year's copies :func:`stage_collection_styles` and
+    :func:`stage_tiles_styles` wrote.
     """
     for key, path in sorted(styles.items()):
         asset = documents.get(directory, {}).get("assets", {}).get(key)
@@ -549,8 +555,12 @@ def stamp_style_assets(
         logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
 
 
-def stage_grid_styles(source_dir: Path, staged: Path) -> dict[str, Path]:
-    """Copy the tiles collection's styles, which do not depend on the year.
+def stage_tiles_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
+    """Write the tiles collection's styles, the latest year's copies.
+
+    The tiles have no archives of their own: the default style draws the
+    mosaics collection's archive of the latest year, and the grid style
+    draws only the tile grid, the same every year.
 
     Returns
     -------
@@ -558,12 +568,13 @@ def stage_grid_styles(source_dir: Path, staged: Path) -> dict[str, Path]:
         Staged path per style asset key, e.g. ``{"style-grid": …}``.
     """
     out = staged / TILES_DIR / "styles"
-    out.mkdir(parents=True, exist_ok=True)
-    written: dict[str, Path] = {}
-    for path in sorted((source_dir / TILES_DIR / "styles").glob("*.json")):
-        (out / path.name).write_bytes(path.read_bytes())
-        written[f"style-{path.stem}"] = out / path.name
-    return written
+    return {
+        f"style-{path.stem}": _write_style(
+            out / path.name,
+            year_style(json.loads(path.read_text()), latest, f"../../{MOSAICS_DIR}/{latest}/"),
+        )
+        for path in sorted((source_dir / TILES_DIR / "styles").glob("*.json"))
+    }
 
 
 def require_no_published_fractions(layout: stac.StoreLayout) -> None:

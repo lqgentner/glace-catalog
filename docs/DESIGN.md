@@ -44,7 +44,7 @@ and the year sub-catalogs fit naturally.
 ├── tiles/
 │   ├── collection.json  README.md  AGENTS.md
 │   ├── items.parquet            ← collection-mirror, every year in one file
-│   ├── thumbnail.webp  grid.pmtiles  styles/grid.json
+│   ├── thumbnail.webp  grid.pmtiles  styles/{default,grid}.json
 │   ├── .glacier-fractions.parquet               ← build input, never published
 │   └── {year}/
 │       ├── catalog.json  README.md  AGENTS.md
@@ -94,8 +94,15 @@ assets would put 144 cards on one page.
 of any year and its two glacier fractions as properties. The grid does not
 change between years, so one archive serves all of them. It is registered as
 `PORTO-FMT-011` asks: a `visual` asset, a `rel: "pmtiles"` link and the
-default style `styles/grid.json`. A web map draws the grid from it without
-reading `items.parquet`, whose footer is most of what such a read costs.
+style `styles/grid.json`, whose stepped fill gives the Portolan browser a
+legend. A web map draws the grid from it without reading `items.parquet`,
+whose footer is most of what such a read costs.
+
+**The tiles collection's default style shows coherence, not the grid** (M-39).
+The grid is an index; coherence is the product. `styles/default.json` draws the
+latest year's `coh12_vv` from the mosaics collection's archive, resampled from
+these tiles, and outlines the tiles over it. The thumbnail draws the same layer
+with the same ramp and stretch, from one tile's COG.
 Finalization draws it from the item indexes; the fraction table it came from
 is a build input under a leading dot, so publishing skips it.
 
@@ -470,6 +477,7 @@ rather than struck through; git keeps them.
 | M-36 | **The mosaics collection carries no `rel: "pmtiles"` links**, a recorded deviation from `PORTO-FMT-011`. The archives are used like the COGs, twelve a year, and the rule has one vector archive per collection in mind; 144 links on one collection page serve nobody. The year items list the archives, the year styles draw them, and `finalize-catalog` refuses an archive its year's style does not draw | 2, 3 |
 | M-37 | **The web-map archives carry values, not colours**: 8-bit codes over a fixed transport range per layer, lossy grey WebP at quality 90 with a binary alpha, decoded by the style's `raster-dem` custom encoding and the item band's `raster:scale` / `raster:offset`, drawn by `color-relief` over a default ramp. No false-colour archive. Ramps and stretches are client defaults; no build option chooses an encoding | 2, 3 |
 | M-38 | **The tile grid is one vector PMTiles on the tiles collection**, `tiles/grid.pmtiles`, layer `mgrs`, properties `mgrs_tile`, `glacier_fraction`, `glacier_fraction_buffered`, zooms 0–10, written by `finalize-catalog` from the item indexes and registered per `PORTO-FMT-011` (`grid` asset, `rel: "pmtiles"` link, style `style-grid`). The glacier-fraction table is a build input (`tiles/.glacier-fractions.parquet`), not a published asset | 2, 3 |
+| M-39 | **The tiles collection's default style is coherence VV**, `style-default` at `tiles/styles/default.json`: the latest year's `coh12_vv_viz.pmtiles` from the mosaics collection, drawn as the mosaics style draws it, under the tile grid's outlines. `style-grid` stays, without the `default` role. `finalize-catalog` points the style at the latest year | 2, 3 |
 | R-1 | `src/glace_catalog/__init__.py` exists: a real package, not a namespace package | 6 |
 | R-2 | pyrefly `strict` is the type checker, configured as in s1bursts; vendored files excluded | 6 |
 | R-3 | A mosaic item carries no `rel: "pmtiles"` link; `build_mosaic_item` has no `pmtiles` parameter. The archive is an asset of the year item (M-34) | 3 |
