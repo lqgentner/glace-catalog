@@ -1,17 +1,16 @@
 r"""Build one year of GLACE composites into the store.
 
-The year is built in five steps, run in this order:
+The year is built in four steps, run in this order:
 
 ``copy``
     Check the run manifest against the source archive, accept only the
     composites the catalog publishes, and copy them server-side, unchanged.
-``vrt``
-    Build temporary VRTs that mosaic the tiles onto the scope's grid, in linear
-    values and in decibels.
 ``mosaics``
-    Write the twelve annual mosaic COGs.
+    Write the twelve annual mosaic COGs, read through a VRT chain that mosaics
+    the tiles onto the scope's analysis grid.
 ``pmtiles``
-    Write the twelve web-map archives.
+    Write the twelve web-map archives, read through a VRT chain onto the
+    display grid, in linear values or in decibels.
 ``items``
     Write the year's tile items, its mosaic item and its GeoParquet index.
 
@@ -204,8 +203,9 @@ def step_vrt(
     Web Mercator display grid. Both chains start from the UTM composites, so
     each product is resampled once.
 
-    The VRTs are always rebuilt: they are local, temporary and take seconds,
-    and the cache may have been emptied since the last run.
+    Each step that reads a chain builds it afresh, about two minutes for the
+    Alps: the VRTs are local and temporary, and the cache may have been
+    emptied since the last run.
     """
     vrt_dir = args.cache / "glace-store" / str(args.year) / name
     chain = mosaics.build_year_vrts(
@@ -616,7 +616,6 @@ def main() -> None:
 
     prints = {
         "copy": copy_print,
-        "vrt": copy_print,
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
@@ -643,8 +642,6 @@ def main() -> None:
     logger.info("Scratch: %s", args.cache)
     require_scratch_space(args.cache, scratch_needed(args, scope, pending))
 
-    analysis_chain: mosaics.YearVrts | None = None
-    display_chain: mosaics.YearVrts | None = None
     for step in steps:
         if state.is_current(step, prints[step]):
             logger.info("%s: up to date, skipping", step)
@@ -653,23 +650,14 @@ def main() -> None:
         if step == "copy":
             step_copy(args, layout, files, src)
             state.record(step, prints[step])
-        elif step == "vrt":
-            analysis_chain = step_vrt(args, scope, layout, files)
         elif step == "mosaics":
-            analysis_chain = analysis_chain or step_vrt(args, scope, layout, files)
-            state.record(
-                step, prints[step], step_mosaics(args, scope, layout, analysis_chain, frame)
-            )
+            chain = step_vrt(args, scope, layout, files)
+            state.record(step, prints[step], step_mosaics(args, scope, layout, chain, frame))
         elif step == "pmtiles":
-            display_chain = display_chain or step_vrt(
-                args,
-                scope,
-                layout,
-                files,
-                grid=scope.display_grid,
-                name="vrt-display",
+            chain = step_vrt(
+                args, scope, layout, files, grid=scope.display_grid, name="vrt-display"
             )
-            state.record(step, prints[step], step_pmtiles(args, layout, display_chain, files))
+            state.record(step, prints[step], step_pmtiles(args, layout, chain, files))
         elif step == "items":
             step_items(args, scope, layout, frame, files, state, prints["items"])
             state.record(step, prints[step])

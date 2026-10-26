@@ -140,9 +140,8 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 | Step | Result |
 | --- | --- |
 | `copy` | Validates the manifest and supported assets, leaves out each measurement with no valid pixel and its QA layers, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
-| `vrt` | Builds temporary regional VRTs for the next two steps. |
-| `mosaics` | Writes twelve annual analysis mosaics. |
-| `pmtiles` | Writes twelve value-encoded web-map archives. |
+| `mosaics` | Builds a temporary VRT chain onto the analysis grid, then writes twelve annual analysis mosaics. |
+| `pmtiles` | Builds a temporary VRT chain onto the display grid, then writes twelve value-encoded web-map archives. |
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
@@ -174,7 +173,7 @@ source and store on one local disk, `--mosaic-workers 12`,
 | Step | Time | Peak process-tree RSS |
 | --- | --- | --- |
 | `copy` | 4 s | |
-| `vrt` | 2 min | |
+| analysis VRT chain | 2 min | |
 | `mosaics` | 10 min | 33 GB |
 | `pmtiles` | 41 min | 17 GB |
 | `items` | 1 min | |

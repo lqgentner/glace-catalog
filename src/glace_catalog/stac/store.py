@@ -609,15 +609,8 @@ def upload_tree(local: Path, destination: Path | UPath) -> int:
     return len(sources)
 
 
-STEPS: tuple[str, ...] = ("copy", "vrt", "mosaics", "pmtiles", "items")
+STEPS: tuple[str, ...] = ("copy", "mosaics", "pmtiles", "items")
 """The publication steps, in the order they must run."""
-
-_UNFINGERPRINTED = frozenset({"vrt"})
-"""Steps that always rerun.
-
-The VRTs live in a local scratch cache, which may be empty even when the store
-records the step as done. They rebuild in seconds.
-"""
 
 
 @dataclass
@@ -654,8 +647,6 @@ class BuildState:
 
     def is_current(self, step: str, fingerprint: str) -> bool:
         """Whether ``step`` has already run against exactly these inputs."""
-        if step in _UNFINGERPRINTED:
-            return False
         return self.fingerprints.get(step) == fingerprint
 
     def record(self, step: str, fingerprint: str, detail: Any = None) -> None:
