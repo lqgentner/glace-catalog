@@ -41,10 +41,11 @@ before publication.
 
 ## Scope and layout
 
-`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names;
-`glace-ch`, a small Swiss scope, serves for testing. `src/glace_catalog/scopes.py`
-defines both scopes and their grids; `docs/DESIGN.md` §8 lists what a switch
-changes.
+`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names.
+`glace-ch`, a small Swiss scope, is superseded: no store or source archive
+exists for it, so do not build or test against it. Its grid stays in
+`src/glace_catalog/scopes.py` as a small fixture for unit tests.
+`docs/DESIGN.md` §8 lists what a switch of scope changes.
 
 Preserve these rules:
 

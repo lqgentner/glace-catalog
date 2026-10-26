@@ -431,9 +431,9 @@ without it.
 The dataset is `glace-alps`: the 2 210 MGRS tiles of the Alpine Convention
 perimeter (2025 edition), 2015–2026. It is the scope `metadata/catalog.yaml`
 names. `src/glace_catalog/scopes.py` also defines `glace-ch`, 143 tiles over the
-glacierised Swiss Alps, which is small enough to test the pipeline on; nothing
-built under it is the GLACE dataset. Everything below `scopes.py` takes the
-scope as an argument.
+glacierised Swiss Alps. That scope is superseded and has no store or source
+archive; unit tests use its small grid as a fixture. Everything below
+`scopes.py` takes the scope as an argument.
 
 A switch of scope changes `scope`, `region`, `years`, `title` and the
 preliminary notice in `metadata/catalog.yaml`, and `write_prefix` and
