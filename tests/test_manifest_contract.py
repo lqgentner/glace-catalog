@@ -7,7 +7,8 @@ repositories, so a change on either side must show up here. This gate writes a
 manifest in exactly the producer's column layout and checks that everything the
 build needs survives the round trip, including the checksum and the band
 statistics, which the build takes from the manifest alone. It also checks
-the header reader, which the build uses for the mosaics it writes itself.
+the header reader, which the build uses for the mosaics it writes itself, and
+how the build writes files into a store.
 
 The column list below is copied verbatim from
 ``glacier_mapping/manifest.py::COLUMNS``; keep the two identical.
@@ -30,7 +31,9 @@ import numpy as np
 import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
+from upath import UPath
 
+from glace_catalog.stac import store
 from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.store import (
     MANIFEST_COLUMNS,
@@ -262,6 +265,45 @@ def local_copy_links(tmp: Path) -> dict[str, bool]:
     }
 
 
+def store_writes(tmp: Path) -> dict[str, bool]:
+    """Check staged files reach a local store whole, and an S3 store through ``upload_object``."""
+    staged = tmp / "staged"
+    (staged / "2024").mkdir(parents=True)
+    (staged / "2024" / "a.tif").write_bytes(b"new")
+    store_root = tmp / "store"
+    (store_root / "2024").mkdir(parents=True)
+    (store_root / "2024" / "a.tif").write_bytes(b"old")
+    uploaded = store.upload_tree(staged, store_root)
+    store.put_object(b"thumb", store_root / "thumbnail.webp")
+    local = {
+        "a staged tree replaces the store's files": uploaded == 1
+        and (store_root / "2024" / "a.tif").read_bytes() == b"new",
+        "bytes are written to a local store": (store_root / "thumbnail.webp").read_bytes()
+        == b"thumb",
+        "a local write leaves no temporary file": sorted(
+            path.name for path in store_root.rglob("*")
+        )
+        == ["2024", "a.tif", "thumbnail.webp"],
+    }
+
+    calls: list[tuple[Path | bytes, str]] = []
+
+    def record(src: Path | bytes, dst: Path | UPath | str) -> None:
+        calls.append((src, str(dst)))
+
+    original = store.upload_object
+    store.upload_object = record
+    try:
+        store.upload_tree(staged, UPath("s3://bucket/glace"))
+    finally:
+        store.upload_object = original
+    return {
+        **local,
+        "an S3 store is written through upload_object": calls
+        == [(staged / "2024" / "a.tif", "s3://bucket/glace/2024/a.tif")],
+    }
+
+
 def source_pattern_checks() -> dict[str, bool]:
     """Check that ``GLACE_SOURCE`` names each year's archive and refuses a pattern without one."""
     settings = _build_year().settings
@@ -325,6 +367,8 @@ def main() -> int:
     checks.update(source_pattern_checks())
     with tempfile.TemporaryDirectory() as tmp:
         checks.update(local_copy_links(Path(tmp)))
+    with tempfile.TemporaryDirectory() as tmp:
+        checks.update(store_writes(Path(tmp)))
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

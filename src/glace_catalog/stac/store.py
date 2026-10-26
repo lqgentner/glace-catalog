@@ -19,9 +19,11 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+from secrets import token_hex
+import shutil
 from typing import TYPE_CHECKING, Any
 
-from freezebase.s3 import atomic_write_text, list_object_sizes
+from freezebase.s3 import LOCAL_PROTOCOLS, atomic_write_text, list_object_sizes, upload_object
 from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
@@ -616,18 +618,42 @@ def hard_link(source: Path, target: Path) -> bool:
     return True
 
 
+def put_object(source: bytes | Path, target: Path | UPath) -> None:
+    """Write bytes or a local file into the store, so that a reader never sees it half-written.
+
+    On object storage :func:`freezebase.s3.upload_object` writes it in one put,
+    with its content type, and checks the stored size. On a local disk it is
+    written to a hidden sibling that is renamed over the target.
+    """
+    target = UPath(target)
+    if target.protocol not in LOCAL_PROTOCOLS:
+        upload_object(source, target)
+        return
+    local = Path(target.path)
+    local.parent.mkdir(parents=True, exist_ok=True)
+    # The leading dot keeps a file left by a killed run out of the upload.
+    partial = local.with_name(f".{local.name}.{token_hex(8)}.partial")
+    try:
+        if isinstance(source, bytes):
+            partial.write_bytes(source)
+        else:
+            shutil.copyfile(source, partial)
+        partial.replace(local)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+
+
 def upload_tree(local: Path, destination: Path | UPath) -> int:
     """Upload every file of a locally staged directory tree.
 
     Steps write their outputs to a local directory first and upload them here
-    once complete.
+    once complete, one :func:`put_object` each.
     """
     destination = UPath(destination)
     sources = sorted(path for path in local.rglob("*") if path.is_file())
     for path in sources:
-        target = destination / path.relative_to(local).as_posix()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(path.read_bytes())
+        put_object(path, destination / path.relative_to(local).as_posix())
     logger.info("Uploaded %d files to %s", len(sources), destination)
     return len(sources)
 

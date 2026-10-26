@@ -36,23 +36,20 @@ import logging
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from xml.etree import ElementTree as ET
 
-import defusedxml.ElementTree as DefusedET
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
-from freezebase.raster import get_utm_zone_string, rasterio_open
+from freezebase.raster import get_utm_zone_string, rasterio_open, write_cog
 from freezebase.s3 import s3_env
 from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_warped_vrt
 import numpy as np
+import rasterio
 from rasterio.enums import Resampling
-import rasterio.shutil
 from rasterio.warp import transform_bounds
 from upath import UPath
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
 from glace_catalog.stac.items import GEOMETRY_SIMPLIFY_DEG
 from glace_catalog.stac.naming import published_name
-from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.stac.tags import BandStatistics
 from glace_catalog.tiler import spawn_pool
 
@@ -105,15 +102,12 @@ decibels for display.
 """
 
 COG_CREATION = {
-    "driver": "COG",
-    "BLOCKSIZE": TILE_PX,
-    "COMPRESS": "LERC_ZSTD",
-    "LEVEL": 9,
-    "OVERVIEW_RESAMPLING": "AVERAGE",
-    "BIGTIFF": "IF_SAFER",
-    "NUM_THREADS": "ALL_CPUS",
+    "blocksize": TILE_PX,
+    "compress": "LERC_ZSTD",
+    "level": 9,
+    "overview_resampling": "AVERAGE",
 }
-"""COG creation options of an annual mosaic.
+"""COG creation options of an annual mosaic, as :func:`freezebase.raster.write_cog` takes them.
 
 ``AVERAGE`` overviews make each reduced level the mean of the level above.
 """
@@ -337,70 +331,6 @@ def chain_env(vrts: YearVrts) -> AbstractContextManager[None]:
     return sources_env(vrts.sources_at)
 
 
-def _parse_vrt(text: str) -> ET.Element:
-    """Parse VRT XML with ``defusedxml``.
-
-    VRTs are read back from the store, so they are treated as untrusted input;
-    ``defusedxml`` rejects entity-expansion and external-entity attacks. XML is
-    built and written with ``xml.etree.ElementTree``, because ``defusedxml``
-    only parses.
-    """
-    return DefusedET.fromstring(text)
-
-
-def tagged_vrt(
-    src_vrt: Path | UPath,
-    dst_vrt: Path,
-    *,
-    band_name: str,
-    tags: Mapping[str, str] | None = None,
-    band_tags: Mapping[str, str] | None = None,
-) -> Path:
-    """Copy a VRT with dataset tags, band tags and a band description attached.
-
-    The tags go on the source VRT because GDAL copies a VRT's metadata into the
-    file written from it, and adding tags to a finished COG would break its
-    cloud-optimized layout.
-
-    Parameters
-    ----------
-    src_vrt, dst_vrt
-        VRT read, and the tagged copy written.
-    band_name
-        Description written onto the first band.
-    tags
-        Dataset-level metadata.
-    band_tags
-        Metadata of the first band, where Portolan requires the
-        ``STATISTICS_*`` values.
-
-    Returns
-    -------
-    pathlib.Path
-        The tagged VRT.
-    """
-    root = _parse_vrt(UPath(src_vrt).read_text())
-    if tags:
-        metadata = ET.Element("Metadata")
-        for key, value in sorted(tags.items()):
-            ET.SubElement(metadata, "MDI", key=key).text = str(value)
-        root.insert(0, metadata)
-    band = root.find("VRTRasterBand")
-    if band is not None:
-        if band_tags:
-            metadata = ET.Element("Metadata")
-            for key, value in sorted(band_tags.items()):
-                ET.SubElement(metadata, "MDI", key=key).text = str(value)
-            band.insert(0, metadata)
-        description = band.find("Description")
-        if description is None:
-            description = ET.SubElement(band, "Description")
-        description.text = band_name
-    ET.indent(root)
-    dst_vrt.write_text(ET.tostring(root, encoding="unicode"))
-    return dst_vrt
-
-
 def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
     """Exact statistics of a single-band source, computed block by block.
 
@@ -514,10 +444,11 @@ def build_mosaic_cog(
 ) -> MosaicWrite:
     """Write one fixed-grid VRT as a LERC_ZSTD mosaic COG.
 
-    The VRT is copied block by block, so memory use stays small. Its statistics
-    are computed in a separate streaming pass and written onto the VRT band
-    before the copy, so they end up in the COG's own ``GDAL_METADATA`` header,
-    as Portolan rule ``PTL-DAT-009`` requires.
+    :func:`freezebase.raster.write_cog` streams the VRT into the COG block by
+    block, so memory use stays small. The statistics are computed in a separate
+    streaming pass beforehand and written as band tags, so they end up in the
+    COG's own ``GDAL_METADATA`` header, as Portolan rule ``PTL-DAT-009``
+    requires.
 
     They are statistics of the source values. The written pixels differ from
     them by at most the LERC bound :func:`max_z_error`, far below each
@@ -535,8 +466,7 @@ def build_mosaic_cog(
         Description written onto the output band.
     tags
         Dataset tags, typically the tiles' provenance plus the composite date
-        window. They are attached to the VRT before the copy (see
-        :func:`tagged_vrt`).
+        window.
 
     Returns
     -------
@@ -544,27 +474,27 @@ def build_mosaic_cog(
         The path written, its digest and its band statistics.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    creation = {**COG_CREATION, "MAX_Z_ERROR": max_z_error(asset_key)}
-    logger.info("Writing %s (max_z_error %g)", out_path.name, creation["MAX_Z_ERROR"])
+    profile = {**COG_CREATION, "max_z_error": max_z_error(asset_key)}
+    logger.info("Writing %s (max_z_error %g)", out_path.name, profile["max_z_error"])
     with rasterio_open(src_vrt) as src:
         statistics = band_statistics(src, asset_key=asset_key)
-    described = tagged_vrt(
-        src_vrt,
-        Path(str(src_vrt)).with_name(f"{Path(str(src_vrt)).stem}_tagged.vrt"),
-        band_name=band_name,
-        tags=tags,
-        band_tags={
-            tag: repr(float(getattr(statistics, field))) for field, tag in STATISTICS_TAGS.items()
-        },
-    )
-    with rasterio_open(described) as src:
-        rasterio.shutil.copy(src, str(out_path), **creation)
+    with rasterio.Env(GDAL_NUM_THREADS="ALL_CPUS"):
+        checksum = write_cog(
+            src_vrt,
+            out_path,
+            profile,
+            band_names=[band_name],
+            tags=tags,
+            band_tags=[
+                {
+                    tag: repr(float(getattr(statistics, field)))
+                    for field, tag in STATISTICS_TAGS.items()
+                }
+            ],
+            checksum=True,
+        )
     require_overviews(out_path)
-    return MosaicWrite(
-        path=out_path,
-        checksum=multihash_sha256_file(out_path),
-        statistics=statistics,
-    )
+    return MosaicWrite(path=out_path, checksum=checksum, statistics=statistics)
 
 
 def _write_mosaic_in_worker(

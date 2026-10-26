@@ -299,7 +299,9 @@ it defines their tasks and validation requirements.
 - `../freezebase`: geospatial and IO helpers, including the VRT chain.
 
 Use `freezebase` from PyPI at `>=0.10,<0.11`. It provides `S3Settings`,
-`list_object_sizes`, `atomic_write_text`, `content_type_for` and profile
-endpoints, and its VRT helpers write local sources relative to the VRT, so a
-chain must not be moved. `MGRSGeoBox.from_mgrs` refuses a tile code that lies
+`list_object_sizes`, `atomic_write_text`, `upload_object`, `content_type_for`,
+`write_cog` and profile endpoints, and its VRT helpers write local sources
+relative to the VRT, so a chain must not be moved. Store writes go through
+`stac.store.put_object`: `upload_object` on S3, an atomic rename on a local
+disk. `MGRSGeoBox.from_mgrs` refuses a tile code that lies
 outside its UTM zone. Keep `uv.lock` tracked and do not use editable installs.

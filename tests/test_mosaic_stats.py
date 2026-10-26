@@ -24,6 +24,7 @@ from pathlib import Path
 import sys
 import tempfile
 
+from freezebase.raster import write_cog
 import numpy as np
 import rasterio
 import rasterio.shutil
@@ -139,10 +140,7 @@ def _overview_checks(tmp: Path) -> dict[str, bool]:
 
     # Written directly, with one overview level where the size needs two.
     shallow = tmp / "shallow.tif"
-    with rasterio.open(source) as src:
-        rasterio.shutil.copy(
-            src, str(shallow), **{**COG_CREATION, "MAX_Z_ERROR": 0, "OVERVIEW_COUNT": 1}
-        )
+    write_cog(source, shallow, {**COG_CREATION, "max_z_error": 0, "overview_count": 1})
     try:
         require_overviews(shallow)
     except ValueError as error:

@@ -344,9 +344,10 @@ The manifest also carries the five `STATISTICS_*` values per band, which
 `PTL-DAT-009/010` require of the *composites*; a run whose files lack them
 cannot be published ([`UPSTREAM.md`](UPSTREAM.md), S-1). The annual mosaics
 are written by this repository, so they carry their own: `build_mosaic_cog`
-accumulates the five values over the source VRT, window by window, and writes
-them onto the band before the COG copy, the only point at which they can
-reach the file's header.
+accumulates the five values over the source VRT, window by window, and passes
+them to freezebase's `write_cog` as band tags, which sets them on the VRT
+before the COG encode, the only point at which they can reach the file's
+header.
 
 ---
 
