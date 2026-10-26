@@ -115,24 +115,21 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     style = LayerStyle(cmap="cmc.batlow", vmin=0.1, vmax=0.9, encoding=ENCODING)
     chain = YearVrts(
         linear={"coh12_vv": mosaic, "coh12_vh": mosaic},
-        decibel={},
         sources_at=mosaic,
     )
     built = build_layers(
         chain,
         work / "pmtiles",
         year=2024,
-        start_date="2024-06-01",
-        end_date="2024-09-30",
         styles={"coh12_vv": style, "coh12_vh": style},
         min_zoom=11,
         workers=2,
         concurrent_layers=2,
         scratch=work / "scratch",
     )
-    checks["one archive per layer, in layer order"] = [info.id for info in built] == [
-        "coh12_vh_2024",
-        "coh12_vv_2024",
+    checks["one archive per layer, in layer order"] = [info.url for info in built] == [
+        "coh12_vh_viz.pmtiles",
+        "coh12_vv_viz.pmtiles",
     ]
     checks["the scratch rasters are gone"] = not any((work / "scratch").iterdir())
     checks["nothing but archives is staged"] = sorted(
@@ -183,6 +180,30 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     )
 
 
+def check_decibel(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
+    """Check a decibel layer is tiled from a decibel VRT written beside its linear mosaic."""
+    encoding = ValueEncoding(-30.0, 0.0)
+    style = LayerStyle(cmap="cmc.batlow", vmin=-30, vmax=0, encoding=encoding, decibel=True)
+    built = build_layers(
+        YearVrts(linear={"rtc_vv": mosaic}, sources_at=mosaic),
+        work / "decibel",
+        year=2024,
+        styles={"rtc_vv": style},
+        min_zoom=MOSAIC_ZOOM,
+        workers=1,
+        scratch=work / "scratch",
+    )
+    checks["a decibel layer's VRT is written beside its linear mosaic"] = mosaic.with_name(
+        "rtc_vv_webm13_db.vrt"
+    ).exists()
+    tile = read_tile(work / "decibel" / built[0].url, ORIGIN_X, ORIGIN_Y)
+    side = TILES_ACROSS * TILE_PX
+    expected = encoding.encode(10 * np.log10(np.arange(1, TILE_PX) / (side - 1)))
+    checks["a decibel layer's pixels are the encoded decibels"] = tile is not None and bool(
+        np.abs(tile[0, 1:, 0].astype(int) - expected.astype(int)).max() <= MAX_CODE_ERROR
+    )
+
+
 def main() -> int:
     """Run every check; print the failures."""
     checks: dict[str, bool] = {}
@@ -192,6 +213,7 @@ def main() -> int:
         write_mosaic(mosaic)
         check_intermediate(checks, mosaic, work)
         check_build(checks, mosaic, work)
+        check_decibel(checks, mosaic, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

@@ -15,12 +15,16 @@ The chain, per year, band ``B`` and UTM zone ``Z``::
     1  {B}_{Z}.vrt            10 m UTM mosaic of that zone's tiles
     2  {B}_{Z}_webm13.vrt     (1) warped onto the target grid, average
     3  {B}_webm13.vrt         (2) for every zone, on the scope's fixed extent
-    4  {B}_webm13_db.vrt      (3) in decibels; RTC and QA-CQM only
+    4  {B}_webm13_db.vrt      (3) in decibels, for the web maps of the layers
+                              ``metadata/assets.yaml`` displays in decibels
 
 Both grids use these filenames, ``webm13`` included, and write their chains to
-separate directories.
+separate directories. All published rasters are linear, so warps and COG
+overviews average in the linear domain, where averages are physically
+meaningful.
 
-Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles. The VRTs
+Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles; the web-map
+build writes (4) itself. The VRTs
 are local scratch files, rebuilt in seconds. They name remote tiles by absolute
 ``/vsis3/`` paths and local files relative to the VRT, so a chain is not moved.
 The published record of a run is its manifest, configuration and products.
@@ -40,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
 from freezebase.raster import get_utm_zone_string, rasterio_open, write_cog
 from freezebase.s3 import s3_env
-from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_warped_vrt
+from freezebase.vrt import build_vrt_mosaic, create_warped_vrt
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
@@ -83,21 +87,6 @@ aggregated while estimator noise averages down, hence the small fraction.
 The tiles and the mosaics use the same bound. Neighbouring 10 m pixels are
 strongly correlated through their estimation windows, so averaging them into a
 mosaic pixel reduces the noise only slightly.
-"""
-
-DECIBEL_BANDS: tuple[str, ...] = (
-    "rtc_vv",
-    "rtc_vh",
-    "coh12_vv_qa_cqm",
-    "coh12_vh_qa_cqm",
-    "rtc_vv_qa_cqm",
-    "rtc_vh_qa_cqm",
-)
-"""Bands with a decibel version, used only for the web maps.
-
-All published rasters are linear, so warps and COG overviews average in the
-linear domain, where averages are physically meaningful. Viewers convert to
-decibels for display.
 """
 
 COG_CREATION = {
@@ -193,8 +182,6 @@ class YearVrts:
     linear
         Step (3) per asset key: the fixed-grid mosaic every published product
         is written from.
-    decibel
-        Step (4) per asset key, for the bands that have a decibel version.
     sources_at
         One of the tile paths the chain reads. The VRTs are local but their
         sources may be remote; :func:`sources_env` uses this path to set up the
@@ -202,7 +189,6 @@ class YearVrts:
     """
 
     linear: dict[str, Path | UPath]
-    decibel: dict[str, Path]
     sources_at: Path | UPath | None = None
 
 
@@ -245,7 +231,6 @@ def build_year_vrts(
     vrt_dir: Path,
     *,
     grid: Grid | None = None,
-    decibel: bool = True,
 ) -> YearVrts:
     """Build the whole VRT chain for one year's composites.
 
@@ -262,8 +247,6 @@ def build_year_vrts(
         tiles.
     vrt_dir
         Local scratch directory the chain is written into.
-    decibel
-        Also build step (4), the decibel VRTs.
 
     Returns
     -------
@@ -297,16 +280,8 @@ def build_year_vrts(
     for path in linear.values():
         logger.info("Built %s", Path(str(path)).name)
 
-    decibels: dict[str, Path] = {}
-    if decibel:
-        for asset_key in sorted(set(DECIBEL_BANDS) & set(linear)):
-            db_vrt = vrt_dir / f"{asset_key}_webm{MOSAIC_ZOOM}_db.vrt"
-            create_decibel_vrt(linear[asset_key], db_vrt)
-            decibels[asset_key] = db_vrt
-
     return YearVrts(
         linear=linear,
-        decibel=decibels,
         sources_at=files[0].path if files else None,
     )
 
@@ -595,7 +570,6 @@ def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list
 
 __all__ = [
     "COG_CREATION",
-    "DECIBEL_BANDS",
     "MAX_Z_ERROR",
     "STATISTICS_TAGS",
     "MosaicWrite",

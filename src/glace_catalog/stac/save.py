@@ -47,6 +47,7 @@ from upath import UPath
 # when metadata loads. Looking up `metadata.vocabulary` at call time works for
 # every order.
 from glace_catalog import metadata
+from glace_catalog.stac.store import MOSAICS_DIR, TILES_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -106,9 +107,6 @@ reads them by key.
 ITEM_NAME = "item.json"
 CATALOG_NAME = "catalog.json"
 
-TILES_DIR = "tiles"
-MOSAICS_DIR = "mosaics"
-
 
 def item_year(item: pystac.Item) -> str:
     """Year an item belongs to, as it appears in the path."""
@@ -162,7 +160,7 @@ def write_stac_geoparquet(payloads: Sequence[Document], out_path: Path | UPath) 
     logger.info("Geoparquet index with %d items saved to %s", len(payloads), out_path)
 
 
-def year_index_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> Document:
+def year_index_document(item: pystac.Item) -> Document:
     """One row of a year's tile index: the published item, with hrefs from the store root.
 
     The row carries the item document as published, collection and structural
@@ -170,7 +168,7 @@ def year_index_document(item: pystac.Item, collection_id: str, *, scope_title: s
     item's directory to the store root, so :func:`concat_indexes` can make them
     absolute without knowing where each item lives.
     """
-    payload = item_document(item, collection_id, scope_title=scope_title)
+    payload = item_document(item)
     directory = item_prefix(item)
     for entry in [*payload.get("assets", {}).values(), *payload.get("links", [])]:
         href = entry.get("href")
@@ -462,23 +460,16 @@ def mirror_column_type(data_type: pa.DataType) -> str:
     return str(data_type)
 
 
-def _link(rel: str, href: str, title: str | None = None, *, item: bool = False) -> dict[str, str]:
+def link(rel: str, href: str, title: str, media_type: str = "application/json") -> Document:
     """One relative link, as it appears in a written document.
 
     Portolan requires a ``type`` on every structural link, and
     ``application/geo+json`` specifically on a link to an item.
     """
-    link = {
-        "rel": rel,
-        "href": href,
-        "type": "application/geo+json" if item else "application/json",
-    }
-    if title is not None:
-        link["title"] = title
-    return link
+    return {"rel": rel, "href": href, "type": media_type, "title": title}
 
 
-def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) -> Document:
+def item_document(item: pystac.Item) -> Document:
     """Render one item as the JSON the store publishes.
 
     The structural links follow from the layout alone, so a year can be written
@@ -490,8 +481,8 @@ def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) ->
     (``PTL-CAT-001``). A mosaic item's parent is the collection itself, which
     links one item per year.
     """
+    catalog = metadata.vocabulary().catalog
     payload = item_dict(item)
-    payload["collection"] = collection_id
     keep = [
         link
         for link in payload.get("links", [])
@@ -499,46 +490,31 @@ def item_document(item: pystac.Item, collection_id: str, *, scope_title: str) ->
     ]
     if is_tile_item(item):
         # tiles/{year}/{tile}/item.json
+        directory, payload["collection"] = TILES_DIR, catalog.scope.tiles_collection_id
         root, collection, parent = "../../../", "../../", "../"
         parent_href, parent_title = f"{parent}{CATALOG_NAME}", f"Tiles, {item_year(item)}"
     else:
         # mosaics/{year}/item.json
+        directory, payload["collection"] = MOSAICS_DIR, catalog.scope.mosaics_collection_id
         root, collection, parent = "../../", "../", "../"
         parent_href, parent_title = f"{parent}collection.json", "Annual mosaics"
     payload["links"] = [
-        _link("root", f"{root}{CATALOG_NAME}", scope_title),
-        _link("collection", f"{collection}collection.json", _collection_title(collection_id)),
-        _link("parent", parent_href, parent_title),
+        link("root", f"{root}{CATALOG_NAME}", catalog.short_title),
+        link("collection", f"{collection}collection.json", _collection_title(directory)),
+        link("parent", parent_href, parent_title),
         *keep,
     ]
     return payload
 
 
-def _collection_title(collection_id: str) -> str:
-    """Short human title for a link to one of the store's collections."""
-    if collection_id.startswith("labels-"):
-        return "GLACE labels"
-    return metadata.vocabulary().collection_short_title(_collection_dir(collection_id))
-
-
-def _collection_dir(collection_id: str) -> str:
-    """Directory a collection document lives in, from its id.
-
-    A store's two collections take fixed directories; a label collection, which
-    lives in its own root beside its masks, takes its own id.
-    """
-    if collection_id.startswith("labels-"):
-        return collection_id
-    return MOSAICS_DIR if collection_id.endswith("-mosaics") else TILES_DIR
+def _collection_title(directory: str) -> str:
+    """Short human title for a link to the collection in ``directory``."""
+    return metadata.vocabulary().collection_short_title(directory)
 
 
 def year_catalog_document(
     year: int,
     item_hrefs_and_titles: Sequence[tuple[str, str]],
-    *,
-    scope_title: str,
-    portolan_schema: str,
-    collection_id: str,
 ) -> Document:
     """Build the sub-catalog listing one year's tile items.
 
@@ -546,32 +522,26 @@ def year_catalog_document(
     items (for example, a raster collection grouping items by year)". Like
     every catalog, it carries no assets.
     """
+    catalog = metadata.vocabulary().catalog
+    title = f"{_collection_title(TILES_DIR)} {year}"
     return {
         "type": "Catalog",
         "stac_version": "1.1.0",
-        "stac_extensions": [portolan_schema],
-        "id": f"{collection_id}-{year}",
-        "title": _year_title(collection_id, year),
+        "stac_extensions": [PORTOLAN_SCHEMA],
+        "id": f"{catalog.scope.tiles_collection_id}-{year}",
+        "title": title,
         "description": metadata.vocabulary().year_description(year),
         "links": [
-            _link("root", f"../../{CATALOG_NAME}", scope_title),
-            _link("parent", "../collection.json", _collection_title(collection_id)),
-            _link(
-                "describedby",
-                "./README.md",
-                f"{_year_title(collection_id, year)} documentation",
-            )
-            | {"type": "text/markdown"},
-            _link("agents", "./AGENTS.md", f"{_year_title(collection_id, year)} agent guide")
-            | {"type": "text/markdown"},
-            *[_link("item", href, title, item=True) for href, title in item_hrefs_and_titles],
+            link("root", f"../../{CATALOG_NAME}", catalog.short_title),
+            link("parent", "../collection.json", _collection_title(TILES_DIR)),
+            link("describedby", "./README.md", f"{title} documentation", "text/markdown"),
+            link("agents", "./AGENTS.md", f"{title} agent guide", "text/markdown"),
+            *[
+                link("item", href, item_title, "application/geo+json")
+                for href, item_title in item_hrefs_and_titles
+            ],
         ],
     }
-
-
-def _year_title(collection_id: str, year: int) -> str:
-    """Title of one year sub-catalog, e.g. ``GLACE tiles 2024``."""
-    return f"{_collection_title(collection_id)} {year}"
 
 
 def write_year_items(
@@ -580,10 +550,6 @@ def write_year_items(
     tiles_dir: Path,
     mosaics_dir: Path,
     *,
-    tiles_collection_id: str,
-    mosaics_collection_id: str,
-    scope_title: str,
-    portolan_schema: str,
     year: int,
     year_prose: tuple[str, str],
 ) -> list[Path]:
@@ -603,12 +569,6 @@ def write_year_items(
         Local directory standing in for ``tiles/{year}/``.
     mosaics_dir
         Local directory standing in for ``mosaics/{year}/``.
-    tiles_collection_id, mosaics_collection_id
-        Collection ids the items belong to.
-    scope_title
-        Title of the root catalog, used on ``root`` links.
-    portolan_schema
-        Portolan profile schema URI the year sub-catalog declares.
     year
         Year being written.
     year_prose
@@ -627,21 +587,14 @@ def write_year_items(
         path = tiles_dir / tile / ITEM_NAME
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps(item_document(item, tiles_collection_id, scope_title=scope_title), indent=2)
-            + "\n",
+            json.dumps(item_document(item), indent=2) + "\n",
         )
         written.append(path)
         listed.append((f"./{tile}/{ITEM_NAME}", f"GLACE tile {tile}, {year}"))
 
     if listed:
         tiles_dir.mkdir(parents=True, exist_ok=True)
-        catalog = year_catalog_document(
-            year,
-            listed,
-            scope_title=scope_title,
-            portolan_schema=portolan_schema,
-            collection_id=tiles_collection_id,
-        )
+        catalog = year_catalog_document(year, listed)
         (tiles_dir / CATALOG_NAME).write_text(json.dumps(catalog, indent=2) + "\n")
         readme, agents = year_prose
         (tiles_dir / "README.md").write_text(readme)
@@ -652,11 +605,7 @@ def write_year_items(
         mosaics_dir.mkdir(parents=True, exist_ok=True)
         path = mosaics_dir / ITEM_NAME
         path.write_text(
-            json.dumps(
-                item_document(mosaic_item, mosaics_collection_id, scope_title=scope_title),
-                indent=2,
-            )
-            + "\n",
+            json.dumps(item_document(mosaic_item), indent=2) + "\n",
         )
         written.append(path)
 
@@ -669,19 +618,19 @@ def read_item(path: Path | UPath) -> pystac.Item:
     return pystac.Item.from_dict(json.loads(UPath(path).read_text()))
 
 
-def year_child_link(year: int) -> dict[str, str]:
+def year_child_link(year: int) -> Document:
     """Build the ``child`` link a tiles collection carries for one published year."""
-    return _link("child", f"./{year}/{CATALOG_NAME}", f"{_collection_title('-tiles')} {year}")
+    return link("child", f"./{year}/{CATALOG_NAME}", f"{_collection_title(TILES_DIR)} {year}")
 
 
-def mosaic_item_link(year: int) -> dict[str, str]:
+def mosaic_item_link(year: int) -> Document:
     """Build the ``item`` link a mosaics collection carries for one published year.
 
     The mosaics collection has one item per year, few enough to link directly.
     """
-    return _link(
+    return link(
         "item",
         f"./{year}/{ITEM_NAME}",
-        f"{_collection_title('-mosaics')}, {year}",
-        item=True,
+        f"{_collection_title(MOSAICS_DIR)}, {year}",
+        "application/geo+json",
     )

@@ -96,7 +96,12 @@ def check_styles(
     staged: Path,
 ) -> dict[int, dict[str, Path]]:
     """Check the published styles: one per year beside its archives, and the collection's."""
-    written = fin.stage_item_styles(source, staged, [2023, 2024])
+    written = {
+        year: fin.stage_styles(
+            source / "mosaics" / "styles", staged / "mosaics" / str(year) / "styles", year, "../"
+        )
+        for year in (2023, 2024)
+    }
     beside = staged / "mosaics" / "2023" / "styles" / "default.json"
     checks["one style per year, beside its archives"] = sorted(written) == [2023, 2024] and (
         written[2023] == {"style-default": beside}
@@ -116,7 +121,9 @@ def check_styles(
         "2023" in source_entry["attribution"] for source_entry in style_2023["sources"].values()
     )
 
-    collection = fin.stage_collection_styles(source, staged, 2024)
+    collection = fin.stage_styles(
+        source / "mosaics" / "styles", staged / "mosaics" / "styles", 2024, "../2024/"
+    )
     checks["the collection's style keeps its tracked path"] = collection == {
         "style-default": staged / "mosaics" / "styles" / "default.json"
     }

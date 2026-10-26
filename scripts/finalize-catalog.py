@@ -40,8 +40,9 @@ import logging
 import math
 from pathlib import Path
 import re
+import shutil
 import tempfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -55,14 +56,14 @@ from glace_catalog.grid import grid_frame, write_grid
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import (
-    MOSAICS_DIR,
-    TILES_DIR,
     Document,
     mirror_column_type,
     read_item,
 )
 from glace_catalog.stac.store import (
     ASSETS_DIR,
+    MOSAICS_DIR,
+    TILES_DIR,
     YEAR_INDEX_NAME,
     multihash_sha256,
     upload_tree,
@@ -280,68 +281,29 @@ def year_style(template: Document, year: int, archives: str) -> Document:
     return style
 
 
-def _style_templates(source_dir: Path) -> dict[str, Document]:
-    """Read the mosaics collection's tracked style templates, by asset key ``style-{stem}``."""
-    return {
-        f"style-{path.stem}": json.loads(path.read_text())
-        for path in sorted((source_dir / MOSAICS_DIR / "styles").glob("*.json"))
-    }
+def stage_styles(templates: Path, out: Path, year: int, archives: str) -> dict[str, Path]:
+    """Write every style template in ``templates`` into ``out``, drawing ``year``.
 
-
-def _write_style(path: Path, style: Document) -> Path:
-    """Write one staged style document."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
-    return path
-
-
-def stage_item_styles(
-    source_dir: Path, staged: Path, years: Sequence[int]
-) -> dict[int, dict[str, Path]]:
-    """Write each year's styles beside its archives, as ``{year}/styles/{stem}.json``.
-
-    Every published year thus has styles that draw its own archives, and its
-    mosaic item registers them.
-
-    Returns
-    -------
-    dict[int, dict[str, pathlib.Path]]
-        Staged path per year and style asset key, e.g.
-        ``{2024: {"style-default": …}}``.
-    """
-    templates = _style_templates(source_dir)
-    written: dict[int, dict[str, Path]] = {}
-    for year in years:
-        directory = staged / MOSAICS_DIR / str(year) / "styles"
-        written[year] = {
-            key: _write_style(
-                directory / f"{key.removeprefix('style-')}.json", year_style(template, year, "../")
-            )
-            for key, template in templates.items()
-        }
-    logger.info("Wrote %d style(s) over %d year(s)", len(templates) * len(years), len(years))
-    return written
-
-
-def stage_collection_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
-    """Write the mosaics collection's styles, each the latest year's copy.
-
-    They keep the tracked paths, ``styles/{stem}.json``, so the collection's
-    assets name them as rendered.
+    ``archives`` is the href prefix from ``out`` to that year's archives.
 
     Returns
     -------
     dict[str, pathlib.Path]
         Staged path per style asset key, e.g. ``{"style-default": …}``.
     """
-    directory = staged / MOSAICS_DIR / "styles"
-    return {
-        key: _write_style(
-            directory / f"{key.removeprefix('style-')}.json",
-            year_style(template, latest, f"../{latest}/"),
-        )
-        for key, template in _style_templates(source_dir).items()
-    }
+    out.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    for path in sorted(templates.glob("*.json")):
+        style = year_style(json.loads(path.read_text()), year, archives)
+        (out / path.name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
+        written[f"style-{path.stem}"] = out / path.name
+    return written
+
+
+def file_fields(path: Path | UPath) -> dict[str, Any]:
+    """``file:size`` and ``file:checksum`` of one file, measured on its bytes."""
+    payload = path.read_bytes()
+    return {"file:size": len(payload), "file:checksum": multihash_sha256(payload)}
 
 
 def register_item_styles(
@@ -359,15 +321,13 @@ def register_item_styles(
     assets: dict[str, Document] = item.setdefault("assets", {})
     for key, path in sorted(styles.items()):
         shared = item_assets.get(key, {})
-        payload = path.read_bytes()
         assets[key] = {
             "href": f"./styles/{path.name}",
             "type": shared.get("type", "application/vnd.mapbox.style+json"),
             "title": f"{shared.get('title', key)} – {year}",
             "description": vocabulary().style_description(year),
             "roles": list(shared.get("roles", ["style"])),
-            "file:size": len(payload),
-            "file:checksum": multihash_sha256(payload),
+            **file_fields(path),
         }
 
 
@@ -385,7 +345,17 @@ def publish_item_styles(
     """
     with tempfile.TemporaryDirectory() as tmp:
         staged = Path(tmp)
-        styles = stage_item_styles(source_dir, staged, years)
+        # Each year's styles sit beside its archives, so every published year
+        # has styles that draw its own archives.
+        styles = {
+            year: stage_styles(
+                source_dir / MOSAICS_DIR / "styles",
+                staged / MOSAICS_DIR / str(year) / "styles",
+                year,
+                "../",
+            )
+            for year in years
+        }
         # Every archive must have a layer in its year's styles.
         check_style_coverage(layout, years, styles)
         for year in years:
@@ -478,29 +448,29 @@ def write_documents(
 
         # Portolan requires a README.md and an AGENTS.md beside every catalog
         # and collection (rule PTL-FIL-001).
-        for name in ("README.md", "AGENTS.md"):
-            (staged / name).write_bytes((source_dir / name).read_bytes())
-            for directory in documents:
-                (staged / directory).mkdir(parents=True, exist_ok=True)
-                (staged / directory / name).write_bytes(
-                    (source_dir / directory / name).read_bytes(),
-                )
+        for directory in (".", *documents):
+            (staged / directory).mkdir(parents=True, exist_ok=True)
+            for name in ("README.md", "AGENTS.md"):
+                shutil.copyfile(source_dir / directory / name, staged / directory / name)
 
         # `_assets/` holds files the documents link to, such as the root
         # catalog's icon. They are published beside the documents.
-        assets = source_dir / ASSETS_DIR
-        if assets.is_dir():
-            (staged / ASSETS_DIR).mkdir(parents=True, exist_ok=True)
-            for path in sorted(assets.iterdir()):
-                if path.is_file():
-                    (staged / ASSETS_DIR / path.name).write_bytes(path.read_bytes())
+        shutil.copytree(source_dir / ASSETS_DIR, staged / ASSETS_DIR)
 
         # Write the styles first: the collections record their size and
-        # checksum. The mosaics collection's styles draw the latest year.
-        stamp_style_assets(documents, stage_collection_styles(source_dir, staged, max(years)))
-        stamp_style_assets(
-            documents, stage_tiles_styles(source_dir, staged, max(years)), TILES_DIR
-        )
+        # checksum. They are the latest year's copies at their tracked paths.
+        # The tiles have no archives of their own: their default style draws
+        # the mosaics' archive of the latest year, and the grid style draws
+        # only the tile grid.
+        latest = max(years)
+        for directory, archives in (
+            (MOSAICS_DIR, f"../{latest}/"),
+            (TILES_DIR, f"../../{MOSAICS_DIR}/{latest}/"),
+        ):
+            styles = stage_styles(
+                source_dir / directory / "styles", staged / directory / "styles", latest, archives
+            )
+            stamp_style_assets(documents, styles, directory)
 
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
@@ -536,45 +506,20 @@ def stamped_asset_paths(
 def stamp_style_assets(
     documents: Mapping[str, Document],
     styles: Mapping[str, Path],
-    directory: str = MOSAICS_DIR,
+    directory: str,
 ) -> None:
     """Fill ``file:size`` and ``file:checksum`` on one collection's MapLibre styles.
 
     Each value is measured on the staged copy, which is the file readers
-    download: the latest year's copies :func:`stage_collection_styles` and
-    :func:`stage_tiles_styles` wrote.
+    download.
     """
     for key, path in sorted(styles.items()):
         asset = documents.get(directory, {}).get("assets", {}).get(key)
         if asset is None:
             logger.warning("%s declares no %s asset for %s", directory, key, path.name)
             continue
-        payload = path.read_bytes()
-        asset["file:size"] = len(payload)
-        asset["file:checksum"] = multihash_sha256(payload)
-        logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
-
-
-def stage_tiles_styles(source_dir: Path, staged: Path, latest: int) -> dict[str, Path]:
-    """Write the tiles collection's styles, the latest year's copies.
-
-    The tiles have no archives of their own: the default style draws the
-    mosaics collection's archive of the latest year, and the grid style
-    draws only the tile grid, the same every year.
-
-    Returns
-    -------
-    dict[str, pathlib.Path]
-        Staged path per style asset key, e.g. ``{"style-grid": …}``.
-    """
-    out = staged / TILES_DIR / "styles"
-    return {
-        f"style-{path.stem}": _write_style(
-            out / path.name,
-            year_style(json.loads(path.read_text()), latest, f"../../{MOSAICS_DIR}/{latest}/"),
-        )
-        for path in sorted((source_dir / TILES_DIR / "styles").glob("*.json"))
-    }
+        asset.update(file_fields(path))
+        logger.info("Stamped %s/%s: %d bytes", directory, key, asset["file:size"])
 
 
 def require_existing_thumbnails(layout: stac.StoreLayout) -> None:
@@ -626,10 +571,8 @@ def stamp_collection_assets(
             if not path.exists():
                 logger.warning("%s has no bytes for its %s asset at %s", directory, key, path)
                 continue
-            payload = path.read_bytes()
-            asset["file:size"] = len(payload)
-            asset["file:checksum"] = multihash_sha256(payload)
-            logger.info("Stamped %s/%s: %d bytes", directory, key, len(payload))
+            asset.update(file_fields(path))
+            logger.info("Stamped %s/%s: %d bytes", directory, key, asset["file:size"])
 
 
 def describe_mirrors(

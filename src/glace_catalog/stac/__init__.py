@@ -27,7 +27,6 @@ from glace_catalog.stac.naming import (
     require_unique_composites,
 )
 from glace_catalog.stac.save import (
-    PORTOLAN_SCHEMA,
     UPathStacIO,
     concat_indexes,
     index_from_items,
@@ -58,7 +57,6 @@ from glace_catalog.stac.tags import (
 
 __all__ = [
     "DATASET_VERSION",
-    "PORTOLAN_SCHEMA",
     "PROVENANCE_EXPECTATION",
     "PROVENANCE_TAGS",
     "VIZ_SUFFIX",

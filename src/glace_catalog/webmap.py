@@ -29,7 +29,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from freezebase.raster import rasterio_open
-from freezebase.vrt import create_rgba_vrt
+from freezebase.vrt import create_decibel_vrt, create_rgba_vrt
 from rasterio.enums import Resampling
 import rasterio.shutil
 from rasterio.warp import transform_bounds
@@ -90,29 +90,20 @@ layers finish a year faster; raise the number when the disk has room.
 
 @dataclass
 class LayerInfo:
-    """One built PMTiles archive, as the build reports it.
+    """One built PMTiles archive, as ``build-year`` records it in the build state.
 
-    ``build-year`` stores this record in the year's build state, so a later
-    run can tell what changed. Readers of the store see the archive header,
-    the year item's ``visual`` asset and the year style.
+    The year item's ``visual`` asset is written from it, and finalization
+    checks the encoding against ``metadata/assets.yaml``.
     """
 
-    id: str
-    product: str
-    polarization: str
-    year: int
     url: str
     bounds: list[float]
     min_zoom: int
     max_zoom: int
     scale: float
     offset: float
-    units: str
-    source: str
     size_bytes: int
-    start_date: str
-    end_date: str
-    checksum: str = ""
+    checksum: str
 
 
 def encoding_mismatch(key: str, detail: Mapping[str, Any]) -> str | None:
@@ -180,10 +171,7 @@ def build_pmtiles(
     out_path: Path,
     *,
     layer_id: str,
-    year: int,
     style: LayerStyle,
-    start_date: str,
-    end_date: str,
     min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
     attribution: str = "",
@@ -203,13 +191,9 @@ def build_pmtiles(
     layer_id
         Identifier of the layer. The archive is named ``viz_filename(layer_id)``,
         so a reader derives the data stem by stripping the suffix.
-    year
-        Composite year, for the manifest entry.
     style
         The layer's display record. The codes span its transport range, which
         is the same for every year, so years are directly comparable.
-    start_date, end_date
-        Composite window the layer covers.
     min_zoom, max_zoom
         Zoom range of the pyramid. The default maximum is the source's own
         zoom, so that level is copied unchanged and each lower level halves
@@ -269,42 +253,16 @@ def build_pmtiles(
     size = out_path.stat().st_size
     checksum = multihash_sha256_file(out_path)
     logger.info("Wrote %s: %d tiles, %.1f MB", out_path.name, written, size / 1e6)
-    product, polarization = _split_layer_id(layer_id)
     return LayerInfo(
-        id=f"{layer_id}_{year}",
-        product=product,
-        polarization=polarization,
-        year=year,
         url=out_path.name,
         bounds=bounds,
         min_zoom=min_zoom,
         max_zoom=max_zoom,
         scale=encoding.scale,
         offset=encoding.offset,
-        units=style.units,
-        source=str(src_vrt),
         size_bytes=size,
         checksum=checksum,
-        start_date=start_date,
-        end_date=end_date,
     )
-
-
-def _split_layer_id(layer_id: str) -> tuple[str, str]:
-    """Product and polarization of a layer id, for the manifest's grouping."""
-    product, _, rest = layer_id.partition("_")
-    return product.upper(), rest.upper()
-
-
-def _pmtiles_source(
-    layer_id: str,
-    style: LayerStyle,
-    vrts: YearVrts,
-) -> Path | UPath | None:
-    """Select the VRT a layer is tiled from: linear or decibel."""
-    if style.decibel:
-        return vrts.decibel.get(layer_id)
-    return vrts.linear.get(layer_id)
 
 
 def build_layers(
@@ -312,8 +270,6 @@ def build_layers(
     out_dir: Path,
     *,
     year: int,
-    start_date: str,
-    end_date: str,
     styles: Mapping[str, LayerStyle] | None = None,
     layers: Collection[str] | None = None,
     min_zoom: int = VIZ_MIN_ZOOM,
@@ -338,12 +294,13 @@ def build_layers(
         paths are the inputs.
     out_dir
         Local directory the archives are written to.
-    year, start_date, end_date
-        The year being built and the composite window it covers.
+    year
+        The year being built, named in each archive's attribution.
     styles
         Display record per layer, whose transport range the archive is
-        encoded over. Defaults to the vocabulary's, from
-        ``metadata/assets.yaml``.
+        encoded over. A layer whose record is in decibels is tiled from a
+        decibel VRT over its linear mosaic, written beside it. Defaults to the
+        vocabulary's, from ``metadata/assets.yaml``.
     layers
         Restrict to these layer ids. ``None`` builds all twelve.
     min_zoom, max_zoom
@@ -376,10 +333,7 @@ def build_layers(
             source,
             out_dir / viz_filename(layer_id),
             layer_id=layer_id,
-            year=year,
             style=style,
-            start_date=start_date,
-            end_date=end_date,
             min_zoom=min_zoom,
             max_zoom=max_zoom,
             attribution=attribution,
@@ -388,13 +342,17 @@ def build_layers(
             pool=pool,
         )
 
-    sources = {
-        layer_id: (style, source)
-        for layer_id, style in sorted(wanted.items())
-        if (source := _pmtiles_source(layer_id, style, vrts)) is not None
-    }
-    for layer_id in sorted(set(wanted) - set(sources)):
-        logger.info("No VRT for %s; skipping", layer_id)
+    sources: dict[str, tuple[LayerStyle, Path | UPath]] = {}
+    for layer_id, style in sorted(wanted.items()):
+        linear = vrts.linear.get(layer_id)
+        if linear is None:
+            logger.info("No VRT for %s; skipping", layer_id)
+        elif style.decibel:
+            decibel = Path(str(linear)).with_name(f"{layer_id}_webm{MOSAIC_ZOOM}_db.vrt")
+            create_decibel_vrt(linear, decibel)
+            sources[layer_id] = (style, decibel)
+        else:
+            sources[layer_id] = (style, linear)
 
     # The VRTs are local but read remote files, so the store's credentials are
     # set here, in the main thread, around all warps. rasterio applies options

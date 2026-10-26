@@ -266,11 +266,11 @@ def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
     mosaic.properties["glace:build_fingerprint"] = "0" * 64
     mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
     # Finalization reads the mosaic items back from the store, as written.
-    stored = pystac.Item.from_dict(item_document(mosaic, "glace-ch-mosaics", scope_title="GLACE"))
+    stored = pystac.Item.from_dict(item_document(mosaic))
     with tempfile.TemporaryDirectory() as tmp:
         year, tiles = Path(tmp) / ".items.parquet", Path(tmp) / "tiles.parquet"
         mosaics = Path(tmp) / "mosaics.parquet"
-        row = year_index_document(tile_item, "glace-ch-tiles", scope_title="GLACE")
+        row = year_index_document(tile_item)
         write_stac_geoparquet([row], year)
         concat_indexes([year], tiles, base_url=base)
         index_from_items([stored], mosaics, base_url=base)

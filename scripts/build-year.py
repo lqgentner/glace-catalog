@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 import logging
 from pathlib import Path
 import shutil
@@ -50,7 +50,6 @@ from glace_catalog.config import settings
 from glace_catalog.documents import render_year_prose
 from glace_catalog.grid import read_glacier_fractions
 from glace_catalog.metadata import vocabulary
-from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.naming import ASSET_KEYS, published_name
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
@@ -215,7 +214,7 @@ def step_vrt(
         vrt_dir,
         grid=grid,
     )
-    logger.info("vrt: %d linear, %d decibel", len(chain.linear), len(chain.decibel))
+    logger.info("vrt: %d layer(s)", len(chain.linear))
     return chain
 
 
@@ -311,10 +310,9 @@ def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
-    window: tuple[date, date],
     files: Sequence[stac.CompositeFile],
-) -> list[webmap.LayerInfo]:
-    """Render and upload the year's web-map archives.
+) -> dict[str, dict[str, Any]]:
+    """Render and upload the year's web-map archives; return their build-state details.
 
     Each archive's header declares the bbox of the mosaic item, the extent of
     the data rather than of the tile-aligned display grid.
@@ -325,8 +323,6 @@ def step_pmtiles(
             chain,
             staged,
             year=args.year,
-            start_date=window[0].isoformat(),
-            end_date=window[1].isoformat(),
             layers=args.layers,
             workers=args.tiler_workers,
             concurrent_layers=args.concurrent_layers,
@@ -337,7 +333,7 @@ def step_pmtiles(
         # The archives are assets of the year's mosaic item, so they go beside
         # its COGs. `upload_tree` adds and overwrites files and leaves the rest.
         stac.store.upload_tree(staged, layout.mosaic_year(args.year))
-    return layers
+    return {layer.url.removesuffix(".pmtiles"): asdict(layer) for layer in layers}
 
 
 def scratch_needed(args: argparse.Namespace, scope: Scope, steps: Sequence[str]) -> int:
@@ -446,23 +442,12 @@ def step_items(
             mosaic_item,
             staged_tiles,
             staged_mosaics,
-            tiles_collection_id=scope.tiles_collection_id,
-            mosaics_collection_id=scope.mosaics_collection_id,
-            scope_title=vocabulary().catalog.short_title,
-            portolan_schema=PORTOLAN_SCHEMA,
             year=args.year,
             year_prose=render_year_prose(vocabulary(), args.year),
         )
         # Hrefs relative to the store root; finalize-catalog makes them absolute.
         stac.write_stac_geoparquet(
-            [
-                stac.year_index_document(
-                    item,
-                    scope.tiles_collection_id,
-                    scope_title=vocabulary().catalog.short_title,
-                )
-                for item in tile_items
-            ],
+            [stac.year_index_document(item) for item in tile_items],
             staged_tiles / YEAR_INDEX_NAME,
         )
         stac.store.upload_tree(staged_tiles, layout.tile_year(args.year))
@@ -684,31 +669,7 @@ def main() -> None:
                 grid=scope.display_grid,
                 name="vrt-display",
             )
-            built = step_pmtiles(args, layout, display_chain, composite_window(frame), files)
-            state.record(
-                step,
-                prints[step],
-                {
-                    layer.url.removesuffix(".pmtiles"): {
-                        "url": layer.url,
-                        "size_bytes": layer.size_bytes,
-                        "checksum": layer.checksum,
-                        "bounds": layer.bounds,
-                        "min_zoom": layer.min_zoom,
-                        "max_zoom": layer.max_zoom,
-                        "scale": layer.scale,
-                        "offset": layer.offset,
-                        "units": layer.units,
-                        "product": layer.product,
-                        "polarization": layer.polarization,
-                        "year": layer.year,
-                        "id": layer.id,
-                        "start_date": layer.start_date,
-                        "end_date": layer.end_date,
-                    }
-                    for layer in built
-                },
-            )
+            state.record(step, prints[step], step_pmtiles(args, layout, display_chain, files))
         elif step == "items":
             step_items(args, scope, layout, frame, files, state, prints["items"])
             state.record(step, prints[step])
