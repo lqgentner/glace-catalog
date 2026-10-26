@@ -311,6 +311,15 @@ the store-level mirror (about 2 200 tiles over twelve years, about 26 500
 rows) has thirteen groups.
 """
 
+MIRROR_COMPRESSION_LEVEL = 15
+"""zstd level of every mirror, written without dictionary encoding.
+
+Measured on the Alpine tile mirror: Snappy, pyarrow's default, gave 36.1 MB;
+zstd 15 gave 21.4 MB, and 18.4 MB without dictionaries, which pyarrow
+otherwise tries on every column, including the mostly unique hrefs and
+checksums. Reads were as fast; the write takes about 8 s.
+"""
+
 _BBOX_CORNERS = ("xmin", "ymin", "xmax", "ymax")
 
 _BBOX_STRUCT = pa.struct([(corner, pa.float64()) for corner in _BBOX_CORNERS])
@@ -347,6 +356,23 @@ def _with_covering_bbox(table: pa.Table) -> pa.Table:
     return table.set_column(index, field, table.column("bbox").cast(_BBOX_STRUCT))
 
 
+def _with_geo_summary(table: pa.Table) -> pa.Table:
+    """Record the geometry types and the file's bbox in the GeoParquet metadata.
+
+    Both are optional in GeoParquet 1.1; ``stac_geoparquet`` leaves the types
+    empty and the bbox out. With them, a reader learns the extent and the
+    geometry kind from the footer alone.
+    """
+    geo = json.loads(table.schema.metadata[b"geo"])
+    column = geo["columns"][geo["primary_column"]]
+    geometries = gpd.GeoSeries.from_wkb(table.column(geo["primary_column"]).to_pylist())
+    column["geometry_types"] = sorted(geometries.geom_type.dropna().unique())
+    column["bbox"] = [float(value) for value in geometries.total_bounds]
+    return table.replace_schema_metadata(
+        {**table.schema.metadata, b"geo": json.dumps(geo).encode()}
+    )
+
+
 def _hilbert_sorted(table: pa.Table) -> pa.Table:
     """Sort rows along a Hilbert curve over the bbox centres.
 
@@ -376,7 +402,8 @@ def _write_mirror(
     ``PTL-DAT-008``): spatially ordered rows, a bbox covering column, bounded
     row groups, and per-row-group statistics over the column's four fields.
     ``write_statistics`` is passed explicitly because those statistics are
-    essential.
+    essential. Every mirror is compressed the same way
+    (:data:`MIRROR_COMPRESSION_LEVEL`).
 
     Parameters
     ----------
@@ -388,11 +415,18 @@ def _write_mirror(
         Rows per row group. A smaller value gives several groups over a
         handful of rows.
     """
-    table = _with_covering_bbox(table)
-    table = _hilbert_sorted(table)
+    table = _hilbert_sorted(_with_geo_summary(_with_covering_bbox(table)))
     out_path = UPath(out_path)
     with out_path.open("wb") as handle:
-        pq.write_table(table, handle, row_group_size=row_group_size, write_statistics=True)
+        pq.write_table(
+            table,
+            handle,
+            row_group_size=row_group_size,
+            write_statistics=True,
+            compression="zstd",
+            compression_level=MIRROR_COMPRESSION_LEVEL,
+            use_dictionary=False,
+        )
 
 
 def mirror_column_type(data_type: pa.DataType) -> str:

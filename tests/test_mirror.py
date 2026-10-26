@@ -194,6 +194,22 @@ def _check_file(path: Path, checks: dict[str, bool], label: str) -> None:
         stat_defects == [] and boxes is not None and len(boxes) == groups
     )
     checks[f"{label}: no row group exceeds the ceiling"] = max(rows) <= _MAX_ROW_GROUP_ROWS
+    column = geo.get("columns", {}).get("geometry", {})
+    bboxes = parquet.read(columns=["bbox"]).column("bbox").to_pylist()
+    checks[f"{label}: the geo metadata names the geometry types"] = column.get(
+        "geometry_types"
+    ) == ["Polygon"]
+    checks[f"{label}: the geo metadata's bbox spans every row"] = column.get("bbox") == [
+        min(box["xmin"] for box in bboxes),
+        min(box["ymin"] for box in bboxes),
+        max(box["xmax"] for box in bboxes),
+        max(box["ymax"] for box in bboxes),
+    ]
+    checks[f"{label}: every column is zstd-compressed"] = all(
+        parquet.metadata.row_group(group).column(index).compression == "ZSTD"
+        for group in range(groups)
+        for index in range(parquet.metadata.num_columns)
+    )
 
 
 def _shuffled_copy(path: Path, out_path: Path) -> None:
