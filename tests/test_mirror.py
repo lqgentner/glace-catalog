@@ -51,10 +51,8 @@ from rashid.data.checks import (
 from rashid.data.reader import Locator
 
 from glace_catalog.stac.save import (
-    HILBERT_ORDER,
     _write_mirror,
     concat_indexes,
-    hilbert_index,
     write_stac_geoparquet,
 )
 
@@ -226,21 +224,6 @@ def _uncovered_copy(path: Path, out_path: Path) -> None:
         pq.write_table(table.replace_schema_metadata(metadata), handle)
 
 
-def _hilbert_checks() -> dict[str, bool]:
-    """Check the curve itself: it visits every cell once, in single steps."""
-    order = 4
-    side = 2**order
-    cells = [(x, y) for x in range(side) for y in range(side)]
-    indexes = {hilbert_index(x, y, order=order): (x, y) for x, y in cells}
-    walk: list[tuple[int, int]] = [indexes[i] for i in sorted(indexes)]
-    steps = [abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in itertools.pairwise(walk)]
-    return {
-        "the Hilbert index is a bijection over the grid": sorted(indexes) == list(range(side**2)),
-        "consecutive Hilbert cells are neighbours": steps != [] and set(steps) == {1},
-        "the curve starts at the origin": hilbert_index(0, 0, order=HILBERT_ORDER) == 0,
-    }
-
-
 def _year_of(item_id: str) -> str:
     """Read the year an item id ends with."""
     return item_id[-4:]
@@ -284,7 +267,7 @@ def _writer_checks(root: Path) -> dict[str, bool]:
 
 def main() -> int:
     """Run the gate."""
-    checks = _hilbert_checks()
+    checks: dict[str, bool] = {}
     tiles = _tile_codes()
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

@@ -26,6 +26,7 @@ from pathlib import Path
 from upath import UPath
 
 from glace_catalog.config import settings
+from glace_catalog.stac.save import dump_document
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -52,7 +53,7 @@ def drop_self_link(out: Path) -> None:
     path = out / "catalog.json"
     catalog = json.loads(path.read_text())
     catalog["links"] = [link for link in catalog["links"] if link.get("rel") != "self"]
-    path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n")
+    path.write_text(dump_document(catalog))
 
 
 def main() -> None:

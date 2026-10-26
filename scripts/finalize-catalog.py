@@ -57,6 +57,7 @@ from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import (
     Document,
+    dump_document,
     mirror_column_type,
     read_item,
 )
@@ -295,7 +296,7 @@ def stage_styles(templates: Path, out: Path, year: int, archives: str) -> dict[s
     written: dict[str, Path] = {}
     for path in sorted(templates.glob("*.json")):
         style = year_style(json.loads(path.read_text()), year, archives)
-        (out / path.name).write_text(json.dumps(style, indent=2, ensure_ascii=False) + "\n")
+        (out / path.name).write_text(dump_document(style))
         written[f"style-{path.stem}"] = out / path.name
     return written
 
@@ -366,7 +367,7 @@ def publish_item_styles(
             register_item_styles(item, year, styles[year], item_assets)
             # Written as the build writes items.
             path = staged / MOSAICS_DIR / str(year) / UPath(source).name
-            path.write_text(json.dumps(item, indent=2) + "\n")
+            path.write_text(dump_document(item))
         upload_tree(staged, layout.root)
 
 
@@ -442,9 +443,7 @@ def write_documents(
             *_keep(catalog["links"], {"self"}),
         ]
         catalog = with_updated(catalog, updated)
-        (staged / "catalog.json").write_text(
-            json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
-        )
+        (staged / "catalog.json").write_text(dump_document(catalog))
 
         # Portolan requires a README.md and an AGENTS.md beside every catalog
         # and collection (rule PTL-FIL-001).
@@ -475,9 +474,7 @@ def write_documents(
         for directory, document in documents.items():
             path = staged / directory / "collection.json"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(
-                json.dumps(with_updated(document, updated), indent=2, ensure_ascii=False) + "\n",
-            )
+            path.write_text(dump_document(with_updated(document, updated)))
 
         upload_tree(staged, layout.root)
 

@@ -29,10 +29,12 @@ import posixpath
 from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urljoin
 
+import geopandas as gpd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pystac
+import shapely
 import stac_geoparquet.arrow
 
 # The private metadata builder behind `stac_geoparquet.arrow.to_parquet`.
@@ -103,6 +105,12 @@ Document = dict[str, Any]
 Values vary in type (link lists, nested extents, numbers), and the code here
 reads them by key.
 """
+
+
+def dump_document(document: Document) -> str:
+    """Serialize one document as the store publishes it: indented UTF-8, one final newline."""
+    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+
 
 ITEM_NAME = "item.json"
 CATALOG_NAME = "catalog.json"
@@ -286,7 +294,7 @@ def _mgrs_tile(item: pystac.Item) -> str:
     return str(item.properties["glace:mgrs_tile"])
 
 
-HILBERT_ORDER = 16
+HILBERT_LEVEL = 16
 """Bits per axis of the Hilbert curve the mirror rows are sorted along.
 
 An order-16 curve divides each axis into 65 536 steps, a few metres over the
@@ -306,43 +314,6 @@ rows) has thirteen groups.
 _BBOX_CORNERS = ("xmin", "ymin", "xmax", "ymax")
 
 _BBOX_STRUCT = pa.struct([(corner, pa.float64()) for corner in _BBOX_CORNERS])
-
-
-def hilbert_index(x: int, y: int, *, order: int = HILBERT_ORDER) -> int:
-    """Position of a grid cell along the 2-D Hilbert curve.
-
-    The Hilbert curve visits every cell of a ``2**order`` square grid once, and
-    cells close along the curve are close on the grid. Sorting rows by this
-    index gives each row group a small bounding box, so readers can skip
-    groups.
-
-    Parameters
-    ----------
-    x, y
-        Cell coordinates, each in ``[0, 2**order)``.
-    order
-        Bits per axis.
-
-    Returns
-    -------
-    int
-        Distance along the curve, in ``[0, 4**order)``.
-    """
-    distance = 0
-    side = 1 << (order - 1)
-    while side > 0:
-        rx = 1 if x & side else 0
-        ry = 1 if y & side else 0
-        distance += side * side * ((3 * rx) ^ ry)
-        # Rotate the quadrant so the curve enters the next one where it left
-        # this one, joining the four sub-curves.
-        if ry == 0:
-            if rx == 1:
-                x = side - 1 - x
-                y = side - 1 - y
-            x, y = y, x
-        side >>= 1
-    return distance
 
 
 def _with_covering_bbox(table: pa.Table) -> pa.Table:
@@ -379,40 +350,17 @@ def _with_covering_bbox(table: pa.Table) -> pa.Table:
 def _hilbert_sorted(table: pa.Table) -> pa.Table:
     """Sort rows along a Hilbert curve over the bbox centres.
 
-    The curve spans the table's own total bounds, so a Swiss year and an
-    Alpine one are each ordered across their own extent. Rows without a bbox
-    go last.
+    The curve spans the table's own total bounds, so each mirror is ordered
+    across its own extent. Rows close along the curve are close on the
+    ground, so each row group gets a small bounding box and readers can skip
+    groups.
     """
     bbox = table.column("bbox").combine_chunks()
-    corners = {
-        corner: bbox.field(corner).to_numpy(zero_copy_only=False) for corner in _BBOX_CORNERS
-    }
-    centre_x = (corners["xmin"] + corners["xmax"]) / 2
-    centre_y = (corners["ymin"] + corners["ymax"]) / 2
-    placed = np.isfinite(centre_x) & np.isfinite(centre_y)
-    if not placed.any():
-        return table
-    cells = 2**HILBERT_ORDER - 1
-    grid_x = _grid_coordinates(centre_x, placed, cells)
-    grid_y = _grid_coordinates(centre_y, placed, cells)
-    # 4**16 - 1 is the last cell on the curve, so unplaced rows get the next
-    # key and sort last. Both fit easily in an int64.
-    keys = np.full(table.num_rows, 4**HILBERT_ORDER, dtype=np.int64)
-    keys[placed] = [
-        hilbert_index(int(x), int(y)) for x, y in zip(grid_x[placed], grid_y[placed], strict=True)
-    ]
-    order = np.argsort(keys, kind="stable")
-    return table.take(pa.array(order))
-
-
-def _grid_coordinates(values: np.ndarray, placed: np.ndarray, cells: int) -> np.ndarray:
-    """Map coordinates onto ``[0, cells]`` over the extent of the placed ones."""
-    low, high = values[placed].min(), values[placed].max()
-    span = high - low
-    if span <= 0:
-        return np.zeros(values.shape, dtype=np.int64)
-    scaled = np.rint((values - low) / span * cells)
-    return np.clip(np.nan_to_num(scaled), 0, cells).astype(np.int64)
+    boxes = shapely.box(
+        *(bbox.field(corner).to_numpy(zero_copy_only=False) for corner in _BBOX_CORNERS)
+    )
+    distance = gpd.GeoSeries(boxes).hilbert_distance(level=HILBERT_LEVEL).to_numpy()
+    return table.take(pa.array(np.argsort(distance, kind="stable")))
 
 
 def _write_mirror(
@@ -587,7 +535,7 @@ def write_year_items(
         path = tiles_dir / tile / ITEM_NAME
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps(item_document(item), indent=2) + "\n",
+            dump_document(item_document(item)),
         )
         written.append(path)
         listed.append((f"./{tile}/{ITEM_NAME}", f"GLACE tile {tile}, {year}"))
@@ -595,7 +543,7 @@ def write_year_items(
     if listed:
         tiles_dir.mkdir(parents=True, exist_ok=True)
         catalog = year_catalog_document(year, listed)
-        (tiles_dir / CATALOG_NAME).write_text(json.dumps(catalog, indent=2) + "\n")
+        (tiles_dir / CATALOG_NAME).write_text(dump_document(catalog))
         readme, agents = year_prose
         (tiles_dir / "README.md").write_text(readme)
         (tiles_dir / "AGENTS.md").write_text(agents)
@@ -605,7 +553,7 @@ def write_year_items(
         mosaics_dir.mkdir(parents=True, exist_ok=True)
         path = mosaics_dir / ITEM_NAME
         path.write_text(
-            json.dumps(item_document(mosaic_item), indent=2) + "\n",
+            dump_document(item_document(mosaic_item)),
         )
         written.append(path)
 

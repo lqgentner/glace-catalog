@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import filecmp
-import json
 from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, Any
@@ -43,7 +42,7 @@ from glace_catalog.stac.items import (
     VERSION_EXTENSION_URI,
 )
 from glace_catalog.stac.naming import ASSET_KEYS, viz_filename
-from glace_catalog.stac.save import PORTOLAN_SCHEMA, Document
+from glace_catalog.stac.save import PORTOLAN_SCHEMA, Document, dump_document
 from glace_catalog.stac.save import link as _link
 from glace_catalog.stac.store import ASSETS_DIR, MOSAICS_DIR, TILES_DIR
 from glace_catalog.styles import ATTRIBUTION, ramp_colors
@@ -147,10 +146,6 @@ def wgs84_bbox(grid: Grid, decimals: int = 4) -> list[float]:
     transformer = Transformer.from_crs(grid.crs, "EPSG:4326", always_xy=True)
     left, bottom, right, top = transformer.transform_bounds(*grid.bounds, densify_pts=21)
     return [round(v, decimals) for v in (left, bottom, right, top)]
-
-
-def _json(document: Document) -> str:
-    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
 # --- the documents ------------------------------------------------------------
@@ -707,16 +702,18 @@ def render_tree(
     vocabulary = vocabulary or load_vocabulary()
     bases = bases or load_public_bases()
     documents: Mapping[str, str] = {
-        "catalog.json": _json(catalog_document(vocabulary)),
-        f"{TILES_DIR}/collection.json": _json(collection_document(vocabulary, TILES_DIR, bases)),
-        f"{MOSAICS_DIR}/collection.json": _json(
+        "catalog.json": dump_document(catalog_document(vocabulary)),
+        f"{TILES_DIR}/collection.json": dump_document(
+            collection_document(vocabulary, TILES_DIR, bases)
+        ),
+        f"{MOSAICS_DIR}/collection.json": dump_document(
             collection_document(vocabulary, MOSAICS_DIR, bases),
         ),
-        f"{TILES_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
+        f"{TILES_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": dump_document(
             tiles_style_document(vocabulary, vocabulary.catalog.last_year),
         ),
-        f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": _json(grid_style_document()),
-        f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
+        f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": dump_document(grid_style_document()),
+        f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": dump_document(
             style_document(vocabulary, vocabulary.catalog.last_year),
         ),
         **{name: render_markdown(vocabulary, name, bases) for name in MARKDOWN_TEMPLATES},
