@@ -56,10 +56,10 @@ logger = logging.getLogger(__name__)
 
 
 class UPathStacIO(pystac.stac_io.DefaultStacIO):
-    """pystac IO that reads and writes through ``UPath``.
+    """pystac IO that reads through ``UPath``.
 
-    Local and ``s3://`` stores are read and written the same way, including
-    during validation, and relative child links resolve in both.
+    Local and ``s3://`` stores are read the same way during validation, and
+    relative child links resolve in both.
 
     pystac passes hrefs as plain strings, which carry no S3 profile or
     endpoint, so this class holds the storage options and attaches them to
@@ -86,13 +86,6 @@ class UPathStacIO(pystac.stac_io.DefaultStacIO):
     def read_text_from_href(self, href: str) -> str:
         """Read one document, from a local path or an object store."""
         return self._path(href).read_text()
-
-    @override
-    def write_text_to_href(self, href: str, txt: str) -> None:
-        """Write one document, to a local path or an object store."""
-        target = self._path(href)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(txt)
 
 
 PORTOLAN_SCHEMA = "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"

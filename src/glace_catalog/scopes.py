@@ -157,8 +157,6 @@ class Scope:
     ----------
     key
         Short identifier, ``"ch"`` or ``"alps"``.
-    title
-        Human-readable region name, used in collection titles.
     analysis_grid
         Equal-area grid the annual mosaics are written on.
     display_grid
@@ -180,22 +178,12 @@ class Scope:
     """
 
     key: str
-    title: str
     analysis_grid: Grid
     display_grid: Grid
     perimeter_tiles: int
     utm_zones: tuple[str, ...]
     glacier_inventory: str
     glacier_buffer_m: float
-
-    @property
-    def catalog_title(self) -> str:
-        """Title of the root catalog, as ``root`` links to it must repeat.
-
-        Portolan requires a title on every ``child`` and ``item`` link. Clients
-        show link titles without fetching the target, so the link carries it.
-        """
-        return f"GLACE {self.title}"
 
     @property
     def tiles_collection_id(self) -> str:
@@ -215,7 +203,6 @@ class Scope:
 SCOPES: Mapping[str, Scope] = {
     "ch": Scope(
         key="ch",
-        title="Switzerland",
         analysis_grid=Grid(
             crs=LAEA,
             resolution=ANALYSIS_RESOLUTION,
@@ -241,7 +228,6 @@ SCOPES: Mapping[str, Scope] = {
     ),
     "alps": Scope(
         key="alps",
-        title="Alps",
         analysis_grid=Grid(
             crs=LAEA,
             resolution=ANALYSIS_RESOLUTION,
@@ -281,22 +267,3 @@ def get_scope(key: str) -> Scope:
     except KeyError:
         msg = f"Unknown scope {key!r}; known scopes are {sorted(SCOPES)}."
         raise KeyError(msg) from None
-
-
-def snap_to_tiles(
-    bounds: tuple[float, float, float, float],
-    zoom: int = MOSAIC_ZOOM,
-) -> tuple[float, float, float, float]:
-    """Grow ``bounds`` outward to whole 256 px tiles of the WebMercatorQuad grid.
-
-    The mosaic then begins and ends on a tile boundary, so every edge tile is
-    complete.
-    """
-    step = zoom_resolution(zoom) * TILE_PX
-    left, bottom, right, top = bounds
-    return (
-        MERCATOR_ORIGIN + math.floor((left - MERCATOR_ORIGIN) / step) * step,
-        MERCATOR_ORIGIN + math.floor((bottom - MERCATOR_ORIGIN) / step) * step,
-        MERCATOR_ORIGIN + math.ceil((right - MERCATOR_ORIGIN) / step) * step,
-        MERCATOR_ORIGIN + math.ceil((top - MERCATOR_ORIGIN) / step) * step,
-    )

@@ -16,32 +16,16 @@ from dataclasses import dataclass, field
 import logging
 from typing import TYPE_CHECKING, Any
 
-from freezebase.raster import rasterio_open
-import numpy as np
-
 from glace_catalog.stac.naming import by_asset_key
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
-
-    from upath import UPath
 
     from glace_catalog.stac.naming import CompositeFile
 
 logger = logging.getLogger(__name__)
 
 SPECIFICATION_URL = "https://ceos.org/ard/files/PFS/SAR/v1.3.1/CEOS-ARD_PFS_SAR_v1.3.1.pdf"
-METADATA_VOCABULARY_NOTE = (
-    "Product metadata borrows the vocabulary of the CEOS-ARD Product Family "
-    "Specification for SAR v1.3.1, so that terms can be looked up there. "
-    "Full conformance is neither assessed nor claimed. "
-)
-"""The collection's statement about its relationship to the specification.
-
-Each product file states the same in its ``METADATA_VOCABULARY`` tag.
-"""
-
 # Tags whose presence means the raster stores decibels. Published rasters must
 # be linear (see the module docstring).
 _DECIBEL_TAGS = ("BACKSCATTER_SCALING", "CQM_SCALING")
@@ -188,14 +172,6 @@ _INT_TAGS = frozenset(
     },
 )
 _FLOAT_TAGS = frozenset({"COHERENCE_AVERAGE", "COHERENCE_STD"})
-_STATISTICS_TAGS = {
-    "minimum": "STATISTICS_MINIMUM",
-    "maximum": "STATISTICS_MAXIMUM",
-    "mean": "STATISTICS_MEAN",
-    "stddev": "STATISTICS_STDDEV",
-    "valid_percent": "STATISTICS_VALID_PERCENT",
-}
-"""GDAL band tag of each :class:`BandStatistics` field."""
 
 
 @dataclass(frozen=True)
@@ -205,7 +181,7 @@ class BandStatistics:
     Portolan requires all five (``PTL-DAT-009``, and ``PTL-DAT-010`` for the
     valid percent on bands with a nodata value). :func:`band_statistics`
     builds this record and raises ``ValueError`` on a partial set, as soon as
-    the manifest or header is read.
+    the manifest is read.
 
     Parameters
     ----------
@@ -305,57 +281,6 @@ class RasterInfo:
         return any(tag in self.tags for tag in _DECIBEL_TAGS) or self.band_unit == "dB"
 
 
-def read_raster_info(path: Path | UPath) -> RasterInfo:
-    """Read the tags, band metadata and file layout of one raster.
-
-    Parameters
-    ----------
-    path
-        Local path or object-storage URI of a single-band COG.
-
-    Returns
-    -------
-    RasterInfo
-        Everything the catalogue needs about this file besides its pixels.
-
-    Raises
-    ------
-    ValueError
-        If the file does not start with a TIFF byte-order marker, or if its band
-        carries some but not all of the five ``STATISTICS_*`` tags.
-    """
-    with rasterio_open(path) as src:
-        band_tags = src.tags(1)
-        info = {
-            "tags": dict(src.tags()),
-            "statistics": band_statistics(
-                {
-                    name: float(band_tags[tag])
-                    for name, tag in _STATISTICS_TAGS.items()
-                    if tag in band_tags
-                },
-                names=_STATISTICS_TAGS,
-                source=str(path),
-            ),
-            "band_name": src.descriptions[0] or "",
-            "band_unit": src.units[0] or "",
-            "data_type": src.dtypes[0],
-            "nodata": src.nodatavals[0],
-            "spatial_resolution": abs(src.res[0]),
-            "bits_per_sample": np.dtype(src.dtypes[0]).itemsize * 8,
-        }
-    with path.open("rb") as handle:
-        marker = handle.read(2)
-    if marker not in (b"II", b"MM"):
-        msg = f"{path} does not start with a TIFF byte-order marker, got {marker!r}."
-        raise ValueError(msg)
-    return RasterInfo(
-        **info,
-        byte_order="little-endian" if marker == b"II" else "big-endian",
-        size=path.stat().st_size,
-    )
-
-
 @dataclass(frozen=True)
 class RasterProblems:
     """One raster that the catalogue refuses to describe, and why."""
@@ -381,9 +306,10 @@ def survey_tags(
     Parameters
     ----------
     by_tile
-        Output of :func:`discover_composites`.
+        The year's composites, grouped by tile.
     raster_info
-        Output of :func:`collect_raster_info`.
+        What the manifest records about each file, per tile and asset key
+        (:func:`~glace_catalog.stac.store.manifest_raster_info`).
 
     Returns
     -------

@@ -29,7 +29,7 @@ import pandas as pd
 from upath import UPath
 
 from glace_catalog.grid import GRID_ARCHIVE
-from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
@@ -48,8 +48,6 @@ The specification only requires the mirror to be a collection asset with the
 so they find the mirror without reading the collection document first.
 """
 
-README_NAME = "README.md"
-AGENTS_NAME = "AGENTS.md"
 THUMBNAIL_NAME = "thumbnail.webp"
 ASSETS_DIR = "_assets"
 """Root directory of files the catalog documents link to without describing them."""
@@ -170,36 +168,12 @@ class StoreLayout:
         """Root catalog. Finalization stamps its absolute ``self`` link."""
         return self.root / "catalog.json"
 
-    @property
-    def readme(self) -> Path | UPath:
-        """Root ``README.md``, linked ``rel: "describedby"``."""
-        return self.root / README_NAME
-
-    @property
-    def agents(self) -> Path | UPath:
-        """Root ``AGENTS.md``, linked ``rel: "agents"``."""
-        return self.root / AGENTS_NAME
-
-    @property
-    def icon(self) -> Path | UPath:
-        """Catalog wordmark, linked ``rel: "icon"`` from the root catalog.
-
-        An SVG, so registries and browsers can draw it at any card size
-        (``PTL-LNK-007``). The viewer's header uses the same file.
-        """
-        return self.root / ASSETS_DIR / "glace-wordmark.svg"
-
     # -- tiles collection ------------------------------------------------
 
     @property
     def tiles(self) -> Path | UPath:
         """Directory owning the per-tile collection."""
         return self.root / TILES_DIR
-
-    @property
-    def tiles_collection(self) -> Path | UPath:
-        """Collection document of the per-tile items."""
-        return self.tiles / "collection.json"
 
     @property
     def tiles_index(self) -> Path | UPath:
@@ -232,10 +206,6 @@ class StoreLayout:
         """Directory of the sub-catalog organizing one year's tile items."""
         return self.tiles / str(year)
 
-    def tile_year_catalog(self, year: int) -> Path | UPath:
-        """Sub-catalog listing one year's tile items."""
-        return self.tile_year(year) / "catalog.json"
-
     def tile(self, year: int, tile: str) -> Path | UPath:
         """Directory of one tile item, holding its twelve COGs and its ``item.json``."""
         return self.tile_year(year) / tile
@@ -260,11 +230,6 @@ class StoreLayout:
         return self.root / MOSAICS_DIR
 
     @property
-    def mosaics_collection(self) -> Path | UPath:
-        """Collection document of the annual mosaic items."""
-        return self.mosaics / "collection.json"
-
-    @property
     def mosaics_index(self) -> Path | UPath:
         """Item mirror of the annual mosaic items, one row per year."""
         return self.mosaics / ITEMS_INDEX_NAME
@@ -281,20 +246,6 @@ class StoreLayout:
     def mosaic_item(self, year: int) -> Path | UPath:
         """Item document of one year's mosaics."""
         return self.mosaic_year(year) / "item.json"
-
-    @property
-    def styles(self) -> Path | UPath:
-        """MapLibre GL style assets of the mosaics collection."""
-        return self.mosaics / "styles"
-
-    def viz(self, year: int, asset_key: str) -> Path | UPath:
-        """One year's web-map archive of ``asset_key``, beside the COG it renders.
-
-        Same directory, different stem: ``coh12_vv_viz.pmtiles`` next to
-        ``coh12_vv.tif``. The archive is an asset of the year item with the
-        ``visual`` role.
-        """
-        return self.mosaic_year(year) / viz_filename(asset_key)
 
 
 def read_manifest(path: Path | UPath) -> pd.DataFrame:

@@ -108,7 +108,6 @@ def _empty_band_refused(tmp: Path) -> bool:
             vrt,
             tmp / "empty_out.tif",
             asset_key="rtc_vh_qa_cqm",
-            band_name="x",
         )
     except ValueError as error:
         return "rtc_vh_qa_cqm" in str(error)
@@ -134,7 +133,7 @@ def _overview_checks(tmp: Path) -> dict[str, bool]:
     vrt = tmp / "wide.vrt"
     with rasterio.open(source) as src:
         rasterio.shutil.copy(src, str(vrt), driver="VRT")
-    written = build_mosaic_cog(vrt, tmp / "wide_out.tif", asset_key="coh12_vv", band_name="x")
+    written = build_mosaic_cog(vrt, tmp / "wide_out.tif", asset_key="coh12_vv")
     with rasterio.open(written.path) as src:
         levels = src.overviews(1)
 
@@ -170,7 +169,6 @@ def main() -> int:
             _source(tmp),
             tmp / "out" / "coh12_vv.tif",
             asset_key="coh12_vv",
-            band_name="12-day repeat-pass coherence VV",
             tags={"COMPOSITING_METHOD": "LRW"},
         )
         # With PAM off, GDAL reads only the file's own header, as Portolan does.
@@ -200,7 +198,7 @@ def main() -> int:
         "no PAM sidecar was written beside the COG": not sidecars,
         "the dataset tags survive beside the band ones": dataset_tags.get("COMPOSITING_METHOD")
         == "LRW",
-        "the band description survives": description == "12-day repeat-pass coherence VV",
+        "the band description is the asset key": description == "coh12_vv",
         "the checksum is the multihash of the written bytes": written.checksum
         == "1220" + hashlib.sha256(payload).hexdigest(),
         "an all-nodata band is refused, by asset key": empty_refused,

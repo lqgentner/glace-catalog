@@ -577,27 +577,6 @@ def stage_tiles_styles(source_dir: Path, staged: Path, latest: int) -> dict[str,
     }
 
 
-def require_no_published_fractions(layout: stac.StoreLayout) -> None:
-    """Check that the glacier-fraction table is under its leading dot.
-
-    Publishing uploads every file without one, and the table is a build input,
-    not an asset: an old store would publish it unregistered.
-
-    Raises
-    ------
-    SystemExit
-        If ``tiles/glacier-fractions.parquet`` is in the store.
-    """
-    stray = layout.tiles / "glacier-fractions.parquet"
-    if stray.exists():
-        msg = (
-            f"{stray} would be published. Rename it to "
-            f"{layout.glacier_fractions.name} (on object storage, copy it there and "
-            "delete the original), then finalize again"
-        )
-        raise SystemExit(msg)
-
-
 def require_existing_thumbnails(layout: stac.StoreLayout) -> None:
     """Check that the store holds both thumbnails before ``--skip-thumbnail`` reuses them.
 
@@ -795,8 +774,6 @@ def main() -> None:
     layout = stac.StoreLayout(settings.store_root)
     years = built_years(layout)
     require_current_encodings(layout, years)
-    require_no_published_fractions(layout)
-
     tables = [read_year_index(layout, year) for year in years]
     require_current_year_indexes(tables, years)
     tile_count, versions = tiles_summary(tables)

@@ -398,9 +398,6 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     except ValueError:
         checks["a key without the suffix is refused"] = True
     layout = StoreLayout(Path("/store"))
-    checks["a rendering sits in its year's item directory"] = layout.viz(2024, "coh12_vv") == Path(
-        "/store/mosaics/2024/coh12_vv_viz.pmtiles"
-    )
     checks["the layout has no pmtiles directory"] = not hasattr(layout, "pmtiles")
     checks["visual_assets keys by rendering key"] = list(built) == [
         "coh12_vv_viz",

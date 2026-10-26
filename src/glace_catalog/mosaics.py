@@ -55,7 +55,6 @@ from glace_catalog.tiler import spawn_pool
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from contextlib import AbstractContextManager
 
     from rasterio.io import DatasetReader
 
@@ -198,7 +197,7 @@ class YearVrts:
         Step (4) per asset key, for the bands that have a decibel version.
     sources_at
         One of the tile paths the chain reads. The VRTs are local but their
-        sources may be remote; :func:`chain_env` uses this path to set up the
+        sources may be remote; :func:`sources_env` uses this path to set up the
         matching credentials.
     """
 
@@ -322,15 +321,6 @@ def sources_env(sources_at: Path | UPath | None) -> Generator[None]:
         yield
 
 
-def chain_env(vrts: YearVrts) -> AbstractContextManager[None]:
-    """Enter the environment the chain's sources need, if they are remote.
-
-    A local VRT path says nothing about where its sources live, so the
-    credentials are set around the read.
-    """
-    return sources_env(vrts.sources_at)
-
-
 def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
     """Exact statistics of a single-band source, computed block by block.
 
@@ -439,7 +429,6 @@ def build_mosaic_cog(
     out_path: Path,
     *,
     asset_key: str,
-    band_name: str,
     tags: Mapping[str, str] | None = None,
 ) -> MosaicWrite:
     """Write one fixed-grid VRT as a LERC_ZSTD mosaic COG.
@@ -461,9 +450,11 @@ def build_mosaic_cog(
     out_path
         Destination COG.
     asset_key
-        Band being written; selects the quantisation bound.
-    band_name
-        Description written onto the output band.
+        Band being written; selects the quantisation bound. It is also the band
+        description: each file has one band, so the asset key identifies it
+        even in a file separated from the catalog. The ``LAYER_DESCRIPTION``
+        tag explains how QA-NUM differs between tiles (counts) and mosaics
+        (means).
     tags
         Dataset tags, typically the tiles' provenance plus the composite date
         window.
@@ -483,7 +474,7 @@ def build_mosaic_cog(
             src_vrt,
             out_path,
             profile,
-            band_names=[band_name],
+            band_names=[asset_key],
             tags=tags,
             band_tags=[
                 {
@@ -503,7 +494,6 @@ def _write_mosaic_in_worker(
     out_path: Path,
     *,
     asset_key: str,
-    band_name: str,
     tags: Mapping[str, str] | None,
 ) -> MosaicWrite:
     """Run :func:`build_mosaic_cog` in a pool worker, with the sources' credentials."""
@@ -512,7 +502,6 @@ def _write_mosaic_in_worker(
             src_vrt,
             out_path,
             asset_key=asset_key,
-            band_name=band_name,
             tags=tags,
         )
 
@@ -521,7 +510,6 @@ def build_mosaic_cogs(
     vrts: YearVrts,
     out_dir: Path,
     *,
-    band_names: Mapping[str, str],
     tags: Mapping[str, Mapping[str, str]] | None = None,
     layers: Sequence[str] | None = None,
     workers: int = MOSAIC_WORKERS,
@@ -538,8 +526,6 @@ def build_mosaic_cogs(
         Chain built by :func:`build_year_vrts`.
     out_dir
         Local directory the COGs are written into, staged for one upload.
-    band_names
-        Band description per asset key.
     tags
         Dataset tags per asset key.
     layers
@@ -567,7 +553,6 @@ def build_mosaic_cogs(
                 vrts.linear[asset_key],
                 out_dir / published_name(asset_key),
                 asset_key=asset_key,
-                band_name=band_names.get(asset_key, asset_key),
                 tags=tags.get(asset_key),
             ): asset_key
             for asset_key in selected
@@ -582,16 +567,6 @@ def build_mosaic_cogs(
             pool.shutdown(cancel_futures=True)
             raise
     return {key: written[key] for key in selected}
-
-
-def mosaic_band_name(asset_key: str) -> str:
-    """Band description of a mosaic: its asset key.
-
-    Each file has one band, so the asset key identifies it, even in a file
-    separated from the catalog. The mosaic's ``LAYER_DESCRIPTION`` tag explains
-    how QA-NUM differs between tiles (counts) and mosaics (means).
-    """
-    return asset_key
 
 
 def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list[float]]:
@@ -629,10 +604,9 @@ __all__ = [
     "build_mosaic_cog",
     "build_mosaic_cogs",
     "build_year_vrts",
-    "chain_env",
     "data_footprint",
     "max_z_error",
-    "mosaic_band_name",
+    "sources_env",
     "zone_bounds",
     "zone_token",
 ]

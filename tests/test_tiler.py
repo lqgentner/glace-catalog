@@ -3,17 +3,15 @@
 
 The tiler is adapted from rio-pmtiles. This gate checks which tiles it
 enumerates, that it skips empty tiles and keeps edge tiles, and that it reads
-each tile at the right resolution. The last matters most. The tiler picks an
-overview level for each tile, and a choice carried over from one tile to the
-finer tiles after it would read max-zoom tiles from a coarser overview and
-upsample them. The archive would be valid, only blurred.
+each tile at full resolution. A tile read from an overview would be valid,
+only blurred.
 
 The test builds a synthetic RGBA raster with known pixels: a 0/255
 checkerboard on the z13 pixel grid, with one 2x2 block of tiles transparent. It
 tiles the raster twice, once as written and once with average overviews, which
-turn the checkerboard flat grey. Every z13 tile of both archives must be the
-checkerboard, the transparent block must be absent, and the enumeration must
-match the scope's grid. Tiles are PNG, so comparisons are exact.
+turn the checkerboard flat grey and which the tiler must not read. Every z13
+tile of both archives must be the checkerboard, the transparent block must be
+absent, and the enumeration must match the scope's grid. Tiles are PNG, so comparisons are exact.
 
 Writes only into a temporary directory, reads no data and needs no network.
 
@@ -23,6 +21,7 @@ Run: uv run tests/test_tiler.py
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -43,7 +42,6 @@ from glace_catalog.tiler import (
     spawn_pool,
     tile_bounds,
     tiles_covering,
-    worker_gdal_cache,
     write_archive,
 )
 
@@ -54,7 +52,7 @@ TILES_ACROSS = 4
 """The raster is this many z13 tiles on a side."""
 
 MIN_ZOOM = 9
-"""Deep enough below z13 that the tiler selects an overview where one exists."""
+"""Deep enough below z13 that an overview would serve the coarser tiles."""
 
 
 def write_source(path: Path, *, overviews: bool) -> None:
@@ -203,7 +201,7 @@ def check_declared_bounds(checks: dict[str, bool], source: Path, work: Path) -> 
         declared,
         min_zoom=MIN_ZOOM,
         max_zoom=MOSAIC_ZOOM,
-        spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format="PNG"),
+        spec=TileSpec(image_format="PNG"),
         name="bounds",
         bounds=bounds,
     )
@@ -232,7 +230,7 @@ def check_all_transparent_refused(work: Path) -> bool:
             work / "blank.pmtiles",
             min_zoom=MIN_ZOOM,
             max_zoom=MOSAIC_ZOOM,
-            spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format="PNG"),
+            spec=TileSpec(image_format="PNG"),
             name="blank",
         )
     except ValueError:
@@ -260,7 +258,7 @@ def main() -> int:
                 archive,
                 min_zoom=MIN_ZOOM,
                 max_zoom=MOSAIC_ZOOM,
-                spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format="PNG"),
+                spec=TileSpec(image_format="PNG"),
                 name=label,
                 attribution="test",
             )
@@ -275,7 +273,7 @@ def main() -> int:
     # Each worker sets a bounded GDAL cache. GDAL's default of 5 % of RAM per
     # process adds up quickly across a pool of workers.
     with spawn_pool(2) as pool:
-        caches = set(pool.map(worker_gdal_cache, range(4)))
+        caches = set(pool.map(os.getenv, ["GDAL_CACHEMAX"] * 4))
     checks["every tiler worker bounds its GDAL cache"] = caches == {str(WORKER_GDAL_CACHE_MB)}
 
     failed = [name for name, ok in checks.items() if not ok]

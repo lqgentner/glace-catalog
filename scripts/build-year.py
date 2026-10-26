@@ -286,13 +286,11 @@ def step_mosaics(
     frame: pd.DataFrame,
 ) -> dict[str, dict[str, Any]]:
     """Write and upload the year's twelve mosaic COGs; return their build-state details."""
-    band_names = {key: mosaics.mosaic_band_name(key) for key in chain.linear}
     tags = {key: mosaic_tags(frame, key) for key in chain.linear}
     with staging(args, "mosaics") as staged:
         written = mosaics.build_mosaic_cogs(
             chain,
             staged,
-            band_names=band_names,
             tags=tags,
             layers=args.layers,
             workers=args.mosaic_workers,
@@ -634,14 +632,12 @@ def main() -> None:
     prints = {
         "copy": copy_print,
         "vrt": copy_print,
-        # Band names are written into the COGs, so renaming one rebuilds them.
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
             mosaics.MAX_Z_ERROR,
             mosaics.COG_CREATION,
             args.layers,
-            [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
         # The encoding ranges, tile format, quality and tiler version decide the
         # archive bytes, so changing any of them rebuilds the archives. Colour

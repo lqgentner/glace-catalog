@@ -277,27 +277,6 @@ def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
         checks["a stale render stops finalization"] = "default.json" in str(error)
 
 
-def check_no_published_fractions(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
-    """Check that a fraction table without the leading dot stops finalization."""
-    layout = stac.StoreLayout(work / "fractions-store")
-    tiles = Path(str(layout.tiles))
-    tiles.mkdir(parents=True)
-    (tiles / ".glacier-fractions.parquet").write_bytes(b"")
-    try:
-        fin.require_no_published_fractions(layout)
-        checks["the dot-prefixed fraction table is accepted"] = True
-    except SystemExit:
-        checks["the dot-prefixed fraction table is accepted"] = False
-    (tiles / "glacier-fractions.parquet").write_bytes(b"")
-    try:
-        fin.require_no_published_fractions(layout)
-        checks["a fraction table publishing would upload stops finalization"] = False
-    except SystemExit as error:
-        checks["a fraction table publishing would upload stops finalization"] = (
-            ".glacier-fractions.parquet" in str(error)
-        )
-
-
 def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
     """Check that the grid asset records the size of the archive in the store."""
     layout = stac.StoreLayout(store)
@@ -496,7 +475,6 @@ def main() -> int:
         check_skip_thumbnail(checks, fin, store)
         check_render(checks, fin, work)
         check_encodings(checks, fin, store)
-        check_no_published_fractions(checks, fin, work)
         check_grid_stamping(checks, fin, store)
         check_mirror_description(checks, fin, store)
         check_grid_style_staged(checks, fin, work)
