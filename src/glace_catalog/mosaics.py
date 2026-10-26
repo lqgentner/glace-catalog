@@ -21,7 +21,8 @@ Both grids use these filenames, ``webm13`` included, and write their chains to
 separate directories.
 
 Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles. The VRTs
-are local scratch files with absolute ``/vsis3/`` sources, rebuilt in seconds.
+are local scratch files, rebuilt in seconds. They name remote tiles by absolute
+``/vsis3/`` paths and local files relative to the VRT, so a chain is not moved.
 The published record of a run is its manifest, configuration and products.
 """
 

@@ -176,9 +176,9 @@ a measurement whose `valid_percent` is missing or 0.
 | **D-4** `manifest.parquet` | Every Alpine year's `copy` step reports zero mismatches, and the `file:checksum` of the 2026 item `32TMS24` and of the 2026 mosaics verify under `rashid check --data`. Verified 2026-10-16 |
 | the pass-direction tag | `PASS_DIRECTION` (CEOS-ARD PFS SAR wording), published as `glace:pass_direction`. 2026-09-04 |
 | **F-2** `subprocess_s3_env` | In `freezebase/s3.py`, beside `s3_env`. 2026-09-04 |
-| **F-3** the VRT helpers | `freezebase/vrt.py`, released in freezebase 0.7.0 on 2026-09-04 and used by the mosaic chain |
+| **F-3** the VRT helpers | Released in freezebase 0.7.0 on 2026-09-04 and used by the mosaic chain; rebuilt on the `freezebase.vrt` package in 0.9.0 |
 | **F-4** releases instead of editable overrides | freezebase 0.7.0 and s1bursts 0.5.0 are on PyPI; this repository has no `[tool.uv.sources]`. 2026-09-08 |
-| **F-5** `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for`, `file_sha256(UPath)`, the profile-configured endpoint in `s3_env` | Released in freezebase 0.7.1 on 2026-09-08; this repository requires `freezebase[s3]>=0.7.1,<0.8` |
+| **F-5** `S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for`, `file_sha256(UPath)`, the profile-configured endpoint in `s3_env` | Released in freezebase 0.7.1 on 2026-09-08; this repository requires `freezebase[s3]>=0.10,<0.11` |
 | **D-2** the pipeline copied out of `deep-glacier-mapping` | Lives only in `deep-glacier-mapping`; `rasterize-labels.py`, `derive-glacier-fractions.py` and `export-inventories.py` are under its `scripts/inventories/`. 2026-09-05 |
 
 s1bursts is not a dependency of this repository; it writes the files this

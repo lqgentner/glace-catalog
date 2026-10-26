@@ -239,7 +239,8 @@ def _staging_checks() -> dict[str, bool]:
 
 def _footprint_checks() -> dict[str, bool]:
     """Check the mosaic footprint of a block of tiles that spans two UTM zones."""
-    tiles = [f"31TGK{e}{n}" for e in "789" for n in "012"] + ["32TLQ02", "32TLQ12"]
+    # Alpine perimeter tiles on both sides of 6°E, where zones 31 and 32 overlap.
+    tiles = [f"31TGK{e}{n}" for e in "123" for n in "012"] + ["32TKQ60", "32TKQ61"]
     files = [
         file
         for tile in tiles

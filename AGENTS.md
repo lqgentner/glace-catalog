@@ -297,6 +297,8 @@ it defines their tasks and validation requirements.
   repository only reads its output files.
 - `../freezebase`: geospatial and IO helpers, including the VRT chain.
 
-Use `freezebase` from PyPI at `>=0.7.1,<0.8`, the range that provides
-`S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and
-profile endpoints. Keep `uv.lock` tracked and do not use editable installs.
+Use `freezebase` from PyPI at `>=0.10,<0.11`. It provides `S3Settings`,
+`list_object_sizes`, `atomic_write_text`, `content_type_for` and profile
+endpoints, and its VRT helpers write local sources relative to the VRT, so a
+chain must not be moved. `MGRSGeoBox.from_mgrs` refuses a tile code that lies
+outside its UTM zone. Keep `uv.lock` tracked and do not use editable installs.
