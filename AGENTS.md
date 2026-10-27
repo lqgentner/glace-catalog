@@ -52,7 +52,7 @@ Preserve these rules:
 - Collections contain their items: `tiles/{year}/{tile}/item.json`.
   Year catalogs sit below collections and only group items.
 - Assets belong to collections and items only. Run manifests and
-  configurations stay beside the source archive and are never published (M-32).
+  configurations stay beside the source archive and are never published.
 - Structural links, item asset hrefs and the collections' style asset hrefs are
   relative. The other collection asset hrefs and the hrefs in `items.parquet`
   are absolute HTTPS; `s3://` hrefs appear only in the `alternate` extension.
@@ -119,15 +119,17 @@ Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
       --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
-Every year reuses this lookup, so a tile's glacier fraction stays constant.
-The build checks that the table names the scope's inventory and buffer
-(`src/glace_catalog/scopes.py`). The leading dot keeps the table out of the
-upload: the items and the tile grid carry its values.
+Every year reuses this lookup, so a tile's glacier fraction stays constant. Its
+columns are `mgrs_code`, `glacier_fraction`, `glacier_fraction_buffered`,
+`rgi_version` and `buffer_m`. The build checks that the table names the scope's
+inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
+tile rather than computing a fallback. The leading dot keeps the table out of
+the upload: the items and the tile grid carry its values.
 
 ### 2. Build each year
 
 The source archive must contain `manifest.parquet`, one row per file, written
-by the composite run in `deep-glacier-mapping` (`docs/UPSTREAM.md` D-4). Source
+by the composite run in `deep-glacier-mapping` (`docs/DESIGN.md` §5). Source
 manifests come only from that run: to add a missing one, rerun the upstream
 year, which skips complete tiles and describes and hashes their files.
 
@@ -287,11 +289,10 @@ moves, add the old prefix to its `RETIRED_PREFIXES`.
 
 ## Related repositories
 
-Read [docs/UPSTREAM.md](docs/UPSTREAM.md) before working in these repositories;
-it defines their tasks and validation requirements.
+They share files, not imports (`docs/DESIGN.md` §5).
 
-- `../deep-glacier-mapping`: composite production, labels, ML and run manifests
-  (M-31, D-4).
+- `../deep-glacier-mapping`: composite production, labels and ML. Its
+  composite run writes the source archives and their manifests.
 - `../s1bursts`: Sentinel-1 processing. Its COG writer (0.5.0 and later)
   embeds band statistics (`PTL-DAT-009`) and computes checksums. This
   repository only reads its output files.

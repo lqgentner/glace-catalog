@@ -1,7 +1,7 @@
 """The MGRS tile grid and the glacier fractions it carries.
 
 deep-glacier-mapping computes each tile's glacier fractions once per scope
-(UPSTREAM.md D-1) and writes them to a table in the store. The build copies
+(AGENTS.md step 1) and writes them to a table in the store. The build copies
 them onto every tile item; the table itself is a build input and is not
 published.
 

@@ -42,7 +42,7 @@ publish base: about ten hours for the Alps. It reads that base from the root
 catalog's `self` link, so `make conformance-live` mirrors the documents
 without it (`tools/mirror_docs.py --drop-self`).
 
-The last run over the published catalog, on 2026-10-22 over the Alpine years
+The last run over the published catalog, on 2026-10-27 over the Alpine years
 2015–2026 (`make conformance-live`, 26 545 files, rashid 0.3.0, every
 extension schema), gave 0 errors and only the twelve `PTL-CAT-001` warnings
 accepted below.
@@ -69,7 +69,7 @@ published one, which is worse than a finding whose cause is written down.
 
 | Requirement | Where | Why accepted | Tracking |
 |---|---|---|---|
-| `PORTO-FMT-011`, `PORTO-FMT-012` | mosaics collection, built tree | The web-map archives are item assets with the `visual` role and the collection does not link them. | none yet |
+| `PORTO-FMT-011`, `PORTO-FMT-012` | mosaics collection, built tree | The web-map archives are item assets with the `visual` role and the collection does not link them. | none |
 
 *"A PMTiles file … MUST be registered through a collection-level
 `rel: "pmtiles"` link."* The rule is written for a vector collection, which has
@@ -80,8 +80,9 @@ links they would form a list that long on the collection page.
 rashid does not report the omission: `PTL-VIZ-003` checks only a collection
 that carries a PMTiles asset or link, and the mosaics collection carries
 neither. The tiles collection conforms: its one archive, the tile grid, is a
-`visual` asset with a `rel: "pmtiles"` link and a style (M-38). So the `ACCEPTED` list in `tests/test_conformance.py` does not include
-it; it is recorded here so that a clean run is not read as conformance.
+`visual` asset with a `rel: "pmtiles"` link and a style. So the `ACCEPTED` list
+in `tests/test_conformance.py` does not include it; it is recorded here so that
+a clean run is not read as conformance.
 
 The archives are still fully described. Each year's item lists its archives as
 assets, with size and checksum. Each year's style draws the archive
@@ -92,7 +93,7 @@ refuses a store holding an archive its year's style does not draw.
 
 | Requirement | Where | Why accepted | Tracking |
 |---|---|---|---|
-| `PORTO-CORE-069` | mosaics collection and its items, built tree | Each year's style is an asset of that year's mosaic item; the collection registers one style, the latest year's. | spec issue drafted, not raised |
+| `PORTO-CORE-069` | mosaics collection and its items, built tree | Each year's style is an asset of that year's mosaic item; the collection registers one style, the latest year's. | none |
 
 *"Style files are STAC assets: each style MUST be registered as a
 collection-level asset carrying the `style` role."* A year style draws only
@@ -184,7 +185,7 @@ Where stac-check and rashid disagree, **rashid wins**.
 ## Requirements Proved Elsewhere
 
 These rules need more than the tracked metadata to check. Each is listed with
-what satisfies it; open work is tracked in [`STATUS.md`](STATUS.md).
+what satisfies it.
 
 | Rule | Requirement | State |
 |---|---|---|
@@ -192,4 +193,4 @@ what satisfies it; open work is tracked in [`STATUS.md`](STATUS.md).
 | `PTL-DAT-010` | a COG band with nodata declares its valid percent | **Satisfied for both writers**, from the same headers and the same pass. The build keys the QA-NUM count to the data asset it counts for; every mosaic band is float32 with NaN nodata |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **Implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **Implemented and gated** through rashid's `_check_mirror`, over in-memory catalogs of 400 and 800 items |
-| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `rashid check --live` over the Swiss test catalog, 2026-09-08, 0 errors |
+| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `make conformance-live` over the published catalog, 2026-10-27, 0 errors |

@@ -1,4 +1,4 @@
-# Citation metadata for the GLACE dataset, read by GitHub (R-16). `version`
+# Citation metadata for the GLACE dataset, read by GitHub (docs/DESIGN.md §7). `version`
 # is one string with DATASET_VERSION and the two collection documents;
 # tests/test_version.py enforces that. `date-released` is written in the release commit itself.
 cff-version: 1.2.0

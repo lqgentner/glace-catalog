@@ -21,7 +21,7 @@ jobs:
           enable-cache: true
 
       # --locked fails rather than re-resolving when uv.lock and pyproject.toml
-      # have drifted apart (R-15). --all-groups adds dev and validate; only
+      # have drifted apart. --all-groups adds dev and validate; only
       # stac-check stays unpinned, so CI takes the release that fixes the crash
       # docs/conformance.md tolerates.
       - name: Install the locked environment

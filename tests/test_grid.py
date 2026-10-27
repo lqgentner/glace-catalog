@@ -2,7 +2,7 @@
 """Checks the tile grid: its fraction input and the archive built from it.
 
 The build reads each tile's glacier fractions from a table that
-deep-glacier-mapping writes once per scope (UPSTREAM.md D-1). The table pins
+deep-glacier-mapping writes once per scope (AGENTS.md step 1). The table pins
 one inventory and one buffer, and a table computed with others would give the
 items different values from the ones the catalog describes, so reading it
 checks both against the scope.

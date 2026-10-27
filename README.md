@@ -28,8 +28,8 @@ This repository holds the metadata of the **GLACE** STAC catalog on
 that builds and publishes it. The catalog follows the
 [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
-> **Not yet published.** The metadata here describes **`glace-alps`**, ahead
-> of its publication. [`docs/STATUS.md`](docs/STATUS.md) lists the open work.
+> **Not yet listed.** **`glace-alps`** is published on Source Cooperative;
+> its DOIs are registered once it is listed at LaRS.
 
 Keeping the metadata on GitHub lets anyone review its history, cite a release
 and report errors as issues.
@@ -42,7 +42,7 @@ scripts/            the build commands, incl. render-catalog.py
 tools/              publish.py, which uploads the built store; mirror_docs.py
 Makefile            the commands: make lists them
 tests/              the gates, incl. rashid conformance
-docs/               DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
+docs/               DESIGN.md, conformance.md
 ```
 
 ## Quick start
