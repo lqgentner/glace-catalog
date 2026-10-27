@@ -61,9 +61,6 @@ MGRS_EXTENSION_URI = "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
 GRID_EXTENSION_URI = "https://stac-extensions.github.io/grid/v1.1.0/schema.json"
 SAR_EXTENSION_URI = "https://stac-extensions.github.io/sar/v1.3.2/schema.json"
 PROJECTION_EXTENSION_URI = "https://stac-extensions.github.io/projection/v2.0.0/schema.json"
-CLASSIFICATION_EXTENSION_URI = (
-    "https://stac-extensions.github.io/classification/v2.0.0/schema.json"
-)
 RASTER_EXTENSION_URI = "https://stac-extensions.github.io/raster/v2.0.0/schema.json"
 FILE_EXTENSION_URI = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
 PROCESSING_EXTENSION_URI = "https://stac-extensions.github.io/processing/v1.2.0/schema.json"

@@ -37,7 +37,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import sys
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from botocore.exceptions import BotoCoreError, ClientError
 from freezebase.s3 import content_type_for as default_content_type_for
@@ -50,6 +50,8 @@ from glace_catalog.config import settings
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from fsspec.spec import AbstractBufferedFile
 
 ROOT = Path(__file__).resolve().parent.parent
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
@@ -336,26 +338,6 @@ def list_subtree(root: UPath, subtree: str) -> dict[str, Entry]:
     return {f"{subtree}/{name}": entry for name, entry in listed.items()}
 
 
-class TwoPhaseFile(Protocol):
-    """A write handle whose close uploads and whose commit publishes."""
-
-    def write(self, data: bytes, /) -> int:
-        """Buffer bytes, uploading a part when the buffer fills."""
-        ...
-
-    def close(self) -> None:
-        """Upload what is left in the buffer."""
-        ...
-
-    def commit(self) -> None:
-        """Complete the object."""
-        ...
-
-    def discard(self) -> None:
-        """Abort the upload."""
-        ...
-
-
 def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
     """Stream one object from the store to Source Cooperative.
 
@@ -376,7 +358,7 @@ def transfer_one(source_root: UPath, target_root: UPath, relative: str) -> None:
         # fsspec types the handle as a plain binary file; S3File, like every
         # AbstractBufferedFile, also provides commit and discard.
         writer = cast(
-            "TwoPhaseFile",
+            "AbstractBufferedFile",
             writer_path.open("wb", ContentType=content_type_for(relative), autocommit=False),
         )
         try:

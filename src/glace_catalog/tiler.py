@@ -9,8 +9,9 @@ from Sean Gillies's rio-mbtiles.
 The tiles of every layer in a year are rendered in one shared
 :class:`~concurrent.futures.ProcessPoolExecutor`, and archives are written by
 :class:`pmtiles.writer.Writer` from the PMTiles package. This module warps
-single tiles and lists which tiles to warp. :func:`render_tile` chooses the
-overview level separately for each tile.
+single tiles and lists which tiles to warp. Every tile is warped from the
+source's full resolution; the sources this repository tiles carry no
+overviews.
 
 The reprojection call and image creation options follow rio-pmtiles, with
 three differences, each explained where it applies: tile images declare no
@@ -69,13 +70,6 @@ LOSSY_FORMATS = frozenset({"WEBP"})
 EDGE_EPS = 1e-6
 """Tolerance for an edge to count as lying on a boundary, in tiles or in pixels."""
 
-OVERSAMPLING_FACTOR = 4
-"""Minimum number of source pixels per tile pixel, along each axis.
-
-A tile is read from an overview only if the overview still provides this many
-source pixels per tile pixel (the rule rio-pmtiles uses).
-"""
-
 
 @dataclass(frozen=True)
 class TileSpec:
@@ -83,9 +77,6 @@ class TileSpec:
 
     Parameters
     ----------
-    max_zoom
-        Zoom the source's full resolution serves. Coarser tiles may be read
-        from an overview of the source, if it carries any.
     tile_size
         Side of one tile, in pixels.
     image_format
@@ -94,16 +85,12 @@ class TileSpec:
         Encoder quality for the lossy formats.
     resampling
         Warp kernel.
-    exclude_empty
-        Skip a tile whose source window holds no valid pixel at all.
     """
 
-    max_zoom: int
     tile_size: int = TILE_PX
     image_format: str = "WEBP"
     quality: int = 90
     resampling: Resampling = Resampling.average
-    exclude_empty: bool = True
 
 
 def tile_bounds(zoom: int, x: int, y: int) -> tuple[float, float, float, float]:
@@ -139,35 +126,18 @@ def tiles_covering(
     return sorted(ids)
 
 
-_datasets: dict[tuple[str, int | None], rasterio.DatasetReader] = {}
-"""Open sources of this worker process, keyed by path and overview level.
+_datasets: dict[str, rasterio.DatasetReader] = {}
+"""Open sources of this worker process, keyed by path.
 
 They stay open across tiles, so each worker reads a file's header once.
 """
 
 
-def _open(path: str, overview_level: int | None) -> rasterio.DatasetReader:
-    """Open ``path`` at one overview level, once per worker process."""
-    key = (path, overview_level)
-    if key not in _datasets:
-        options = {} if overview_level is None else {"OVERVIEW_LEVEL": overview_level}
-        _datasets[key] = rasterio.open(path, **options)
-    return _datasets[key]
-
-
-def _overview_level(overviews: list[int], zoom: int, max_zoom: int) -> int | None:
-    """Overview to read a tile at ``zoom`` from, or ``None`` for full resolution.
-
-    Picks the coarsest overview that still oversamples the tile by
-    :data:`OVERSAMPLING_FACTOR`.
-    """
-    if not overviews or zoom >= max_zoom:
-        return None
-    target = 2 ** (max_zoom - zoom) / OVERSAMPLING_FACTOR
-    candidates = [
-        (abs(factor - target), i) for i, factor in enumerate(overviews) if factor <= target
-    ]
-    return min(candidates)[1] if candidates else None
+def _open(path: str) -> rasterio.DatasetReader:
+    """Open ``path`` once per worker process."""
+    if path not in _datasets:
+        _datasets[path] = rasterio.open(path)
+    return _datasets[path]
 
 
 def _footprint_is_empty(
@@ -208,11 +178,10 @@ def render_tile(path: str, tile_id: int, *, spec: TileSpec) -> tuple[int, bytes 
     pixels stay nodata despite compression artefacts at a data edge.
     """
     zoom, x, y = tileid_to_zxy(tile_id)
-    level = _overview_level(_open(path, None).overviews(1), zoom, spec.max_zoom)
-    src = _open(path, level)
+    src = _open(path)
     left, bottom, right, top = tile_bounds(zoom, x, y)
 
-    if spec.exclude_empty and _footprint_is_empty(src, (left, bottom, right, top)):
+    if _footprint_is_empty(src, (left, bottom, right, top)):
         return tile_id, None
 
     # The alpha band marks the data, so the tile declares no nodata value and
@@ -278,11 +247,6 @@ def _configure_worker(cache_mb: int, log_level: int) -> None:
     os.environ.setdefault("GDAL_CACHEMAX", str(cache_mb))
     logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
     atexit.register(_close_datasets)
-
-
-def worker_gdal_cache(_: int = 0) -> str:
-    """Report a worker's GDAL cache setting; tests map it over a pool."""
-    return os.environ.get("GDAL_CACHEMAX", "unset")
 
 
 def spawn_pool(
@@ -428,7 +392,6 @@ def _header_bounds(bounds: Sequence[float]) -> dict[str, int]:
 __all__ = [
     "EDGE_EPS",
     "LOSSY_FORMATS",
-    "OVERSAMPLING_FACTOR",
     "TILE_TYPES",
     "WRITER",
     "TileSpec",
@@ -436,6 +399,5 @@ __all__ = [
     "spawn_pool",
     "tile_bounds",
     "tiles_covering",
-    "worker_gdal_cache",
     "write_archive",
 ]

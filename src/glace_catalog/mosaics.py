@@ -15,13 +15,18 @@ The chain, per year, band ``B`` and UTM zone ``Z``::
     1  {B}_{Z}.vrt            10 m UTM mosaic of that zone's tiles
     2  {B}_{Z}_webm13.vrt     (1) warped onto the target grid, average
     3  {B}_webm13.vrt         (2) for every zone, on the scope's fixed extent
-    4  {B}_webm13_db.vrt      (3) in decibels; RTC and QA-CQM only
+    4  {B}_webm13_db.vrt      (3) in decibels, for the web maps of the layers
+                              ``metadata/assets.yaml`` displays in decibels
 
 Both grids use these filenames, ``webm13`` included, and write their chains to
-separate directories.
+separate directories. All published rasters are linear, so warps and COG
+overviews average in the linear domain, where averages are physically
+meaningful.
 
-Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles. The VRTs
-are local scratch files with absolute ``/vsis3/`` sources, rebuilt in seconds.
+Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles; the web-map
+build writes (4) itself. The VRTs
+are local scratch files, rebuilt in seconds. They name remote tiles by absolute
+``/vsis3/`` paths and local files relative to the VRT, so a chain is not moved.
 The published record of a run is its manifest, configuration and products.
 """
 
@@ -35,29 +40,25 @@ import logging
 import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from xml.etree import ElementTree as ET
 
-import defusedxml.ElementTree as DefusedET
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
-from freezebase.raster import get_utm_zone_string, rasterio_open
+from freezebase.raster import get_utm_zone_string, rasterio_open, write_cog
 from freezebase.s3 import s3_env
-from freezebase.vrt import build_vrt_mosaic, create_decibel_vrt, create_warped_vrt
+from freezebase.vrt import build_vrt_mosaic, create_warped_vrt
 import numpy as np
+import rasterio
 from rasterio.enums import Resampling
-import rasterio.shutil
 from rasterio.warp import transform_bounds
 from upath import UPath
 
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
 from glace_catalog.stac.items import GEOMETRY_SIMPLIFY_DEG
 from glace_catalog.stac.naming import published_name
-from glace_catalog.stac.store import multihash_sha256_file
 from glace_catalog.stac.tags import BandStatistics
 from glace_catalog.tiler import spawn_pool
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from contextlib import AbstractContextManager
 
     from rasterio.io import DatasetReader
 
@@ -88,31 +89,13 @@ strongly correlated through their estimation windows, so averaging them into a
 mosaic pixel reduces the noise only slightly.
 """
 
-DECIBEL_BANDS: tuple[str, ...] = (
-    "rtc_vv",
-    "rtc_vh",
-    "coh12_vv_qa_cqm",
-    "coh12_vh_qa_cqm",
-    "rtc_vv_qa_cqm",
-    "rtc_vh_qa_cqm",
-)
-"""Bands with a decibel version, used only for the web maps.
-
-All published rasters are linear, so warps and COG overviews average in the
-linear domain, where averages are physically meaningful. Viewers convert to
-decibels for display.
-"""
-
 COG_CREATION = {
-    "driver": "COG",
-    "BLOCKSIZE": TILE_PX,
-    "COMPRESS": "LERC_ZSTD",
-    "LEVEL": 9,
-    "OVERVIEW_RESAMPLING": "AVERAGE",
-    "BIGTIFF": "IF_SAFER",
-    "NUM_THREADS": "ALL_CPUS",
+    "blocksize": TILE_PX,
+    "compress": "LERC_ZSTD",
+    "level": 9,
+    "overview_resampling": "AVERAGE",
 }
-"""COG creation options of an annual mosaic.
+"""COG creation options of an annual mosaic, as :func:`freezebase.raster.write_cog` takes them.
 
 ``AVERAGE`` overviews make each reduced level the mean of the level above.
 """
@@ -199,16 +182,13 @@ class YearVrts:
     linear
         Step (3) per asset key: the fixed-grid mosaic every published product
         is written from.
-    decibel
-        Step (4) per asset key, for the bands that have a decibel version.
     sources_at
         One of the tile paths the chain reads. The VRTs are local but their
-        sources may be remote; :func:`chain_env` uses this path to set up the
+        sources may be remote; :func:`sources_env` uses this path to set up the
         matching credentials.
     """
 
     linear: dict[str, Path | UPath]
-    decibel: dict[str, Path]
     sources_at: Path | UPath | None = None
 
 
@@ -251,7 +231,6 @@ def build_year_vrts(
     vrt_dir: Path,
     *,
     grid: Grid | None = None,
-    decibel: bool = True,
 ) -> YearVrts:
     """Build the whole VRT chain for one year's composites.
 
@@ -268,8 +247,6 @@ def build_year_vrts(
         tiles.
     vrt_dir
         Local scratch directory the chain is written into.
-    decibel
-        Also build step (4), the decibel VRTs.
 
     Returns
     -------
@@ -303,16 +280,8 @@ def build_year_vrts(
     for path in linear.values():
         logger.info("Built %s", Path(str(path)).name)
 
-    decibels: dict[str, Path] = {}
-    if decibel:
-        for asset_key in sorted(set(DECIBEL_BANDS) & set(linear)):
-            db_vrt = vrt_dir / f"{asset_key}_webm{MOSAIC_ZOOM}_db.vrt"
-            create_decibel_vrt(linear[asset_key], db_vrt)
-            decibels[asset_key] = db_vrt
-
     return YearVrts(
         linear=linear,
-        decibel=decibels,
         sources_at=files[0].path if files else None,
     )
 
@@ -325,79 +294,6 @@ def sources_env(sources_at: Path | UPath | None) -> Generator[None]:
             yield
     else:
         yield
-
-
-def chain_env(vrts: YearVrts) -> AbstractContextManager[None]:
-    """Enter the environment the chain's sources need, if they are remote.
-
-    A local VRT path says nothing about where its sources live, so the
-    credentials are set around the read.
-    """
-    return sources_env(vrts.sources_at)
-
-
-def _parse_vrt(text: str) -> ET.Element:
-    """Parse VRT XML with ``defusedxml``.
-
-    VRTs are read back from the store, so they are treated as untrusted input;
-    ``defusedxml`` rejects entity-expansion and external-entity attacks. XML is
-    built and written with ``xml.etree.ElementTree``, because ``defusedxml``
-    only parses.
-    """
-    return DefusedET.fromstring(text)
-
-
-def tagged_vrt(
-    src_vrt: Path | UPath,
-    dst_vrt: Path,
-    *,
-    band_name: str,
-    tags: Mapping[str, str] | None = None,
-    band_tags: Mapping[str, str] | None = None,
-) -> Path:
-    """Copy a VRT with dataset tags, band tags and a band description attached.
-
-    The tags go on the source VRT because GDAL copies a VRT's metadata into the
-    file written from it, and adding tags to a finished COG would break its
-    cloud-optimized layout.
-
-    Parameters
-    ----------
-    src_vrt, dst_vrt
-        VRT read, and the tagged copy written.
-    band_name
-        Description written onto the first band.
-    tags
-        Dataset-level metadata.
-    band_tags
-        Metadata of the first band, where Portolan requires the
-        ``STATISTICS_*`` values.
-
-    Returns
-    -------
-    pathlib.Path
-        The tagged VRT.
-    """
-    root = _parse_vrt(UPath(src_vrt).read_text())
-    if tags:
-        metadata = ET.Element("Metadata")
-        for key, value in sorted(tags.items()):
-            ET.SubElement(metadata, "MDI", key=key).text = str(value)
-        root.insert(0, metadata)
-    band = root.find("VRTRasterBand")
-    if band is not None:
-        if band_tags:
-            metadata = ET.Element("Metadata")
-            for key, value in sorted(band_tags.items()):
-                ET.SubElement(metadata, "MDI", key=key).text = str(value)
-            band.insert(0, metadata)
-        description = band.find("Description")
-        if description is None:
-            description = ET.SubElement(band, "Description")
-        description.text = band_name
-    ET.indent(root)
-    dst_vrt.write_text(ET.tostring(root, encoding="unicode"))
-    return dst_vrt
 
 
 def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
@@ -508,15 +404,15 @@ def build_mosaic_cog(
     out_path: Path,
     *,
     asset_key: str,
-    band_name: str,
     tags: Mapping[str, str] | None = None,
 ) -> MosaicWrite:
     """Write one fixed-grid VRT as a LERC_ZSTD mosaic COG.
 
-    The VRT is copied block by block, so memory use stays small. Its statistics
-    are computed in a separate streaming pass and written onto the VRT band
-    before the copy, so they end up in the COG's own ``GDAL_METADATA`` header,
-    as Portolan rule ``PTL-DAT-009`` requires.
+    :func:`freezebase.raster.write_cog` streams the VRT into the COG block by
+    block, so memory use stays small. The statistics are computed in a separate
+    streaming pass beforehand and written as band tags, so they end up in the
+    COG's own ``GDAL_METADATA`` header, as Portolan rule ``PTL-DAT-009``
+    requires.
 
     They are statistics of the source values. The written pixels differ from
     them by at most the LERC bound :func:`max_z_error`, far below each
@@ -529,13 +425,14 @@ def build_mosaic_cog(
     out_path
         Destination COG.
     asset_key
-        Band being written; selects the quantisation bound.
-    band_name
-        Description written onto the output band.
+        Band being written; selects the quantisation bound. It is also the band
+        description: each file has one band, so the asset key identifies it
+        even in a file separated from the catalog. The ``LAYER_DESCRIPTION``
+        tag explains how QA-NUM differs between tiles (counts) and mosaics
+        (means).
     tags
         Dataset tags, typically the tiles' provenance plus the composite date
-        window. They are attached to the VRT before the copy (see
-        :func:`tagged_vrt`).
+        window.
 
     Returns
     -------
@@ -543,27 +440,27 @@ def build_mosaic_cog(
         The path written, its digest and its band statistics.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    creation = {**COG_CREATION, "MAX_Z_ERROR": max_z_error(asset_key)}
-    logger.info("Writing %s (max_z_error %g)", out_path.name, creation["MAX_Z_ERROR"])
+    profile = {**COG_CREATION, "max_z_error": max_z_error(asset_key)}
+    logger.info("Writing %s (max_z_error %g)", out_path.name, profile["max_z_error"])
     with rasterio_open(src_vrt) as src:
         statistics = band_statistics(src, asset_key=asset_key)
-    described = tagged_vrt(
-        src_vrt,
-        Path(str(src_vrt)).with_name(f"{Path(str(src_vrt)).stem}_tagged.vrt"),
-        band_name=band_name,
-        tags=tags,
-        band_tags={
-            tag: repr(float(getattr(statistics, field))) for field, tag in STATISTICS_TAGS.items()
-        },
-    )
-    with rasterio_open(described) as src:
-        rasterio.shutil.copy(src, str(out_path), **creation)
+    with rasterio.Env(GDAL_NUM_THREADS="ALL_CPUS"):
+        checksum = write_cog(
+            src_vrt,
+            out_path,
+            profile,
+            band_names=[asset_key],
+            tags=tags,
+            band_tags=[
+                {
+                    tag: repr(float(getattr(statistics, field)))
+                    for field, tag in STATISTICS_TAGS.items()
+                }
+            ],
+            checksum=True,
+        )
     require_overviews(out_path)
-    return MosaicWrite(
-        path=out_path,
-        checksum=multihash_sha256_file(out_path),
-        statistics=statistics,
-    )
+    return MosaicWrite(path=out_path, checksum=checksum, statistics=statistics)
 
 
 def _write_mosaic_in_worker(
@@ -572,7 +469,6 @@ def _write_mosaic_in_worker(
     out_path: Path,
     *,
     asset_key: str,
-    band_name: str,
     tags: Mapping[str, str] | None,
 ) -> MosaicWrite:
     """Run :func:`build_mosaic_cog` in a pool worker, with the sources' credentials."""
@@ -581,7 +477,6 @@ def _write_mosaic_in_worker(
             src_vrt,
             out_path,
             asset_key=asset_key,
-            band_name=band_name,
             tags=tags,
         )
 
@@ -590,7 +485,6 @@ def build_mosaic_cogs(
     vrts: YearVrts,
     out_dir: Path,
     *,
-    band_names: Mapping[str, str],
     tags: Mapping[str, Mapping[str, str]] | None = None,
     layers: Sequence[str] | None = None,
     workers: int = MOSAIC_WORKERS,
@@ -607,8 +501,6 @@ def build_mosaic_cogs(
         Chain built by :func:`build_year_vrts`.
     out_dir
         Local directory the COGs are written into, staged for one upload.
-    band_names
-        Band description per asset key.
     tags
         Dataset tags per asset key.
     layers
@@ -636,7 +528,6 @@ def build_mosaic_cogs(
                 vrts.linear[asset_key],
                 out_dir / published_name(asset_key),
                 asset_key=asset_key,
-                band_name=band_names.get(asset_key, asset_key),
                 tags=tags.get(asset_key),
             ): asset_key
             for asset_key in selected
@@ -651,16 +542,6 @@ def build_mosaic_cogs(
             pool.shutdown(cancel_futures=True)
             raise
     return {key: written[key] for key in selected}
-
-
-def mosaic_band_name(asset_key: str) -> str:
-    """Band description of a mosaic: its asset key.
-
-    Each file has one band, so the asset key identifies it, even in a file
-    separated from the catalog. The mosaic's ``LAYER_DESCRIPTION`` tag explains
-    how QA-NUM differs between tiles (counts) and mosaics (means).
-    """
-    return asset_key
 
 
 def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list[float]]:
@@ -689,7 +570,6 @@ def data_footprint(files: Sequence[CompositeFile]) -> tuple[dict[str, Any], list
 
 __all__ = [
     "COG_CREATION",
-    "DECIBEL_BANDS",
     "MAX_Z_ERROR",
     "STATISTICS_TAGS",
     "MosaicWrite",
@@ -698,10 +578,9 @@ __all__ = [
     "build_mosaic_cog",
     "build_mosaic_cogs",
     "build_year_vrts",
-    "chain_env",
     "data_footprint",
     "max_z_error",
-    "mosaic_band_name",
+    "sources_env",
     "zone_bounds",
     "zone_token",
 ]

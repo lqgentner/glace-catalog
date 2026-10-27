@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import filecmp
-import json
 from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, Any
@@ -36,29 +35,29 @@ from glace_catalog.metadata import (
     load_vocabulary,
 )
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM, Grid
-from glace_catalog.stac.items import DATASET_VERSION
+from glace_catalog.stac.items import (
+    DATASET_VERSION,
+    FILE_EXTENSION_URI,
+    RASTER_EXTENSION_URI,
+    VERSION_EXTENSION_URI,
+)
 from glace_catalog.stac.naming import ASSET_KEYS, viz_filename
-from glace_catalog.stac.save import MOSAICS_DIR, TILES_DIR
-from glace_catalog.stac.store import ASSETS_DIR
+from glace_catalog.stac.save import PORTOLAN_SCHEMA, Document, dump_document
+from glace_catalog.stac.save import link as _link
+from glace_catalog.stac.store import ASSETS_DIR, MOSAICS_DIR, TILES_DIR
 from glace_catalog.styles import ATTRIBUTION, ramp_colors
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-Document = dict[str, Any]
-
 ROOT = Path(__file__).resolve().parents[2]
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
 TEMPLATES_DIR = METADATA_DIR / "templates"
 
-PORTOLAN_SCHEMA = "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
 RENDER_EXTENSION_URI = "https://stac-extensions.github.io/render/v2.0.0/schema.json"
-RASTER_EXTENSION_URI = "https://stac-extensions.github.io/raster/v2.0.0/schema.json"
-FILE_EXTENSION_URI = "https://stac-extensions.github.io/file/v2.1.0/schema.json"
 ALTERNATE_ASSETS_EXTENSION_URI = (
     "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
 )
-VERSION_EXTENSION_URI = "https://stac-extensions.github.io/version/v1.2.0/schema.json"
 SCIENTIFIC_EXTENSION_URI = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
 TABLE_EXTENSION_URI = "https://stac-extensions.github.io/table/v1.2.0/schema.json"
 WEB_MAP_LINKS_EXTENSION_URI = "https://stac-extensions.github.io/web-map-links/v1.3.0/schema.json"
@@ -147,14 +146,6 @@ def wgs84_bbox(grid: Grid, decimals: int = 4) -> list[float]:
     transformer = Transformer.from_crs(grid.crs, "EPSG:4326", always_xy=True)
     left, bottom, right, top = transformer.transform_bounds(*grid.bounds, densify_pts=21)
     return [round(v, decimals) for v in (left, bottom, right, top)]
-
-
-def _link(rel: str, href: str, title: str, media_type: str = "application/json") -> Document:
-    return {"rel": rel, "href": href, "type": media_type, "title": title}
-
-
-def _json(document: Document) -> str:
-    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
 # --- the documents ------------------------------------------------------------
@@ -711,16 +702,18 @@ def render_tree(
     vocabulary = vocabulary or load_vocabulary()
     bases = bases or load_public_bases()
     documents: Mapping[str, str] = {
-        "catalog.json": _json(catalog_document(vocabulary)),
-        f"{TILES_DIR}/collection.json": _json(collection_document(vocabulary, TILES_DIR, bases)),
-        f"{MOSAICS_DIR}/collection.json": _json(
+        "catalog.json": dump_document(catalog_document(vocabulary)),
+        f"{TILES_DIR}/collection.json": dump_document(
+            collection_document(vocabulary, TILES_DIR, bases)
+        ),
+        f"{MOSAICS_DIR}/collection.json": dump_document(
             collection_document(vocabulary, MOSAICS_DIR, bases),
         ),
-        f"{TILES_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
+        f"{TILES_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": dump_document(
             tiles_style_document(vocabulary, vocabulary.catalog.last_year),
         ),
-        f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": _json(grid_style_document()),
-        f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": _json(
+        f"{TILES_DIR}/styles/{GRID_STYLE_NAME}.json": dump_document(grid_style_document()),
+        f"{MOSAICS_DIR}/styles/{STYLE_TEMPLATE_NAME}.json": dump_document(
             style_document(vocabulary, vocabulary.catalog.last_year),
         ),
         **{name: render_markdown(vocabulary, name, bases) for name in MARKDOWN_TEMPLATES},

@@ -32,6 +32,8 @@ Reads no data and needs no network.
 Run: uv run tests/test_grids.py
 """
 
+import math
+
 from glace_catalog.scopes import (
     ANALYSIS_ALIGNMENT,
     ANALYSIS_RESOLUTION,
@@ -42,7 +44,6 @@ from glace_catalog.scopes import (
     TILE_PX,
     WEB_MERCATOR,
     Grid,
-    snap_to_tiles,
     zoom_resolution,
 )
 
@@ -54,6 +55,25 @@ Far below a pixel, so it ignores floating-point noise but catches any hand edit.
 
 MIN_ALIGNED_LEVELS = 2
 """Levels that must land on the tile grid: the mosaic itself, and z12 under it."""
+
+
+def snap_to_tiles(
+    bounds: tuple[float, float, float, float],
+    zoom: int = MOSAIC_ZOOM,
+) -> tuple[float, float, float, float]:
+    """Grow ``bounds`` outward to whole 256 px tiles of the WebMercatorQuad grid.
+
+    The mosaic then begins and ends on a tile boundary, so every edge tile is
+    complete.
+    """
+    step = zoom_resolution(zoom) * TILE_PX
+    left, bottom, right, top = bounds
+    return (
+        MERCATOR_ORIGIN + math.floor((left - MERCATOR_ORIGIN) / step) * step,
+        MERCATOR_ORIGIN + math.floor((bottom - MERCATOR_ORIGIN) / step) * step,
+        MERCATOR_ORIGIN + math.ceil((right - MERCATOR_ORIGIN) / step) * step,
+        MERCATOR_ORIGIN + math.ceil((top - MERCATOR_ORIGIN) / step) * step,
+    )
 
 
 def aligned_levels(grid: Grid) -> int:

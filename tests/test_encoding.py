@@ -130,7 +130,7 @@ def read_archive(
         archive,
         min_zoom=11,
         max_zoom=MOSAIC_ZOOM,
-        spec=TileSpec(max_zoom=MOSAIC_ZOOM, image_format=image_format),
+        spec=TileSpec(image_format=image_format),
         name="codes",
     )
     with archive.open("rb") as handle:

@@ -239,7 +239,8 @@ def _staging_checks() -> dict[str, bool]:
 
 def _footprint_checks() -> dict[str, bool]:
     """Check the mosaic footprint of a block of tiles that spans two UTM zones."""
-    tiles = [f"31TGK{e}{n}" for e in "789" for n in "012"] + ["32TLQ02", "32TLQ12"]
+    # Alpine perimeter tiles on both sides of 6°E, where zones 31 and 32 overlap.
+    tiles = [f"31TGK{e}{n}" for e in "123" for n in "012"] + ["32TKQ60", "32TKQ61"]
     files = [
         file
         for tile in tiles
@@ -265,11 +266,11 @@ def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
     mosaic.properties["glace:build_fingerprint"] = "0" * 64
     mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
     # Finalization reads the mosaic items back from the store, as written.
-    stored = pystac.Item.from_dict(item_document(mosaic, "glace-ch-mosaics", scope_title="GLACE"))
+    stored = pystac.Item.from_dict(item_document(mosaic))
     with tempfile.TemporaryDirectory() as tmp:
         year, tiles = Path(tmp) / ".items.parquet", Path(tmp) / "tiles.parquet"
         mosaics = Path(tmp) / "mosaics.parquet"
-        row = year_index_document(tile_item, "glace-ch-tiles", scope_title="GLACE")
+        row = year_index_document(tile_item)
         write_stac_geoparquet([row], year)
         concat_indexes([year], tiles, base_url=base)
         index_from_items([stored], mosaics, base_url=base)
@@ -397,9 +398,6 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     except ValueError:
         checks["a key without the suffix is refused"] = True
     layout = StoreLayout(Path("/store"))
-    checks["a rendering sits in its year's item directory"] = layout.viz(2024, "coh12_vv") == Path(
-        "/store/mosaics/2024/coh12_vv_viz.pmtiles"
-    )
     checks["the layout has no pmtiles directory"] = not hasattr(layout, "pmtiles")
     checks["visual_assets keys by rendering key"] = list(built) == [
         "coh12_vv_viz",

@@ -19,7 +19,7 @@ them, so this gate holds it to what a client is entitled to assume:
 - the tiles collection registers the grid archive as Portolan requires of a
   collection with PMTiles: a ``visual`` asset, a ``rel: "pmtiles"`` link that
   names its layer, the web-map-links extension and a style; the mosaics
-  collection carries no such link (M-36).
+  collection carries no such link (docs/conformance.md).
 
 Reads no data and needs no network.
 
@@ -157,7 +157,7 @@ if tiles_styles != {
     )
 mosaics = json.loads((CATALOG / "mosaics/collection.json").read_text())
 if any(link.get("rel") == "pmtiles" for link in mosaics["links"]):
-    problems.append("mosaics collection: carries a pmtiles link (M-36)")
+    problems.append("mosaics collection: carries a pmtiles link")
 
 if problems:
     for problem in problems:

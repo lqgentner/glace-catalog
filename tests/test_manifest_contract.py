@@ -7,7 +7,7 @@ repositories, so a change on either side must show up here. This gate writes a
 manifest in exactly the producer's column layout and checks that everything the
 build needs survives the round trip, including the checksum and the band
 statistics, which the build takes from the manifest alone. It also checks
-the header reader, which the build uses for the mosaics it writes itself.
+how the build writes files into a store.
 
 The column list below is copied verbatim from
 ``glacier_mapping/manifest.py::COLUMNS``; keep the two identical.
@@ -28,9 +28,9 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import rasterio
-from rasterio.transform import from_origin
+from upath import UPath
 
+from glace_catalog.stac import store
 from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.store import (
     MANIFEST_COLUMNS,
@@ -42,7 +42,7 @@ from glace_catalog.stac.store import (
     manifest_valid_percents,
     read_manifest,
 )
-from glace_catalog.stac.tags import BandStatistics, read_raster_info
+from glace_catalog.stac.tags import BandStatistics
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -181,38 +181,6 @@ def empty_composite_checks() -> dict[str, bool]:
     return checks
 
 
-def header_checks(tmp: Path) -> dict[str, bool]:
-    """Check the header reader picks up the band statistics the writer embeds."""
-    path = tmp / "S1_COH12_LRW_32TPS05_VV_20240619_20240912.tif"
-    data = np.full((4, 4), 0.5, dtype=np.float32)
-    with rasterio.open(
-        path,
-        "w",
-        driver="GTiff",
-        width=4,
-        height=4,
-        count=1,
-        dtype="float32",
-        crs="EPSG:32632",
-        transform=from_origin(500_000, 5_200_000, 10, 10),
-        nodata=np.nan,
-    ) as dst:
-        dst.write(data, 1)
-        dst.update_tags(
-            1,
-            STATISTICS_MINIMUM="0.5",
-            STATISTICS_MAXIMUM="0.5",
-            STATISTICS_MEAN="0.5",
-            STATISTICS_STDDEV="0.0",
-            STATISTICS_VALID_PERCENT="100",
-        )
-    info = read_raster_info(path)
-    return {
-        "header reader fills statistics from band tags": info.statistics
-        == BandStatistics(minimum=0.5, maximum=0.5, mean=0.5, stddev=0.0, valid_percent=100.0),
-    }
-
-
 def refuses_partial_statistics() -> bool:
     """Check a manifest missing one ``stat_*`` value is refused, by column name.
 
@@ -262,6 +230,45 @@ def local_copy_links(tmp: Path) -> dict[str, bool]:
     }
 
 
+def store_writes(tmp: Path) -> dict[str, bool]:
+    """Check staged files reach a local store whole, and an S3 store through ``upload_object``."""
+    staged = tmp / "staged"
+    (staged / "2024").mkdir(parents=True)
+    (staged / "2024" / "a.tif").write_bytes(b"new")
+    store_root = tmp / "store"
+    (store_root / "2024").mkdir(parents=True)
+    (store_root / "2024" / "a.tif").write_bytes(b"old")
+    uploaded = store.upload_tree(staged, store_root)
+    store.put_object(b"thumb", store_root / "thumbnail.webp")
+    local = {
+        "a staged tree replaces the store's files": uploaded == 1
+        and (store_root / "2024" / "a.tif").read_bytes() == b"new",
+        "bytes are written to a local store": (store_root / "thumbnail.webp").read_bytes()
+        == b"thumb",
+        "a local write leaves no temporary file": sorted(
+            path.name for path in store_root.rglob("*")
+        )
+        == ["2024", "a.tif", "thumbnail.webp"],
+    }
+
+    calls: list[tuple[Path | bytes, str]] = []
+
+    def record(src: Path | bytes, dst: Path | UPath | str) -> None:
+        calls.append((src, str(dst)))
+
+    original = store.upload_object
+    store.upload_object = record
+    try:
+        store.upload_tree(staged, UPath("s3://bucket/glace"))
+    finally:
+        store.upload_object = original
+    return {
+        **local,
+        "an S3 store is written through upload_object": calls
+        == [(staged / "2024" / "a.tif", "s3://bucket/glace/2024/a.tif")],
+    }
+
+
 def source_pattern_checks() -> dict[str, bool]:
     """Check that ``GLACE_SOURCE`` names each year's archive and refuses a pattern without one."""
     settings = _build_year().settings
@@ -298,7 +305,6 @@ def main() -> int:
         files = manifest_composites(frame, Path(tmp))
         info = manifest_raster_info(frame)
         percents = manifest_valid_percents(frame)
-        header = header_checks(Path(tmp))
 
     data = info["32TPS05"]["coh12_vv"]
     count = info["32TPS05"]["coh12_vv_qa_num"]
@@ -320,11 +326,12 @@ def main() -> int:
             refuses_partial_statistics()
         ),
     }
-    checks.update(header)
     checks.update(empty_composite_checks())
     checks.update(source_pattern_checks())
     with tempfile.TemporaryDirectory() as tmp:
         checks.update(local_copy_links(Path(tmp)))
+    with tempfile.TemporaryDirectory() as tmp:
+        checks.update(store_writes(Path(tmp)))
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:
         print(f"error  {name}")

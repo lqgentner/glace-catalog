@@ -28,21 +28,29 @@ This repository holds the metadata of the **GLACE** STAC catalog on
 that builds and publishes it. The catalog follows the
 [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
-> **Not yet published.** The metadata here describes **`glace-alps`**, ahead
-> of its publication. [`docs/STATUS.md`](docs/STATUS.md) lists the open work.
+The dataset covers 2015–2026 in two collections: `tiles`, the 10 m
+composites per MGRS tile, and `mosaics`, annual 40 m equal-area mosaics with
+web-map archives. Each holds twelve layers: 12-day coherence and
+gamma-nought backscatter in VV and VH, each with a count of contributing
+observations and a composite quality map. To read the data, start at
+[`catalog/README.md`](catalog/README.md).
+
+> **Not yet listed.** **`glace-alps`** is published on Source Cooperative;
+> its DOIs are registered once it is listed at LaRS.
 
 Keeping the metadata on GitHub lets anyone review its history, cite a release
 and report errors as issues.
 
 ```text
-metadata/           the source: catalog.yaml, assets.yaml, the markdown templates
-catalog/            the published tree, rendered from metadata/ and committed
-src/glace_catalog/  the library that builds it
-scripts/            the build commands, incl. render-catalog.py
-tools/              publish.py, which uploads the built store; mirror_docs.py
-Makefile            the commands: make lists them
-tests/              the gates, incl. rashid conformance
-docs/               DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
+metadata/             the source: catalog.yaml, assets.yaml, the markdown templates
+catalog/              the published tree, rendered from metadata/ and committed
+src/glace_catalog/    the library that builds it
+scripts/              the build commands, incl. render-catalog.py
+tools/                publish.py, which uploads the built store; mirror_docs.py
+catalog.publish.yaml  the publication target and public addresses
+Makefile              the commands: make lists them
+tests/                the gates, incl. rashid conformance
+docs/                 DESIGN.md, conformance.md
 ```
 
 ## Quick start
@@ -50,10 +58,11 @@ docs/               DESIGN.md, STATUS.md, UPSTREAM.md, conformance.md
 ```bash
 uv sync --all-groups
 uv run tests/run_all.py             # run all gates
-uv run rashid check catalog/        # Portolan conformance only
+uv run tests/test_conformance.py    # Portolan conformance only
 ```
 
-To edit the metadata, or to build and publish the store, see [AGENTS.md](AGENTS.md).
+To edit the metadata, or to build and publish the store, see
+[AGENTS.md](AGENTS.md).
 
 ## Citing
 
@@ -63,17 +72,16 @@ Cite version 1.0 of the dataset as:
 > Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
 
 To refer to the dataset across versions, use its canonical DOI,
-https://doi.org/10.48656/d4r9-fj97. Both DOIs are registered once the dataset
-is listed at LaRS.
+https://doi.org/10.48656/d4r9-fj97.
 
 ## License
 
-The code is MIT, except for the vendored files listed in
-[Third Party Notices](THIRD_PARTY_NOTICES.md), which keep their own licenses.
-See [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
+The code is MIT, except for the vendored files listed in [Third Party
+Notices](THIRD_PARTY_NOTICES.md), which keep their own licenses. See
+[`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
 Copernicus Sentinel data. The collection thumbnails are drawn over
-[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that credit
-in the image.
+[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that
+credit in the image.
 
 ## Comments and contributions
 

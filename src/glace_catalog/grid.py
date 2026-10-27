@@ -1,7 +1,7 @@
 """The MGRS tile grid and the glacier fractions it carries.
 
 deep-glacier-mapping computes each tile's glacier fractions once per scope
-(UPSTREAM.md D-1) and writes them to a table in the store. The build copies
+(AGENTS.md step 1) and writes them to a table in the store. The build copies
 them onto every tile item; the table itself is a build input and is not
 published.
 
@@ -14,20 +14,19 @@ them, and a web map draws it without reading the item index.
 from __future__ import annotations
 
 from pathlib import Path
-from secrets import token_hex
 import tempfile
 from typing import TYPE_CHECKING
 
-from freezebase.s3 import LOCAL_PROTOCOLS
 import geopandas as gpd
 import pandas as pd
 import pyarrow as pa
 import pyogrio
 import shapely
-from upath import UPath
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from upath import UPath
 
     from glace_catalog.scopes import Scope
 
@@ -192,6 +191,9 @@ def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
     the copy goes to a sibling temporary file that is renamed over the
     target, so a reader never sees a partial archive.
     """
+    # glace_catalog.stac.store imports this module.
+    from glace_catalog.stac.store import put_object  # noqa: PLC0415
+
     with tempfile.TemporaryDirectory() as tmp:
         local = Path(tmp) / GRID_ARCHIVE
         pyogrio.write_dataframe(
@@ -209,20 +211,4 @@ def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
                 "MAX_SIZE": 100_000_000,
             },
         )
-        _replace_bytes(target, local.read_bytes())
-
-
-def _replace_bytes(target: Path | UPath, payload: bytes) -> None:
-    """Write ``payload`` to ``target`` in one step, as :func:`write_grid` describes."""
-    if UPath(target).protocol not in LOCAL_PROTOCOLS:
-        target.write_bytes(payload)
-        return
-    local = Path(UPath(target).path)
-    # The leading dot keeps a file left by a killed run out of the upload.
-    partial = local.with_name(f".{local.name}.{token_hex(8)}.partial")
-    try:
-        partial.write_bytes(payload)
-        partial.replace(local)
-    except BaseException:
-        partial.unlink(missing_ok=True)
-        raise
+        put_object(local, target)

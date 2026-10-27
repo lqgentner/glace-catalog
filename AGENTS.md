@@ -34,24 +34,34 @@ fails the gate.
 `rashid` is the Portolan conformance gate; `stac-check` is advisory. Where they
 disagree, rashid takes precedence. Do not widen `ACCEPTED` in
 `tests/test_conformance.py` just to pass CI. Any new exception needs a row in
-`docs/conformance.md` and a tracking issue; otherwise fix the finding.
+`docs/conformance.md` naming a tracking issue, or the structural reason none
+applies; otherwise fix the finding.
 The two existing exceptions arise because the tracked tree holds the
 collections while their items live in the store. Validate the full built tree
 before publication.
 
 ## Scope and layout
 
-`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names;
-`glace-ch`, a small Swiss scope, serves for testing. `src/glace_catalog/scopes.py`
-defines both scopes and their grids; `docs/DESIGN.md` §8 lists what a switch
-changes.
+`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names:
+the 2 210 MGRS tiles of the Alpine Convention perimeter (2025 edition).
+`glace-ch`, a small Swiss scope, is superseded: no store or source archive
+exists for it, so do not build or test against it. Its grid stays in
+`src/glace_catalog/scopes.py` as a small fixture for unit tests. Everything
+below `scopes.py` takes the scope as an argument.
+
+A switch of scope changes `scope`, `region`, `years`, `title`, `tagline` and
+`preliminary_notice` in `metadata/catalog.yaml`, and `write_prefix`,
+`public_base` and `public_s3_base` in `catalog.publish.yaml`; `make render`
+then rewrites `catalog/`. Collection ids and absolute hrefs follow. The
+default stretches and transport ranges in `metadata/assets.yaml` are measured
+on the scope's own display mosaics, so measure them again.
 
 Preserve these rules:
 
 - Collections contain their items: `tiles/{year}/{tile}/item.json`.
   Year catalogs sit below collections and only group items.
 - Assets belong to collections and items only. Run manifests and
-  configurations stay beside the source archive and are never published (M-32).
+  configurations stay beside the source archive and are never published.
 - Structural links, item asset hrefs and the collections' style asset hrefs are
   relative. The other collection asset hrefs and the hrefs in `items.parquet`
   are absolute HTTPS; `s3://` hrefs appear only in the `alternate` extension.
@@ -79,7 +89,8 @@ otherwise.
 
 ### Settings
 
-Building reads `.env`, the S3 settings through `freezebase.settings.S3Settings`:
+Building reads `.env`, the S3 settings through
+`freezebase.settings.S3Settings`:
 
 ```bash
 GLACE_S3_PROFILE=        # named profile in ~/.aws/credentials
@@ -118,15 +129,17 @@ Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
       --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
-Every year reuses this lookup, so a tile's glacier fraction stays constant.
-The build checks that the table names the scope's inventory and buffer
-(`src/glace_catalog/scopes.py`). The leading dot keeps the table out of the
-upload: the items and the tile grid carry its values.
+Every year reuses this lookup, so a tile's glacier fraction stays constant. Its
+columns are `mgrs_code`, `glacier_fraction`, `glacier_fraction_buffered`,
+`rgi_version` and `buffer_m`. The build checks that the table names the scope's
+inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
+tile rather than computing a fallback. The leading dot keeps the table out of
+the upload: the items and the tile grid carry its values.
 
 ### 2. Build each year
 
 The source archive must contain `manifest.parquet`, one row per file, written
-by the composite run in `deep-glacier-mapping` (`docs/UPSTREAM.md` D-4). Source
+by the composite run in `deep-glacier-mapping` (`docs/DESIGN.md` §5). Source
 manifests come only from that run: to add a missing one, rerun the upstream
 year, which skips complete tiles and describes and hashes their files.
 
@@ -139,9 +152,8 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 | Step | Result |
 | --- | --- |
 | `copy` | Validates the manifest and supported assets, leaves out each measurement with no valid pixel and its QA layers, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
-| `vrt` | Builds temporary regional VRTs for the next two steps. |
-| `mosaics` | Writes twelve annual analysis mosaics. |
-| `pmtiles` | Writes twelve value-encoded web-map archives. |
+| `mosaics` | Builds a temporary VRT chain onto the analysis grid, then writes twelve annual analysis mosaics. |
+| `pmtiles` | Builds a temporary VRT chain onto the display grid, then writes twelve value-encoded web-map archives. |
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
@@ -162,9 +174,9 @@ unseen by the fingerprints. Replace a composite by writing a new file.
 | `--concurrent-layers` | Set simultaneous layer warps; defaults to four. |
 
 Size web-map concurrency to the available RAM and scratch disk. Each layer
-writes a local RGBA raster of the whole scope: about 100 MB for Switzerland,
-1.1 GB for the Alps. The defaults suit a 16 GB laptop. If memory runs out,
-lower `--concurrent-layers` first, then `--tiler-workers`.
+writes a local RGBA raster of the whole scope: 1.1 GB for the Alps. The
+defaults suit a 16 GB laptop. If memory runs out, lower `--concurrent-layers`
+first, then `--tiler-workers`.
 
 The Alpine years 2015–2026 on 2026-10-16, with 15 cores and 60 GB RAM,
 source and store on one local disk, `--mosaic-workers 12`,
@@ -173,7 +185,7 @@ source and store on one local disk, `--mosaic-workers 12`,
 | Step | Time | Peak process-tree RSS |
 | --- | --- | --- |
 | `copy` | 4 s | |
-| `vrt` | 2 min | |
+| analysis VRT chain | 2 min | |
 | `mosaics` | 10 min | 33 GB |
 | `pmtiles` | 41 min | 17 GB |
 | `items` | 1 min | |
@@ -194,10 +206,11 @@ Finalization:
 - refuses archives encoded over a transport range `metadata/assets.yaml` no
   longer has;
 - updates the collections' year links and temporal extent, and bounds the
-  tiles collection by its tiles;
+  tiles collection by its tiles and the mosaics collection by its items;
 - combines the item-index slices into `items.parquet`, and refuses an index
   whose columns differ from `mirror_columns` in `metadata/assets.yaml`;
-- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier fractions;
+- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier
+  fractions;
 - draws the thumbnails;
 - records asset sizes and checksums, and the item indexes' column types
   and row counts;
@@ -250,6 +263,8 @@ proxy.
 
 Public reads use HTTPS at `data.source.coop` or anonymous S3 at
 `eu-central-1.opendata.source.coop`; the latter appears in `alternate` hrefs.
+The proxy blocks the `Python-urllib` user agent, so read the catalog with
+`requests`, `httpx` or `fsspec`, not `urllib.request`.
 
 ### Upload commands
 
@@ -285,18 +300,35 @@ time, about ten hours for the Alps.
 repository under the prefixes in `catalog.publish.yaml`. When the catalog
 moves, add the old prefix to its `RETIRED_PREFIXES`.
 
+## Release
+
+Each release has one version string and a DOI at LaRS
+([`docs/DESIGN.md`](docs/DESIGN.md#7-releases-and-citation)). Run by hand:
+
+1. Bump `DATASET_VERSION` and `CITATION.cff`, set the new version DOI in
+   `metadata/catalog.yaml`, and re-render.
+2. Build and finalize the store, and run `make conformance`.
+3. `make publish-plan`, then `make publish`.
+4. `make links-live` and `make conformance-live`.
+5. Commit `date-released` in `CITATION.cff`.
+6. `git tag v{version}` and push the tag.
+7. Create the GitHub release with the rashid summary in its notes.
+
 ## Related repositories
 
-Read [docs/UPSTREAM.md](docs/UPSTREAM.md) before working in these repositories;
-it defines their tasks and validation requirements.
+They share files, not imports (`docs/DESIGN.md` §5).
 
-- `../deep-glacier-mapping`: composite production, labels, ML and run manifests
-  (M-31, D-4).
+- `../deep-glacier-mapping`: composite production, labels and ML. Its
+  composite run writes the source archives and their manifests.
 - `../s1bursts`: Sentinel-1 processing. Its COG writer (0.5.0 and later)
   embeds band statistics (`PTL-DAT-009`) and computes checksums. This
   repository only reads its output files.
 - `../freezebase`: geospatial and IO helpers, including the VRT chain.
 
-Use `freezebase` from PyPI at `>=0.7.1,<0.8`, the range that provides
-`S3Settings`, `list_object_sizes`, `atomic_write_text`, `content_type_for` and
-profile endpoints. Keep `uv.lock` tracked and do not use editable installs.
+Use `freezebase` from PyPI at `>=0.10,<0.11`. It provides `S3Settings`,
+`list_object_sizes`, `atomic_write_text`, `upload_object`, `content_type_for`,
+`write_cog` and profile endpoints, and its VRT helpers write local sources
+relative to the VRT, so a chain must not be moved. Store writes go through
+`stac.store.put_object`: `upload_object` on S3, an atomic rename on a local
+disk. `MGRSGeoBox.from_mgrs` refuses a tile code that lies
+outside its UTM zone. Keep `uv.lock` tracked and do not use editable installs.

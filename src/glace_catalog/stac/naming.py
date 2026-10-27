@@ -11,21 +11,17 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-import logging
 import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from upath import UPath
 
-logger = logging.getLogger(__name__)
-
 POLARIZATIONS = ("VV", "VH")
 PRODUCTS = ("COH12", "RTC")
-QA_METRICS = ("NUM", "CQM")
 
 ASSET_KEYS: tuple[str, ...] = tuple(
     f"{product.lower()}_{pol.lower()}{suffix}"
@@ -54,11 +50,6 @@ _COMPOSITE_RE = re.compile(
     r"_(?P<pol>VV|VH|HH|HV)"
     r"_(?P<start>\d{8})_(?P<end>\d{8})\.tif$",
 )
-_LABEL_RE = re.compile(
-    r"^LABELS_(?P<source>[A-Z0-9-]+)"
-    r"(?:_(?P<year>\d{4}))?"
-    r"_(?P<tile>\d{2}[A-Z]{3}\d{2})\.tif$",
-)
 
 
 @dataclass(frozen=True)
@@ -75,11 +66,6 @@ class CompositeFile:
     tile: str  # MGRS 10-km code, e.g. "32TMS55"
     polarization: str
     orbit: str | None  # None for LRW composites, "A" or "D" for pass composites
-
-    @property
-    def method(self) -> str:
-        """Compositing-method token, e.g. ``"LRW"`` or ``"COMP_A"``."""
-        return "LRW" if self.orbit is None else f"COMP_{self.orbit}"
 
     @property
     def asset_key(self) -> str:
@@ -154,17 +140,6 @@ def parse_composite_name(path: Path | UPath) -> CompositeFile | None:
     )
 
 
-def discover_composites(comp_dir: Path | UPath) -> dict[str, list[CompositeFile]]:
-    """Discover and parse all per-tile composite rasters in a directory."""
-    by_tile: dict[str, list[CompositeFile]] = defaultdict(list)
-    for path in comp_dir.glob("S1_*.tif"):
-        parsed = parse_composite_name(path)
-        if parsed is not None:
-            by_tile[parsed.tile].append(parsed)
-    logger.info("Discovered %d tiles in %s", len(by_tile), comp_dir)
-    return dict(by_tile)
-
-
 def require_unique_composites(by_tile: Mapping[str, Sequence[CompositeFile]]) -> None:
     """Reject multiple files that resolve to the same published name.
 
@@ -198,25 +173,3 @@ def require_unique_composites(by_tile: Mapping[str, Sequence[CompositeFile]]) ->
         f"explicitly before publishing:\n{details}"
     )
     raise ValueError(msg)
-
-
-def check_completeness(
-    by_tile: Mapping[str, Sequence[CompositeFile]],
-    expected_tiles: Iterable[str] | None = None,
-) -> dict[str, list[str]]:
-    """Return missing asset keys per tile (empty dict means complete).
-
-    Parameters
-    ----------
-    by_tile
-        Output of :func:`discover_composites`.
-    expected_tiles
-        Tile codes that must be present. Defaults to the discovered tiles.
-    """
-    missing: dict[str, list[str]] = {}
-    for tile in sorted(expected_tiles if expected_tiles is not None else by_tile):
-        present = {f.asset_key for f in by_tile.get(tile, [])}
-        gaps = [key for key in ASSET_KEYS if key not in present]
-        if gaps:
-            missing[tile] = gaps
-    return missing

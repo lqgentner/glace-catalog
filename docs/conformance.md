@@ -8,9 +8,9 @@ uv run tests/test_conformance.py
 ```
 
 The gate fails on any error-severity finding whose rule is not listed below,
-and the list never grows without a row here. A known deviation with an issue
-number is a debt someone can pay off; a silently widened allow-list is a false
-claim about conformance.
+and the list never grows without a row here. Each entry names a tracking
+issue, or the structural reason none applies; a silently widened allow-list
+is a false claim about conformance.
 
 Checked against **rashid 0.3.0** and spec **v0.2.0**.
 
@@ -42,12 +42,14 @@ publish base: about ten hours for the Alps. It reads that base from the root
 catalog's `self` link, so `make conformance-live` mirrors the documents
 without it (`tools/mirror_docs.py --drop-self`).
 
-The last run over the published catalog, on 2026-10-22 over the Alpine years
+The last run over the published catalog, on 2026-10-27 over the Alpine years
 2015–2026 (`make conformance-live`, 26 545 files, rashid 0.3.0, every
 extension schema), gave 0 errors and only the twelve `PTL-CAT-001` warnings
 accepted below.
 
-## Accepted Deviations
+## Findings in `ACCEPTED`
+
+These are the rules `ACCEPTED` in `tests/test_conformance.py` lets through.
 
 | Rule | Where | Why accepted | Tracking |
 |---|---|---|---|
@@ -58,18 +60,24 @@ accepted below.
 items must publish them."* Both collections register a `collection-mirror`
 asset. In a fresh clone the items it describes are absent, because they are
 generated to object storage rather than committed (`.gitignore`:
-`catalog/tiles/[0-9][0-9][0-9][0-9]/`). Fields of the World (FTW) does the same,
-for the same reason, at 45 000 items.
+`catalog/tiles/[0-9][0-9][0-9][0-9]/`). Fields of the World (FTW) does the
+same, for the same reason, at 45 000 items.
 
 Leaving the mirror out of the committed `collection.json`, for the generator
 to add, was rejected: the committed document would then differ from the
 published one, which is worse than a finding whose cause is written down.
 
+## Deviations rashid does not report
+
+These requirements are not met as written, but no rashid rule fires, so
+`ACCEPTED` does not list them. They are recorded here so that a clean run is
+not read as conformance.
+
 ### `PORTO-FMT-011` — no `rel: "pmtiles"` links
 
 | Requirement | Where | Why accepted | Tracking |
 |---|---|---|---|
-| `PORTO-FMT-011`, `PORTO-FMT-012` | mosaics collection, built tree | The web-map archives are item assets with the `visual` role and the collection does not link them. | none yet |
+| `PORTO-FMT-011`, `PORTO-FMT-012` | mosaics collection, built tree | The web-map archives are item assets with the `visual` role and the collection does not link them. | none |
 
 *"A PMTiles file … MUST be registered through a collection-level
 `rel: "pmtiles"` link."* The rule is written for a vector collection, which has
@@ -80,8 +88,7 @@ links they would form a list that long on the collection page.
 rashid does not report the omission: `PTL-VIZ-003` checks only a collection
 that carries a PMTiles asset or link, and the mosaics collection carries
 neither. The tiles collection conforms: its one archive, the tile grid, is a
-`visual` asset with a `rel: "pmtiles"` link and a style (M-38). So the `ACCEPTED` list in `tests/test_conformance.py` does not include
-it; it is recorded here so that a clean run is not read as conformance.
+`visual` asset with a `rel: "pmtiles"` link and a style.
 
 The archives are still fully described. Each year's item lists its archives as
 assets, with size and checksum. Each year's style draws the archive
@@ -92,21 +99,19 @@ refuses a store holding an archive its year's style does not draw.
 
 | Requirement | Where | Why accepted | Tracking |
 |---|---|---|---|
-| `PORTO-CORE-069` | mosaics collection and its items, built tree | Each year's style is an asset of that year's mosaic item; the collection registers one style, the latest year's. | spec issue drafted, not raised |
+| `PORTO-CORE-069` | mosaics collection and its items, built tree | Each year's style is an asset of that year's mosaic item; the collection registers one style, the latest year's. | none |
 
 *"Style files are STAC assets: each style MUST be registered as a
 collection-level asset carrying the `style` role."* A year style draws only
 that year's archives, which are assets of the year's mosaic item. Registered on
-the collection, the twelve styles crowded its asset list and its style picker.
-Each item now carries `style-default` at `./styles/default.json`, beside its
+the collection, twelve styles would crowd its asset list and its style picker.
+Each item carries `style-default` at `./styles/default.json`, beside its
 archives, with the `style` and `default` roles, as the year items of the FIRMS
 mirror do. The Portolan browser reads a style from the entity that owns the
 data it draws, an item included.
 
 rashid does not report it: `PTL-VIZ-002` asks only that a collection with a
 visual derivative register some style, and the mosaics collection keeps one.
-The `ACCEPTED` list in `tests/test_conformance.py` therefore does not include
-it.
 
 ## Warnings Carried Deliberately
 
@@ -122,10 +127,11 @@ fires per year.
 
 Grouping them would take a third level. UTM zone does not split them finely
 enough (five grid zones), and the MGRS 100 km square gives 55 groups of 1 to
-100 tiles, so most groups still warn and a fourth level would be needed. Each level is a directory that
-Portolan requires to carry its own `catalog.json`, `README.md` and `AGENTS.md`
-(`PTL-FIL-001`, `PTL-FIL-002`, `PTL-FIL-003`): for the Alps, hundreds of
-generated Markdown files that would only restate their path.
+100 tiles, so most groups still warn and a fourth level would be needed. Each
+level is a directory that Portolan requires to carry its own `catalog.json`,
+`README.md` and `AGENTS.md` (`PTL-FIL-001`, `PTL-FIL-002`, `PTL-FIL-003`): for
+the Alps, hundreds of generated Markdown files that would only restate their
+path.
 
 FTW groups by UTM zone and *omits* those files, which costs four rashid errors
 per sub-catalog against their published tree. Taking the warning is the better
@@ -148,8 +154,8 @@ guessed.
 
 Portolan treats a stale value as a conformance failure and asks a publisher who
 cannot keep one current to omit it, so an absent field here is correct. Item
-assets carry both fields from the run manifest, whose `sha256` column is stored
-multihash-encoded, so the recorded and published values are the same string.
+assets carry both fields from the run manifest
+([`DESIGN.md`](DESIGN.md#5-the-source-archive-checksums-and-band-statistics)).
 
 ## Advisory Gate
 
@@ -158,14 +164,14 @@ is this valid STAC, rather than does it conform to Portolan. It is advisory.
 
 Two of its notes are ignored on purpose:
 
-- **`self` link recommended.** The tracked tree leaves it out, and the publish
-  step writes it from `public_base`. `PORTO-CORE-081` recommends the link on a
-  *published* catalog, which is where it appears.
+- **`self` link recommended.** The tracked tree leaves it out, and
+  finalization writes it from `public_base`. `PORTO-CORE-081` recommends the
+  link on a *published* catalog, which is where it appears.
 - **One tolerated crash**, on every Portolan Collection:
 
 | What | Where | Why accepted | Tracking |
 |---|---|---|---|
-| stac-validator raises `AttributeError: 'list' object has no attribute 'get'` | both collections | Validator defect, not a metadata defect | [portolan-spec#157](https://github.com/portolan-sdi/portolan-spec/issues/157) |
+| stac-validator raises `AttributeError: 'list' object has no attribute 'get'` | both collections | Validator defect, not a metadata defect | [stac-check#159](https://github.com/stac-utils/stac-check/issues/159) |
 
 The Portolan profile schema declares JSON Schema draft-07, in which `items`
 may be an array of schemas, and its `valid_bbox` definition uses that form.
@@ -184,12 +190,12 @@ Where stac-check and rashid disagree, **rashid wins**.
 ## Requirements Proved Elsewhere
 
 These rules need more than the tracked metadata to check. Each is listed with
-what satisfies it; open work is tracked in [`STATUS.md`](STATUS.md).
+what satisfies it.
 
 | Rule | Requirement | State |
 |---|---|---|
-| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **Satisfied for both writers.** The 2015–2026 composites, written by s1bursts 0.6.0, carry the five `STATISTICS_*` tags on float32 data bands and uint16 QA-NUM bands, and in every manifest row (verified 2026-10-16). The exception is a raster with no valid pixel, such as the 2015 backscatter of `32TNT24`, which has no statistics to carry. The annual mosaics are written here: `build_mosaic_cog` computes the statistics in one streaming pass over the source VRT and writes them onto the band before the COG copy; `tests/test_mosaic_stats.py` reads them back with PAM disabled |
+| `PTL-DAT-009` | every COG band carries embedded min/max/mean/stddev | **Satisfied for both writers.** The 2015–2026 composites, written by s1bursts 0.6.0, carry the five `STATISTICS_*` tags on float32 data bands and uint16 QA-NUM bands, and in every manifest row (verified 2026-10-16), except a raster with no valid pixel, such as the 2015 backscatter of `32TNT24`. The mosaics get theirs from `build_mosaic_cog` ([`DESIGN.md`](DESIGN.md#5-the-source-archive-checksums-and-band-statistics)); `tests/test_mosaic_stats.py` reads them back with PAM disabled |
 | `PTL-DAT-010` | a COG band with nodata declares its valid percent | **Satisfied for both writers**, from the same headers and the same pass. The build keys the QA-NUM count to the data asset it counts for; every mosaic band is float32 with NaN nodata |
 | `PTL-DAT-006/7/8` | the item mirror is spatially ordered, carries per-row-group spatial statistics, and holds ≤150 000 rows per group | **Implemented**: Hilbert-ordered rows, a float64 `bbox` covering column declared in the `geo` metadata, 2 048-row groups. Gated by `tests/test_mirror.py`, which calls rashid's own checks |
 | `PTL-DAT-016` | the item mirror reproduces the collection's items exactly | **Implemented and gated** through rashid's `_check_mirror`, over in-memory catalogs of 400 and 800 items |
-| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative: `rashid check --live` over the Swiss test catalog, 2026-09-08, 0 errors |
+| `PTL-LIV-001..005` | the host honours range requests and CORS | **Passes** on Source Cooperative, in the last run of `make conformance-live` ([above](#what-the-gate-reads)) |

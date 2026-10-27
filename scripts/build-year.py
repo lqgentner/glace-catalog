@@ -1,17 +1,16 @@
 r"""Build one year of GLACE composites into the store.
 
-The year is built in five steps, run in this order:
+The year is built in four steps, run in this order:
 
 ``copy``
     Check the run manifest against the source archive, accept only the
     composites the catalog publishes, and copy them server-side, unchanged.
-``vrt``
-    Build temporary VRTs that mosaic the tiles onto the scope's grid, in linear
-    values and in decibels.
 ``mosaics``
-    Write the twelve annual mosaic COGs.
+    Write the twelve annual mosaic COGs, read through a VRT chain that mosaics
+    the tiles onto the scope's analysis grid.
 ``pmtiles``
-    Write the twelve web-map archives.
+    Write the twelve web-map archives, read through a VRT chain onto the
+    display grid, in linear values or in decibels.
 ``items``
     Write the year's tile items, its mosaic item and its GeoParquet index.
 
@@ -36,7 +35,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 import logging
 from pathlib import Path
 import shutil
@@ -50,7 +49,6 @@ from glace_catalog.config import settings
 from glace_catalog.documents import render_year_prose
 from glace_catalog.grid import read_glacier_fractions
 from glace_catalog.metadata import vocabulary
-from glace_catalog.stac import PORTOLAN_SCHEMA
 from glace_catalog.stac.naming import ASSET_KEYS, published_name
 from glace_catalog.stac.save import write_year_items
 from glace_catalog.stac.store import MANIFEST_NAME, STEPS, YEAR_INDEX_NAME
@@ -205,8 +203,9 @@ def step_vrt(
     Web Mercator display grid. Both chains start from the UTM composites, so
     each product is resampled once.
 
-    The VRTs are always rebuilt: they are local, temporary and take seconds,
-    and the cache may have been emptied since the last run.
+    Each step that reads a chain builds it afresh, about two minutes for the
+    Alps: the VRTs are local and temporary, and the cache may have been
+    emptied since the last run.
     """
     vrt_dir = args.cache / "glace-store" / str(args.year) / name
     chain = mosaics.build_year_vrts(
@@ -215,7 +214,7 @@ def step_vrt(
         vrt_dir,
         grid=grid,
     )
-    logger.info("vrt: %d linear, %d decibel", len(chain.linear), len(chain.decibel))
+    logger.info("vrt: %d layer(s)", len(chain.linear))
     return chain
 
 
@@ -286,13 +285,11 @@ def step_mosaics(
     frame: pd.DataFrame,
 ) -> dict[str, dict[str, Any]]:
     """Write and upload the year's twelve mosaic COGs; return their build-state details."""
-    band_names = {key: mosaics.mosaic_band_name(key) for key in chain.linear}
     tags = {key: mosaic_tags(frame, key) for key in chain.linear}
     with staging(args, "mosaics") as staged:
         written = mosaics.build_mosaic_cogs(
             chain,
             staged,
-            band_names=band_names,
             tags=tags,
             layers=args.layers,
             workers=args.mosaic_workers,
@@ -313,10 +310,9 @@ def step_pmtiles(
     args: argparse.Namespace,
     layout: stac.StoreLayout,
     chain: mosaics.YearVrts,
-    window: tuple[date, date],
     files: Sequence[stac.CompositeFile],
-) -> list[webmap.LayerInfo]:
-    """Render and upload the year's web-map archives.
+) -> dict[str, dict[str, Any]]:
+    """Render and upload the year's web-map archives; return their build-state details.
 
     Each archive's header declares the bbox of the mosaic item, the extent of
     the data rather than of the tile-aligned display grid.
@@ -327,8 +323,6 @@ def step_pmtiles(
             chain,
             staged,
             year=args.year,
-            start_date=window[0].isoformat(),
-            end_date=window[1].isoformat(),
             layers=args.layers,
             workers=args.tiler_workers,
             concurrent_layers=args.concurrent_layers,
@@ -339,7 +333,7 @@ def step_pmtiles(
         # The archives are assets of the year's mosaic item, so they go beside
         # its COGs. `upload_tree` adds and overwrites files and leaves the rest.
         stac.store.upload_tree(staged, layout.mosaic_year(args.year))
-    return layers
+    return {layer.url.removesuffix(".pmtiles"): asdict(layer) for layer in layers}
 
 
 def scratch_needed(args: argparse.Namespace, scope: Scope, steps: Sequence[str]) -> int:
@@ -448,23 +442,12 @@ def step_items(
             mosaic_item,
             staged_tiles,
             staged_mosaics,
-            tiles_collection_id=scope.tiles_collection_id,
-            mosaics_collection_id=scope.mosaics_collection_id,
-            scope_title=vocabulary().catalog.short_title,
-            portolan_schema=PORTOLAN_SCHEMA,
             year=args.year,
             year_prose=render_year_prose(vocabulary(), args.year),
         )
         # Hrefs relative to the store root; finalize-catalog makes them absolute.
         stac.write_stac_geoparquet(
-            [
-                stac.year_index_document(
-                    item,
-                    scope.tiles_collection_id,
-                    scope_title=vocabulary().catalog.short_title,
-                )
-                for item in tile_items
-            ],
+            [stac.year_index_document(item) for item in tile_items],
             staged_tiles / YEAR_INDEX_NAME,
         )
         stac.store.upload_tree(staged_tiles, layout.tile_year(args.year))
@@ -633,15 +616,12 @@ def main() -> None:
 
     prints = {
         "copy": copy_print,
-        "vrt": copy_print,
-        # Band names are written into the COGs, so renaming one rebuilds them.
         "mosaics": stac.fingerprint(
             copy_print,
             scope.analysis_grid,
             mosaics.MAX_Z_ERROR,
             mosaics.COG_CREATION,
             args.layers,
-            [mosaics.mosaic_band_name(key) for key in ASSET_KEYS],
         ),
         # The encoding ranges, tile format, quality and tiler version decide the
         # archive bytes, so changing any of them rebuilds the archives. Colour
@@ -662,8 +642,6 @@ def main() -> None:
     logger.info("Scratch: %s", args.cache)
     require_scratch_space(args.cache, scratch_needed(args, scope, pending))
 
-    analysis_chain: mosaics.YearVrts | None = None
-    display_chain: mosaics.YearVrts | None = None
     for step in steps:
         if state.is_current(step, prints[step]):
             logger.info("%s: up to date, skipping", step)
@@ -672,47 +650,14 @@ def main() -> None:
         if step == "copy":
             step_copy(args, layout, files, src)
             state.record(step, prints[step])
-        elif step == "vrt":
-            analysis_chain = step_vrt(args, scope, layout, files)
         elif step == "mosaics":
-            analysis_chain = analysis_chain or step_vrt(args, scope, layout, files)
-            state.record(
-                step, prints[step], step_mosaics(args, scope, layout, analysis_chain, frame)
-            )
+            chain = step_vrt(args, scope, layout, files)
+            state.record(step, prints[step], step_mosaics(args, scope, layout, chain, frame))
         elif step == "pmtiles":
-            display_chain = display_chain or step_vrt(
-                args,
-                scope,
-                layout,
-                files,
-                grid=scope.display_grid,
-                name="vrt-display",
+            chain = step_vrt(
+                args, scope, layout, files, grid=scope.display_grid, name="vrt-display"
             )
-            built = step_pmtiles(args, layout, display_chain, composite_window(frame), files)
-            state.record(
-                step,
-                prints[step],
-                {
-                    layer.url.removesuffix(".pmtiles"): {
-                        "url": layer.url,
-                        "size_bytes": layer.size_bytes,
-                        "checksum": layer.checksum,
-                        "bounds": layer.bounds,
-                        "min_zoom": layer.min_zoom,
-                        "max_zoom": layer.max_zoom,
-                        "scale": layer.scale,
-                        "offset": layer.offset,
-                        "units": layer.units,
-                        "product": layer.product,
-                        "polarization": layer.polarization,
-                        "year": layer.year,
-                        "id": layer.id,
-                        "start_date": layer.start_date,
-                        "end_date": layer.end_date,
-                    }
-                    for layer in built
-                },
-            )
+            state.record(step, prints[step], step_pmtiles(args, layout, chain, files))
         elif step == "items":
             step_items(args, scope, layout, frame, files, state, prints["items"])
             state.record(step, prints[step])

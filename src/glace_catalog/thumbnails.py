@@ -28,6 +28,7 @@ from xyzservices.providers import providers
 
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.naming import published_name
+from glace_catalog.stac.store import put_object
 from glace_catalog.styles import resolve_cmap
 
 if TYPE_CHECKING:
@@ -267,6 +268,5 @@ def write_collection_thumbnails(
     for destination, image in images:
         buffer = io.BytesIO()
         image.convert("RGB").save(buffer, format="WEBP", quality=THUMBNAIL_QUALITY)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(buffer.getvalue())
+        put_object(buffer.getvalue(), destination)
         logger.info("Wrote %s from %d (%dx%d)", destination, year, image.width, image.height)

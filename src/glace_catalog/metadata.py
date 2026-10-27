@@ -376,10 +376,6 @@ class Vocabulary:
         band = self._qa(ref)["band"][collection]
         return {"name": ref.key, "data_type": str(band["data_type"]), "nodata": band["nodata"]}
 
-    def band_name(self, key: str) -> str:
-        """Name of a raster's one band, on the file and in STAC alike: its asset key."""
-        return parse_key(key).key
-
     def context(self) -> dict[str, Any]:
         """Return what every prose template may name: the region, the years, the counts."""
         return {
@@ -549,11 +545,6 @@ class Vocabulary:
                 },
             )
         return rows
-
-    @property
-    def keys(self) -> Sequence[str]:
-        """The twelve raster asset keys, in publication order."""
-        return ASSET_KEYS
 
 
 def load_vocabulary(root: Path = METADATA_DIR) -> Vocabulary:

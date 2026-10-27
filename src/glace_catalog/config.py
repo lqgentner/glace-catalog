@@ -60,30 +60,10 @@ class Settings:
         self.s3 = S3Settings.from_env("GLACE_S3_")
         self.locations = StoreSettings()
 
-    def resolve_path(self, raw: str) -> AnyDir:
-        """Resolve a local path or an ``s3://`` URI with the configured credentials.
-
-        Parameters
-        ----------
-        raw
-            A filesystem path, possibly ``~``-prefixed, or an ``s3://`` URI.
-
-        Returns
-        -------
-        Path or UPath
-            The resolved location.
-
-        Raises
-        ------
-        ValueError
-            If ``raw`` is an ``s3://`` URI and ``GLACE_S3_PROFILE`` is unset.
-        """
-        return self.s3.resolve_path(raw)
-
     @property
     def store_root(self) -> AnyDir:
         """Root the published tree is assembled under."""
-        return self.resolve_path(self.locations.store_root)
+        return self.s3.resolve_path(self.locations.store_root)
 
     def source(self, year: int) -> AnyDir:
         """Composite archive of ``year``, from the ``GLACE_SOURCE`` pattern.
@@ -92,6 +72,8 @@ class Settings:
         ------
         SystemExit
             If ``GLACE_SOURCE`` is unset or names no ``{year}``.
+        ValueError
+            If the archive is on ``s3://`` and ``GLACE_S3_PROFILE`` is unset.
         """
         pattern = self.locations.source
         if not pattern or "{year}" not in pattern:
@@ -100,7 +82,7 @@ class Settings:
                 "place of the year, e.g. s3://s1-bursts/data/alps-total/{year}/s1-comp"
             )
             raise SystemExit(msg)
-        return self.resolve_path(pattern.replace("{year}", str(year)))
+        return self.s3.resolve_path(pattern.replace("{year}", str(year)))
 
     @property
     def cache_dir(self) -> Path:

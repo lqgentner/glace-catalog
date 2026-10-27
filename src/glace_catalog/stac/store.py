@@ -19,15 +19,17 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+from secrets import token_hex
+import shutil
 from typing import TYPE_CHECKING, Any
 
-from freezebase.s3 import atomic_write_text, list_object_sizes
+from freezebase.s3 import LOCAL_PROTOCOLS, atomic_write_text, list_object_sizes, upload_object
 from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
 from glace_catalog.grid import GRID_ARCHIVE
-from glace_catalog.stac.naming import CompositeFile, parse_composite_name, viz_filename
+from glace_catalog.stac.naming import CompositeFile, parse_composite_name
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
 if TYPE_CHECKING:
@@ -46,8 +48,6 @@ The specification only requires the mirror to be a collection asset with the
 so they find the mirror without reading the collection document first.
 """
 
-README_NAME = "README.md"
-AGENTS_NAME = "AGENTS.md"
 THUMBNAIL_NAME = "thumbnail.webp"
 ASSETS_DIR = "_assets"
 """Root directory of files the catalog documents link to without describing them."""
@@ -168,36 +168,12 @@ class StoreLayout:
         """Root catalog. Finalization stamps its absolute ``self`` link."""
         return self.root / "catalog.json"
 
-    @property
-    def readme(self) -> Path | UPath:
-        """Root ``README.md``, linked ``rel: "describedby"``."""
-        return self.root / README_NAME
-
-    @property
-    def agents(self) -> Path | UPath:
-        """Root ``AGENTS.md``, linked ``rel: "agents"``."""
-        return self.root / AGENTS_NAME
-
-    @property
-    def icon(self) -> Path | UPath:
-        """Catalog wordmark, linked ``rel: "icon"`` from the root catalog.
-
-        An SVG, so registries and browsers can draw it at any card size
-        (``PTL-LNK-007``). The viewer's header uses the same file.
-        """
-        return self.root / ASSETS_DIR / "glace-wordmark.svg"
-
     # -- tiles collection ------------------------------------------------
 
     @property
     def tiles(self) -> Path | UPath:
         """Directory owning the per-tile collection."""
         return self.root / TILES_DIR
-
-    @property
-    def tiles_collection(self) -> Path | UPath:
-        """Collection document of the per-tile items."""
-        return self.tiles / "collection.json"
 
     @property
     def tiles_index(self) -> Path | UPath:
@@ -230,10 +206,6 @@ class StoreLayout:
         """Directory of the sub-catalog organizing one year's tile items."""
         return self.tiles / str(year)
 
-    def tile_year_catalog(self, year: int) -> Path | UPath:
-        """Sub-catalog listing one year's tile items."""
-        return self.tile_year(year) / "catalog.json"
-
     def tile(self, year: int, tile: str) -> Path | UPath:
         """Directory of one tile item, holding its twelve COGs and its ``item.json``."""
         return self.tile_year(year) / tile
@@ -258,11 +230,6 @@ class StoreLayout:
         return self.root / MOSAICS_DIR
 
     @property
-    def mosaics_collection(self) -> Path | UPath:
-        """Collection document of the annual mosaic items."""
-        return self.mosaics / "collection.json"
-
-    @property
     def mosaics_index(self) -> Path | UPath:
         """Item mirror of the annual mosaic items, one row per year."""
         return self.mosaics / ITEMS_INDEX_NAME
@@ -279,20 +246,6 @@ class StoreLayout:
     def mosaic_item(self, year: int) -> Path | UPath:
         """Item document of one year's mosaics."""
         return self.mosaic_year(year) / "item.json"
-
-    @property
-    def styles(self) -> Path | UPath:
-        """MapLibre GL style assets of the mosaics collection."""
-        return self.mosaics / "styles"
-
-    def viz(self, year: int, asset_key: str) -> Path | UPath:
-        """One year's web-map archive of ``asset_key``, beside the COG it renders.
-
-        Same directory, different stem: ``coh12_vv_viz.pmtiles`` next to
-        ``coh12_vv.tif``. The archive is an asset of the year item with the
-        ``visual`` role.
-        """
-        return self.mosaic_year(year) / viz_filename(asset_key)
 
 
 def read_manifest(path: Path | UPath) -> pd.DataFrame:
@@ -616,31 +569,48 @@ def hard_link(source: Path, target: Path) -> bool:
     return True
 
 
+def put_object(source: bytes | Path, target: Path | UPath) -> None:
+    """Write bytes or a local file into the store, so that a reader never sees it half-written.
+
+    On object storage :func:`freezebase.s3.upload_object` writes it in one put,
+    with its content type, and checks the stored size. On a local disk it is
+    written to a hidden sibling that is renamed over the target.
+    """
+    target = UPath(target)
+    if target.protocol not in LOCAL_PROTOCOLS:
+        upload_object(source, target)
+        return
+    local = Path(target.path)
+    local.parent.mkdir(parents=True, exist_ok=True)
+    # The leading dot keeps a file left by a killed run out of the upload.
+    partial = local.with_name(f".{local.name}.{token_hex(8)}.partial")
+    try:
+        if isinstance(source, bytes):
+            partial.write_bytes(source)
+        else:
+            shutil.copyfile(source, partial)
+        partial.replace(local)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+
+
 def upload_tree(local: Path, destination: Path | UPath) -> int:
     """Upload every file of a locally staged directory tree.
 
     Steps write their outputs to a local directory first and upload them here
-    once complete.
+    once complete, one :func:`put_object` each.
     """
     destination = UPath(destination)
     sources = sorted(path for path in local.rglob("*") if path.is_file())
     for path in sources:
-        target = destination / path.relative_to(local).as_posix()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(path.read_bytes())
+        put_object(path, destination / path.relative_to(local).as_posix())
     logger.info("Uploaded %d files to %s", len(sources), destination)
     return len(sources)
 
 
-STEPS: tuple[str, ...] = ("copy", "vrt", "mosaics", "pmtiles", "items")
+STEPS: tuple[str, ...] = ("copy", "mosaics", "pmtiles", "items")
 """The publication steps, in the order they must run."""
-
-_UNFINGERPRINTED = frozenset({"vrt"})
-"""Steps that always rerun.
-
-The VRTs live in a local scratch cache, which may be empty even when the store
-records the step as done. They rebuild in seconds.
-"""
 
 
 @dataclass
@@ -677,8 +647,6 @@ class BuildState:
 
     def is_current(self, step: str, fingerprint: str) -> bool:
         """Whether ``step`` has already run against exactly these inputs."""
-        if step in _UNFINGERPRINTED:
-            return False
         return self.fingerprints.get(step) == fingerprint
 
     def record(self, step: str, fingerprint: str, detail: Any = None) -> None:

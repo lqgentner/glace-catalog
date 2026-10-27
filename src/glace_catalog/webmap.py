@@ -22,22 +22,20 @@ resolution.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 from dataclasses import dataclass
 import logging
-import math
 from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING
 
 from freezebase.raster import rasterio_open
-from freezebase.vrt import create_rgba_vrt
+from freezebase.vrt import create_decibel_vrt, create_rgba_vrt
 from rasterio.enums import Resampling
 import rasterio.shutil
 from rasterio.warp import transform_bounds
 
 from glace_catalog.metadata import vocabulary
-from glace_catalog.mosaics import chain_env
+from glace_catalog.mosaics import sources_env
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM
 from glace_catalog.stac.naming import ASSET_KEYS, data_key, viz_filename
 from glace_catalog.stac.store import multihash_sha256_file
@@ -55,11 +53,6 @@ if TYPE_CHECKING:
     from glace_catalog.styles import LayerStyle
 
 logger = logging.getLogger(__name__)
-
-WEB_MERCATOR = "EPSG:3857"
-# Full width of the WebMercatorQuad tile matrix, in metres.
-MERCATOR_SPAN_M = 2 * 20037508.342789244
-TILE_SIZE = TILE_PX
 
 RGBA_CREATION = {
     "driver": "GTiff",
@@ -97,29 +90,20 @@ layers finish a year faster; raise the number when the disk has room.
 
 @dataclass
 class LayerInfo:
-    """One built PMTiles archive, as the build reports it.
+    """One built PMTiles archive, as ``build-year`` records it in the build state.
 
-    ``build-year`` stores this record in the year's build state, so a later
-    run can tell what changed. Readers of the store see the archive header,
-    the year item's ``visual`` asset and the year style.
+    The year item's ``visual`` asset is written from it, and finalization
+    checks the encoding against ``metadata/assets.yaml``.
     """
 
-    id: str
-    product: str
-    polarization: str
-    year: int
     url: str
     bounds: list[float]
     min_zoom: int
     max_zoom: int
     scale: float
     offset: float
-    units: str
-    source: str
     size_bytes: int
-    start_date: str
-    end_date: str
-    checksum: str = ""
+    checksum: str
 
 
 def encoding_mismatch(key: str, detail: Mapping[str, Any]) -> str | None:
@@ -142,38 +126,10 @@ def encoding_mismatch(key: str, detail: Mapping[str, Any]) -> str | None:
     )
 
 
-def native_max_zoom(res_m: float, lat_deg: float) -> int:
-    """Smallest zoom level that resolves ``res_m`` on the ground at ``lat_deg``.
-
-    WebMercator resolution is quoted at the equator. At latitude ``lat_deg`` a
-    pixel covers ``cos(lat)`` times that distance on the ground, so in the Alps
-    native detail is reached one zoom level earlier.
-    """
-    scale = math.cos(math.radians(lat_deg))
-    return max(0, math.ceil(math.log2(MERCATOR_SPAN_M * scale / (TILE_SIZE * res_m))))
-
-
 def _wgs84_bounds(dataset: rasterio.DatasetReader) -> list[float]:
     """Geographic bounding box of a dataset, as ``[west, south, east, north]``."""
     west, south, east, north = transform_bounds(dataset.crs, "EPSG:4326", *dataset.bounds)
     return [west, south, east, north]
-
-
-def _centre_latitude(dataset: rasterio.DatasetReader) -> float:
-    """Latitude of the dataset's centre, in degrees."""
-    _, south, _, north = _wgs84_bounds(dataset)
-    return (south + north) / 2.0
-
-
-def rgba_vrt(
-    src_vrt: Path | UPath,
-    out_vrt: Path,
-    *,
-    luts: Sequence[Sequence[tuple[float, int]]],
-) -> Path:
-    """Write the tiler's direct input: a 4-band uint8 RGBA VRT over ``src_vrt``."""
-    create_rgba_vrt(src_vrt, out_vrt, luts=luts, src_bands=(1, 1, 1))
-    return out_vrt
 
 
 def rgba_raster(
@@ -184,10 +140,10 @@ def rgba_raster(
 ) -> Path:
     """Warp and encode one layer into a local RGBA GeoTIFF.
 
-    The lookup-table VRT of :func:`rgba_vrt` is written beside ``out_path`` and
+    A 4-band uint8 RGBA lookup-table VRT is written beside ``out_path`` and
     copied with GDAL's ``CreateCopy`` (as ``gdal_translate`` does), so the
     whole VRT chain runs once, in one streaming pass. When the sources are
-    remote, call this inside :func:`~glace_catalog.mosaics.chain_env`.
+    remote, call this inside :func:`~glace_catalog.mosaics.sources_env`.
 
     Parameters
     ----------
@@ -196,14 +152,15 @@ def rgba_raster(
     out_path
         The GeoTIFF written, on the tiler's grid, four uint8 bands with alpha.
     luts
-        The encoding, as :func:`rgba_vrt` takes it.
+        The encoding, as :func:`freezebase.vrt.create_rgba_vrt` takes it.
 
     Returns
     -------
     pathlib.Path
         ``out_path``.
     """
-    lut_vrt = rgba_vrt(src_vrt, out_path.with_suffix(".vrt"), luts=luts)
+    lut_vrt = out_path.with_suffix(".vrt")
+    create_rgba_vrt(src_vrt, lut_vrt, luts=luts, src_bands=(1, 1, 1))
     with rasterio_open(lut_vrt) as src:
         rasterio.shutil.copy(src, str(out_path), **RGBA_CREATION)
     return out_path
@@ -214,17 +171,13 @@ def build_pmtiles(
     out_path: Path,
     *,
     layer_id: str,
-    year: int,
     style: LayerStyle,
-    start_date: str,
-    end_date: str,
     min_zoom: int = VIZ_MIN_ZOOM,
     max_zoom: int = MOSAIC_ZOOM,
-    workers: int | None = None,
     attribution: str = "",
     scratch: Path | None = None,
     bounds: Sequence[float] | None = None,
-    pool: ProcessPoolExecutor | None = None,
+    pool: ProcessPoolExecutor,
 ) -> LayerInfo:
     """Encode, warp and tile one display-grid mosaic into a PMTiles archive.
 
@@ -238,20 +191,13 @@ def build_pmtiles(
     layer_id
         Identifier of the layer. The archive is named ``viz_filename(layer_id)``,
         so a reader derives the data stem by stripping the suffix.
-    year
-        Composite year, for the manifest entry.
     style
         The layer's display record. The codes span its transport range, which
         is the same for every year, so years are directly comparable.
-    start_date, end_date
-        Composite window the layer covers.
     min_zoom, max_zoom
         Zoom range of the pyramid. The default maximum is the source's own
         zoom, so that level is copied unchanged and each lower level halves
         the resolution; tiles are therefore resampled with ``average``.
-    workers
-        Worker processes of the pool started for this call, one per core by
-        default. Ignored when ``pool`` is given.
     attribution
         Archive attribution, as a viewer displays it.
     scratch
@@ -270,15 +216,7 @@ def build_pmtiles(
     -------
     LayerInfo
         Manifest entry describing the archive that was written.
-
-    Raises
-    ------
-    ValueError
-        If the zoom range is inverted.
     """
-    if min_zoom > max_zoom:
-        msg = f"min_zoom {min_zoom} exceeds max_zoom {max_zoom}"
-        raise ValueError(msg)
     encoding = style.encoding
 
     if bounds is None:
@@ -289,10 +227,7 @@ def build_pmtiles(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if scratch is not None:
         scratch.mkdir(parents=True, exist_ok=True)
-    with (
-        tempfile.TemporaryDirectory(dir=scratch, prefix=f"{layer_id}-") as tmp,
-        nullcontext(pool) if pool is not None else spawn_pool(workers) as executor,
-    ):
+    with tempfile.TemporaryDirectory(dir=scratch, prefix=f"{layer_id}-") as tmp:
         logger.info("Warping %s once, encoded over %s", layer_id, encoding)
         rgba_path = rgba_raster(src_vrt, Path(tmp) / f"{layer_id}_rgba.tif", luts=encoding.luts())
         logger.info("Tiling %s to z%d-%d", out_path.name, min_zoom, max_zoom)
@@ -302,8 +237,7 @@ def build_pmtiles(
             min_zoom=min_zoom,
             max_zoom=max_zoom,
             spec=TileSpec(
-                max_zoom=max_zoom,
-                tile_size=TILE_SIZE,
+                tile_size=TILE_PX,
                 image_format=TILE_FORMAT,
                 quality=WEBP_QUALITY,
                 resampling=Resampling.average,
@@ -313,48 +247,22 @@ def build_pmtiles(
             # Record the raster-dem decoding parameters, as terrain archives do.
             extra_metadata={**encoding.maplibre(), "unit": style.units},
             bounds=bounds,
-            pool=executor,
+            pool=pool,
         )
 
     size = out_path.stat().st_size
     checksum = multihash_sha256_file(out_path)
     logger.info("Wrote %s: %d tiles, %.1f MB", out_path.name, written, size / 1e6)
-    product, polarization = _split_layer_id(layer_id)
     return LayerInfo(
-        id=f"{layer_id}_{year}",
-        product=product,
-        polarization=polarization,
-        year=year,
         url=out_path.name,
         bounds=bounds,
         min_zoom=min_zoom,
         max_zoom=max_zoom,
         scale=encoding.scale,
         offset=encoding.offset,
-        units=style.units,
-        source=str(src_vrt),
         size_bytes=size,
         checksum=checksum,
-        start_date=start_date,
-        end_date=end_date,
     )
-
-
-def _split_layer_id(layer_id: str) -> tuple[str, str]:
-    """Product and polarization of a layer id, for the manifest's grouping."""
-    product, _, rest = layer_id.partition("_")
-    return product.upper(), rest.upper()
-
-
-def _pmtiles_source(
-    layer_id: str,
-    style: LayerStyle,
-    vrts: YearVrts,
-) -> Path | UPath | None:
-    """Select the VRT a layer is tiled from: linear or decibel."""
-    if style.decibel:
-        return vrts.decibel.get(layer_id)
-    return vrts.linear.get(layer_id)
 
 
 def build_layers(
@@ -362,8 +270,6 @@ def build_layers(
     out_dir: Path,
     *,
     year: int,
-    start_date: str,
-    end_date: str,
     styles: Mapping[str, LayerStyle] | None = None,
     layers: Collection[str] | None = None,
     min_zoom: int = VIZ_MIN_ZOOM,
@@ -388,12 +294,13 @@ def build_layers(
         paths are the inputs.
     out_dir
         Local directory the archives are written to.
-    year, start_date, end_date
-        The year being built and the composite window it covers.
+    year
+        The year being built, named in each archive's attribution.
     styles
         Display record per layer, whose transport range the archive is
-        encoded over. Defaults to the vocabulary's, from
-        ``metadata/assets.yaml``.
+        encoded over. A layer whose record is in decibels is tiled from a
+        decibel VRT over its linear mosaic, written beside it. Defaults to the
+        vocabulary's, from ``metadata/assets.yaml``.
     layers
         Restrict to these layer ids. ``None`` builds all twelve.
     min_zoom, max_zoom
@@ -426,10 +333,7 @@ def build_layers(
             source,
             out_dir / viz_filename(layer_id),
             layer_id=layer_id,
-            year=year,
             style=style,
-            start_date=start_date,
-            end_date=end_date,
             min_zoom=min_zoom,
             max_zoom=max_zoom,
             attribution=attribution,
@@ -438,13 +342,17 @@ def build_layers(
             pool=pool,
         )
 
-    sources = {
-        layer_id: (style, source)
-        for layer_id, style in sorted(wanted.items())
-        if (source := _pmtiles_source(layer_id, style, vrts)) is not None
-    }
-    for layer_id in sorted(set(wanted) - set(sources)):
-        logger.info("No VRT for %s; skipping", layer_id)
+    sources: dict[str, tuple[LayerStyle, Path | UPath]] = {}
+    for layer_id, style in sorted(wanted.items()):
+        linear = vrts.linear.get(layer_id)
+        if linear is None:
+            logger.info("No VRT for %s; skipping", layer_id)
+        elif style.decibel:
+            decibel = Path(str(linear)).with_name(f"{layer_id}_webm{MOSAIC_ZOOM}_db.vrt")
+            create_decibel_vrt(linear, decibel)
+            sources[layer_id] = (style, decibel)
+        else:
+            sources[layer_id] = (style, linear)
 
     # The VRTs are local but read remote files, so the store's credentials are
     # set here, in the main thread, around all warps. rasterio applies options
@@ -453,7 +361,7 @@ def build_layers(
     # threads, so credentials set inside a warp thread would be missing there
     # ("No valid AWS credentials"). The tiler pool reads local rasters only.
     with (
-        chain_env(vrts),
+        sources_env(vrts.sources_at),
         spawn_pool(workers) as pool,
         ThreadPoolExecutor(max_workers=max(1, concurrent_layers)) as warps,
     ):
