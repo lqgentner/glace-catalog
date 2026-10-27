@@ -34,18 +34,27 @@ fails the gate.
 `rashid` is the Portolan conformance gate; `stac-check` is advisory. Where they
 disagree, rashid takes precedence. Do not widen `ACCEPTED` in
 `tests/test_conformance.py` just to pass CI. Any new exception needs a row in
-`docs/conformance.md` and a tracking issue; otherwise fix the finding.
+`docs/conformance.md` naming a tracking issue, or the structural reason none
+applies; otherwise fix the finding.
 The two existing exceptions arise because the tracked tree holds the
 collections while their items live in the store. Validate the full built tree
 before publication.
 
 ## Scope and layout
 
-`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names.
+`glace-alps` is the dataset and the scope that `metadata/catalog.yaml` names:
+the 2 210 MGRS tiles of the Alpine Convention perimeter (2025 edition).
 `glace-ch`, a small Swiss scope, is superseded: no store or source archive
 exists for it, so do not build or test against it. Its grid stays in
-`src/glace_catalog/scopes.py` as a small fixture for unit tests.
-`docs/DESIGN.md` §8 lists what a switch of scope changes.
+`src/glace_catalog/scopes.py` as a small fixture for unit tests. Everything
+below `scopes.py` takes the scope as an argument.
+
+A switch of scope changes `scope`, `region`, `years`, `title`, `tagline` and
+`preliminary_notice` in `metadata/catalog.yaml`, and `write_prefix`,
+`public_base` and `public_s3_base` in `catalog.publish.yaml`; `make render`
+then rewrites `catalog/`. Collection ids and absolute hrefs follow. The
+default stretches and transport ranges in `metadata/assets.yaml` are measured
+on the scope's own display mosaics, so measure them again.
 
 Preserve these rules:
 
@@ -80,7 +89,8 @@ otherwise.
 
 ### Settings
 
-Building reads `.env`, the S3 settings through `freezebase.settings.S3Settings`:
+Building reads `.env`, the S3 settings through
+`freezebase.settings.S3Settings`:
 
 ```bash
 GLACE_S3_PROFILE=        # named profile in ~/.aws/credentials
@@ -164,9 +174,9 @@ unseen by the fingerprints. Replace a composite by writing a new file.
 | `--concurrent-layers` | Set simultaneous layer warps; defaults to four. |
 
 Size web-map concurrency to the available RAM and scratch disk. Each layer
-writes a local RGBA raster of the whole scope: about 100 MB for Switzerland,
-1.1 GB for the Alps. The defaults suit a 16 GB laptop. If memory runs out,
-lower `--concurrent-layers` first, then `--tiler-workers`.
+writes a local RGBA raster of the whole scope: 1.1 GB for the Alps. The
+defaults suit a 16 GB laptop. If memory runs out, lower `--concurrent-layers`
+first, then `--tiler-workers`.
 
 The Alpine years 2015–2026 on 2026-10-16, with 15 cores and 60 GB RAM,
 source and store on one local disk, `--mosaic-workers 12`,
@@ -199,7 +209,8 @@ Finalization:
   tiles collection by its tiles and the mosaics collection by its items;
 - combines the item-index slices into `items.parquet`, and refuses an index
   whose columns differ from `mirror_columns` in `metadata/assets.yaml`;
-- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier fractions;
+- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier
+  fractions;
 - draws the thumbnails;
 - records asset sizes and checksums, and the item indexes' column types
   and row counts;
@@ -252,6 +263,8 @@ proxy.
 
 Public reads use HTTPS at `data.source.coop` or anonymous S3 at
 `eu-central-1.opendata.source.coop`; the latter appears in `alternate` hrefs.
+The proxy blocks the `Python-urllib` user agent, so read the catalog with
+`requests`, `httpx` or `fsspec`, not `urllib.request`.
 
 ### Upload commands
 
@@ -286,6 +299,20 @@ time, about ten hours for the Alps.
 `tests/test_public_base.py` keeps every Source Cooperative URL in the
 repository under the prefixes in `catalog.publish.yaml`. When the catalog
 moves, add the old prefix to its `RETIRED_PREFIXES`.
+
+## Release
+
+Each release has one version string and a DOI at LaRS
+([`docs/DESIGN.md`](docs/DESIGN.md#7-releases-and-citation)). Run by hand:
+
+1. Bump `DATASET_VERSION` and `CITATION.cff`, set the new version DOI in
+   `metadata/catalog.yaml`, and re-render.
+2. Build and finalize the store, and run `make conformance`.
+3. `make publish-plan`, then `make publish`.
+4. `make links-live` and `make conformance-live`.
+5. Commit `date-released` in `CITATION.cff`.
+6. `git tag v{version}` and push the tag.
+7. Create the GitHub release with the rashid summary in its notes.
 
 ## Related repositories
 
