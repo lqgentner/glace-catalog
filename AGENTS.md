@@ -313,6 +313,9 @@ Each release has one version string and a DOI at LaRS
 5. Commit `date-released` in `CITATION.cff`.
 6. `git tag v{version}` and push the tag.
 7. Create the GitHub release with the rashid summary in its notes.
+8. Run `make landing`, which needs [Quarto](https://quarto.org), and upload
+   the PDF it writes under `.cache/landing/` to the version's LaRS record,
+   with both `items.parquet` in one zip as its metadata file.
 
 ## Related repositories
 

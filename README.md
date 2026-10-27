@@ -46,7 +46,7 @@ metadata/             the source: catalog.yaml, assets.yaml, the markdown templa
 catalog/              the published tree, rendered from metadata/ and committed
 src/glace_catalog/    the library that builds it
 scripts/              the build commands, incl. render-catalog.py
-tools/                publish.py, which uploads the built store; mirror_docs.py
+tools/                publish.py, which uploads the built store; mirror_docs.py, landing.py
 catalog.publish.yaml  the publication target and public addresses
 Makefile              the commands: make lists them
 tests/                the gates, incl. rashid conformance

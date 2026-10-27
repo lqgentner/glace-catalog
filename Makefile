@@ -6,7 +6,7 @@ RUN := uv run --env-file .env
 DOCS := .cache/glace-docs
 
 .DEFAULT_GOAL := help
-.PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live
+.PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live landing
 
 help:  ## List the targets.
 	@awk -F ':.*## ' '/^[a-z-]+:.*## / {printf "  %-17s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,3 +45,6 @@ links-live:  ## Request every published href and compare its size with the store
 	rm -rf $(DOCS)
 	$(RUN) tools/mirror_docs.py $(DOCS)
 	uv run tests/test_links.py --remote $(DOCS) $(ARGS)
+
+landing:  ## Render the root README as a PDF for the LaRS landing page.
+	uv run tools/landing.py $(ARGS)

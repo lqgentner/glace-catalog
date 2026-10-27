@@ -432,3 +432,9 @@ version: a `rel: "related"` link and an identifier in `CITATION.cff`. A new
 version needs its DOI in `metadata/catalog.yaml` and `CITATION.cff` in the
 same commit as the version bump; rendering and `tests/test_version.py` fail
 without it.
+
+**The LaRS record holds no data.** Its data URL is the product page on Source
+Cooperative. It holds the root README as a PDF (`make landing`) and both
+`items.parquet` of that version, zipped. The indexes list every data file with
+its size and checksum, so a reader can check their bytes against the cited
+version after the store has moved on to the next.

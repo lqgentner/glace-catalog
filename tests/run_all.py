@@ -20,6 +20,7 @@ TESTS = [
     "test_lint.py",
     "test_data_format.py",
     "test_render.py",
+    "test_landing.py",
     "test_version.py",
     "test_grids.py",
     "test_styles.py",
