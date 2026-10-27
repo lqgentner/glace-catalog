@@ -16,7 +16,8 @@ to miss:
   ``metadata/``, since the styles it copies must decode the archives with the
   ranges the build used;
 - it bounds the tiles collection by its tiles, as the tile grid archive's
-  header does, rather than by the wider mosaic grid it is rendered with.
+  header does, and the mosaics collection by its items, rather than by the
+  wider mosaic grid both are rendered with.
 
 Runs the script's own functions against a temporary store of empty files.
 Writes only into the temporary directory, reads no data and needs no network.
@@ -26,6 +27,7 @@ Run: uv run tests/test_finalize.py
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import importlib.util
 import json
 import os
@@ -38,6 +40,7 @@ from typing import TYPE_CHECKING, Any
 import geopandas as gpd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pystac
 import shapely
 
 from glace_catalog import stac
@@ -394,7 +397,7 @@ def check_stale_year_index(checks: dict[str, bool], fin: ModuleType) -> None:
 
 
 def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
-    """Check that the tiles collection is bounded by its tiles, rounded outward."""
+    """Check that each collection is bounded by its tiles or items, rounded outward."""
     grid = gpd.GeoDataFrame(
         geometry=[
             shapely.box(8.00004, 46.40006, 8.13001, 46.49),
@@ -402,7 +405,7 @@ def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> 
         ],
         crs="EPSG:4326",
     )
-    bbox = fin.tiles_bbox(grid)
+    bbox = fin.outward_bbox(grid.total_bounds.tolist())
     checks["the tiles bbox is rounded outward"] = bbox == [8.0, 46.3, 8.1301, 46.49]
     source = work / "extent-source"
     (source / "tiles").mkdir(parents=True)
@@ -413,9 +416,29 @@ def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> 
         "bbox"
     ] == [bbox]
     rendered = json.loads((SOURCE / "mosaics" / "collection.json").read_text())
-    checks["the mosaics collection keeps the mosaic grid bbox"] = (
+    checks["without mosaic items, the mosaics collection keeps the mosaic grid bbox"] = (
         documents["mosaics"]["extent"]["spatial"] == rendered["extent"]["spatial"]
     )
+    items = [
+        pystac.Item(
+            id=str(year),
+            geometry=shapely.geometry.mapping(shapely.box(*box)),
+            bbox=list(box),
+            datetime=datetime(year, 8, 1, tzinfo=UTC),
+            properties={
+                "start_datetime": f"{year}-06-01T00:00:00Z",
+                "end_datetime": f"{year}-09-30T00:00:00Z",
+            },
+        )
+        for year, box in (
+            (2023, (8.00004, 46.40006, 8.1, 46.49)),
+            (2024, (8.1, 46.3, 8.13001, 46.4)),
+        )
+    ]
+    documents = fin.patch_collections(source, [2023, 2024], items, bbox)
+    checks["the mosaics collection takes its items' bbox, rounded outward"] = documents["mosaics"][
+        "extent"
+    ]["spatial"]["bbox"] == [[8.0, 46.3, 8.1301, 46.49]]
 
 
 def check_grid_conflict_before_writes(

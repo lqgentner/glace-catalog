@@ -194,7 +194,7 @@ Finalization:
 - refuses archives encoded over a transport range `metadata/assets.yaml` no
   longer has;
 - updates the collections' year links and temporal extent, and bounds the
-  tiles collection by its tiles;
+  tiles collection by its tiles and the mosaics collection by its items;
 - combines the item-index slices into `items.parquet`, and refuses an index
   whose columns differ from `mirror_columns` in `metadata/assets.yaml`;
 - writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier fractions;

@@ -269,7 +269,7 @@ file the same way.
 `GLACE_SOURCE` names for the year and write to `GLACE_STORE_ROOT`: a prefix
 on the private UZH gateway, or a local directory. `finalize-catalog` copies the
 tracked documents into the store and *patches* those copies with what
-depends on the build: year links, temporal extent, the latest year's
+depends on the build: year links, temporal and spatial extent, the latest year's
 style, `file:size` and `file:checksum` on the collection assets it
 wrote, the column types and row count of each item mirror, and `updated`.
 It leaves prose, providers, license, `item_assets` and `renders`

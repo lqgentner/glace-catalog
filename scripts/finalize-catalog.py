@@ -8,8 +8,8 @@ years and writes what spans them:
 - each year's MapLibre styles, ``mosaics/{year}/styles/``, registered on its
   mosaic item;
 - ``tiles/collection.json`` and ``mosaics/collection.json``, with links to each
-  year and the temporal extent; the tiles collection's spatial extent bounds
-  its tiles, and the mosaics collection's style draws the latest year;
+  year and the temporal extent; each collection's spatial extent bounds its
+  tiles or items, and the mosaics collection's style draws the latest year;
 - the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
 - ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
@@ -75,7 +75,6 @@ from glace_catalog.thumbnails import DEFAULT_BASEMAP, write_collection_thumbnail
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    import geopandas as gpd
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -83,7 +82,7 @@ SOURCE_DIR = Path(__file__).resolve().parent.parent / "catalog"
 """The tracked documents, rendered from ``metadata/``."""
 
 EXTENT_DECIMALS = 4
-"""Decimals of the tiles collection's bbox, about ten metres."""
+"""Decimals of the collections' bboxes, about ten metres."""
 
 
 def built_years(layout: stac.StoreLayout) -> list[int]:
@@ -178,16 +177,12 @@ def _keep(links: Sequence[Document], drop: set[str]) -> list[Document]:
     return [link for link in links if link.get("rel") not in drop]
 
 
-def tiles_bbox(grid: gpd.GeoDataFrame) -> list[float]:
-    """Return the WGS84 bbox of every tile, rounded outward to :data:`EXTENT_DECIMALS`.
-
-    The tile grid archive declares the bounds of the same polygons in its
-    header, so the collection and the archive agree.
-    """
+def outward_bbox(bounds: Sequence[float]) -> list[float]:
+    """Return a WGS84 bbox rounded outward to :data:`EXTENT_DECIMALS`."""
     scale = 10**EXTENT_DECIMALS
     # Rounding the product first keeps a bound already on the grid, such as
     # 46.3, from floating to the step below it.
-    west, south, east, north = (round(float(value) * scale, 6) for value in grid.total_bounds)
+    west, south, east, north = (round(float(value) * scale, 6) for value in bounds)
     return [
         math.floor(west) / scale,
         math.floor(south) / scale,
@@ -206,8 +201,8 @@ def patch_collections(
 
     ``scripts/render-catalog.py`` renders these documents from ``metadata/``,
     and they are reviewed in git. This function adds only what depends on the
-    published data: a link to each year, the temporal extent and the tiles'
-    spatial extent. Prose, providers, license and ``item_assets`` stay as
+    published data: a link to each year, the temporal extent and the spatial
+    extent. Prose, providers, license and ``item_assets`` stay as
     rendered.
 
     Parameters
@@ -217,10 +212,12 @@ def patch_collections(
     years
         Published years, ascending.
     mosaic_items
-        The mosaic items, read back from the store, for the temporal extent.
+        The mosaic items, read back from the store, for the temporal extent
+        and the mosaics collection's bbox.
     tiles_extent
-        The bbox of every tile, from :func:`tiles_bbox`. The rendered extent
-        is the mosaic grid's, which reaches past the outermost tiles.
+        The bbox of every tile, from :func:`outward_bbox`. The rendered extent
+        is the mosaic grid's, which reaches past the outermost tiles; without
+        mosaic items, the mosaics collection keeps it.
 
     Returns
     -------
@@ -251,6 +248,17 @@ def patch_collections(
     patched["mosaics"] = mosaics
 
     if mosaic_items:
+        boxes = [item.bbox for item in mosaic_items if item.bbox]
+        mosaics["extent"]["spatial"]["bbox"] = [
+            outward_bbox(
+                [
+                    min(box[0] for box in boxes),
+                    min(box[1] for box in boxes),
+                    max(box[2] for box in boxes),
+                    max(box[3] for box in boxes),
+                ]
+            )
+        ]
         interval = extent_from_items(mosaic_items).temporal.to_dict()["interval"]
         for document in patched.values():
             document["extent"]["temporal"]["interval"] = interval
@@ -740,7 +748,9 @@ def main() -> None:
         _load(SOURCE_DIR / MOSAICS_DIR / "collection.json").get("item_assets", {}),
     )
     mosaic_items = read_mosaic_items(layout, years)
-    documents = patch_collections(SOURCE_DIR, years, mosaic_items, tiles_bbox(grid))
+    documents = patch_collections(
+        SOURCE_DIR, years, mosaic_items, outward_bbox(grid.total_bounds.tolist())
+    )
 
     # Write the indexes and thumbnails first: the collection documents record
     # their size and checksum.
