@@ -6,7 +6,7 @@ RUN := uv run --env-file .env
 DOCS := .cache/glace-docs
 
 .DEFAULT_GOAL := help
-.PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live landing
+.PHONY: help render check build finalize conformance publish-plan publish conformance-live links-live landing prose
 
 help:  ## List the targets.
 	@awk -F ':.*## ' '/^[a-z-]+:.*## / {printf "  %-17s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -48,3 +48,6 @@ links-live:  ## Request every published href and compare its size with the store
 
 landing:  ## Render the root README as a PDF for the LaRS landing page.
 	uv run tools/landing.py $(ARGS)
+
+prose:  ## Check the prose with Vale and the Portolan rules: make prose [ARGS=--only ai-tells].
+	uv run tools/prose.py $(ARGS)
