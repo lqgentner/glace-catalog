@@ -27,7 +27,7 @@ are the ones queries use:
 - `bbox`: Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups.
 - `assets`: One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null.
 - `glace:mgrs_tile`: The 10 km MGRS square, such as `32TMS55`.
-- `proj:code`: CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`.
+- `proj:code`: CRS of the item's rasters, which is the square's UTM zone, such as `EPSG:32632`.
 - `glace:glacier_fraction`: Share of the square inside RGI7-C-11 glacier outlines, 0 to 1. The same every year.
 - `glace:glacier_fraction_buffered`: Share of the square inside the same outlines buffered by 250 m, 0 to 1. The same every year.
 - `datetime`: Midpoint of the compositing window.
@@ -39,7 +39,7 @@ and `grid:code` gives it the grid extension's prefix, `MGRS-`.
 
 `tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a
 vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
-polygon has `mgrs_tile`, `glacier_fraction` and `glacier_fraction_buffered`,
+polygon has `mgrs_tile`, `glacier_fraction`, and `glacier_fraction_buffered`,
 the share of the tile within RGI7-C-11 outlines,
 plain and buffered by 250 m. The grid is the same every year.
 Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
@@ -66,11 +66,11 @@ source of truth; the STAC metadata copies them in three places:
   that are the same on every tile and in every year, such as
   `glace:compositing_method` and `glace:coherence_window_range`. The build
   refuses a raster whose tags state otherwise.
-- Each item asset holds the values that are its file's own:
+- Each item asset contains the values specific to its file:
   `glace:contributing_observations`, and for coherence `glace:coherence_average`
   and `glace:coherence_std`. In `items.parquet` they are fields of the asset's
   struct in the `assets` column.
-- Item properties hold what applies to the whole tile: `processing:level`,
+- Item properties contain what applies to the whole tile: `processing:level`,
   `processing:software`, `glace:dem` and the acquisition dates below. These
   are columns of `items.parquet`, so filter on them there.
 
@@ -79,7 +79,7 @@ compositing window selected for that year's lowest-snow period. Actual
 acquisition dates vary by tile and product. Read `glace:coh_first_acquisition`,
 `glace:coh_last_acquisition` and the corresponding `rtc` properties. The last
 coherence date is about twelve days before the last backscatter date, because
-both images of a coherence pair must fall within the window.
+both images of a coherence pair must lie inside the window.
 
 ## Reading and comparing
 

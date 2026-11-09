@@ -9,8 +9,8 @@ Use this guide to change the repository. To use the published data, read
 
 | Source | Output | Generator |
 | --- | --- | --- |
-| `metadata/catalog.yaml`, `metadata/assets.yaml`, `metadata/templates/` | Tracked STAC documents, default style, READMEs and agent guides in `catalog/` | `scripts/render-catalog.py` |
-| Composite manifests, rasters and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles and updated collections | `scripts/build-year.py`, `scripts/finalize-catalog.py` |
+| `metadata/catalog.yaml`, `metadata/assets.yaml`, `metadata/templates/` | Tracked STAC documents, default style, READMEs, and agent guides in `catalog/` | `scripts/render-catalog.py` |
+| Composite manifests, rasters, and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles, and updated collections | `scripts/build-year.py`, `scripts/finalize-catalog.py` |
 
 The rendered catalog is committed, for review and for release archives; built
 store outputs live only in the store. The other hand-maintained files are
@@ -33,10 +33,10 @@ fails the gate.
 
 `rashid` is the Portolan conformance gate; `stac-check` is advisory. Where they
 disagree, rashid takes precedence. Do not widen `ACCEPTED` in
-`tests/test_conformance.py` just to pass CI. Any new exception needs a row in
+`tests/test_conformance.py` to pass CI. Any new exception needs a row in
 `docs/conformance.md` naming a tracking issue, or the structural reason none
 applies; otherwise fix the finding.
-The two existing exceptions arise because the tracked tree holds the
+Both existing exceptions arise because the tracked tree contains the
 collections while their items live in the store. Validate the full built tree
 before publication.
 
@@ -83,8 +83,8 @@ Preserve these rules:
 
 ## Build a store
 
-A store holds a region's COGs, mosaics, web maps and STAC documents, on object
-storage or a local disk. Run commands from this checkout unless stated
+A store contains a region's COGs, mosaics, web maps, and STAC documents, on
+object storage or a local disk. Run commands from this checkout unless stated
 otherwise.
 
 ### Settings
@@ -129,10 +129,10 @@ Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
       --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
-Every year reuses this lookup, so a tile's glacier fraction stays constant. Its
+Every year reuses this lookup, so a tile's glacier fraction is the same every year. Its
 columns are `mgrs_code`, `glacier_fraction`, `glacier_fraction_buffered`,
-`rgi_version` and `buffer_m`. The build checks that the table names the scope's
-inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
+`rgi_version`, and `buffer_m`. The build checks that the table states the
+scope's inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
 tile rather than computing a fallback. The leading dot keeps the table out of
 the upload: the items and the tile grid carry its values.
 
@@ -157,7 +157,7 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
-source composites, grids or settings change.
+source composites, grids, or settings change.
 
 A hard-linked store shares its composites' bytes with the source archive, so
 never rewrite an archive file in place: the store copy would change with it,
@@ -180,7 +180,7 @@ first, then `--tiler-workers`.
 
 The Alpine years 2015–2026 on 2026-10-16, with 15 cores and 60 GB RAM,
 source and store on one local disk, `--mosaic-workers 12`,
-`--concurrent-layers 12` and 15 tiler workers, per year:
+`--concurrent-layers 12`, and 15 tiler workers, per year:
 
 | Step | Time | Peak process-tree RSS |
 | --- | --- | --- |
@@ -219,7 +219,7 @@ Finalization:
   mosaic item, and points the collection's style to the latest year;
 - validates the store.
 
-Prose, providers, license and `item_assets` come from the tracked metadata.
+Prose, providers, license, and `item_assets` come from the tracked metadata.
 
 `public_base` in `catalog.publish.yaml` is written into the root `self` link
 and every asset href in `items.parquet`, as it is into the collection asset
@@ -321,7 +321,7 @@ Each release has one version string and a DOI at LaRS
 
 They share files, not imports (`docs/DESIGN.md` §5).
 
-- `../deep-glacier-mapping`: composite production, labels and ML. Its
+- `../deep-glacier-mapping`: composite production, labels, and ML. Its
   composite run writes the source archives and their manifests.
 - `../s1bursts`: Sentinel-1 processing. Its COG writer (0.5.0 and later)
   embeds band statistics (`PTL-DAT-009`) and computes checksums. This

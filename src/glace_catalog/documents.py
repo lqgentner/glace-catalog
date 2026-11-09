@@ -267,7 +267,7 @@ def _collection_assets(
             "title": "Tile grid with glacier fractions",
             "description": (
                 f"Every MGRS tile of any year as a polygon in the vector layer {GRID_LAYER}, "
-                "with the properties mgrs_tile, glacier_fraction and "
+                "with the properties mgrs_tile, glacier_fraction, and "
                 "glacier_fraction_buffered: the share of the tile covered by "
                 f"{scope.glacier_inventory} outlines, plain and buffered by "
                 f"{scope.glacier_buffer_m:g} m."

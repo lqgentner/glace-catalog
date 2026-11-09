@@ -19,7 +19,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction, and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
       "roles": [
         "producer",
         "processor",

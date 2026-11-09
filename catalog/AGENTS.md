@@ -14,12 +14,12 @@ catalog.json
 ```
 
 Use each collection's `items.parquet` to search multiple items. This
-STAC-GeoParquet index has the `collection-mirror` role and holds the item
+STAC-GeoParquet index has the `collection-mirror` role and stores the item
 properties as columns; each collection's guide lists them. Individual item
 JSON files are the authoritative records.
 
 This DuckDB query finds the 2026 tiles with more than 20% glacier
-cover. The index holds one row per tile and year, so filter by year:
+cover. The index has one row per tile and year, so filter by year:
 
 ```sql
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
@@ -53,13 +53,13 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 
 **Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favourable viewing geometries contributed. In the validation, a random forest maps glaciers less accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87) than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
 
-**Coherence bias.** Coherence is estimated over a 35 × 7 (range × azimuth) window. The finite window biases the estimate upwards, so fully decorrelated surfaces do not reach 0: over large lakes, the mean is about 0.09. Absolute values therefore differ from products that use larger windows, such as the global seasonal Sentinel-1 coherence of [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6). Do not compare values across products, and choose thresholds on GLACE itself.
+**Coherence bias.** Coherence is estimated over a 35 × 7 (range × azimuth) window. The finite window biases the estimate upwards, so fully decorrelated surfaces do not reach 0: over large lakes, the mean is about 0.09. So absolute values differ from products that use larger windows, such as the global seasonal Sentinel-1 coherence of [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6). Do not compare values across products, and choose thresholds on GLACE itself.
 
-**Low coherence outside glaciers.** Other surfaces also decorrelate over 12 days and can have similarly low coherence, such as snow patches, lakes and unstable slopes.
+**Low coherence outside glaciers.** Snow patches, lakes, unstable slopes, and other surfaces also decorrelate over 12 days and can have coherence as low as glaciers.
 
-**Validated scope.** The validation covers glacier mapping in Switzerland only. Its scores do not describe glacier mapping performance in other parts of the Alps, or farther than 250 m from the glacier outlines. Other applications may also benefit from the composites, but were not validated.
+**Validated scope.** The validation covers glacier mapping in Switzerland within 250 m of the glacier outlines, so its scores do not apply to other parts of the Alps or to other applications, which may still benefit from the composites.
 
-**2015 coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
+**2015 coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU, and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
 
 ## Compare years and collections
 

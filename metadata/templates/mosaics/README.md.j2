@@ -35,12 +35,12 @@ Every year shares one grid, so the years form a time axis directly.
 
 ## PMTiles for web maps
 
-Each year's item also holds PMTiles archives for web maps, beside the COGs.
+Each year's item also has PMTiles archives for web maps, beside the COGs.
 The `_viz` suffix marks them as visualization products. They are tiled on
 WebMercatorQuad up to zoom {{ max_zoom }}, resampled from the MGRS tiles.
 
-The archive pixels hold encoded values: an 8-bit code in all three channels of
-a lossy WebP tile, linear over a fixed range per layer. Backscatter and
+Each archive pixel stores an 8-bit code in all three channels of a lossy WebP
+tile, linear over a fixed range per layer. Backscatter and
 composite quality maps are encoded in decibels; coherence is linear. Each
 archive's asset declares the decoding as `raster:scale` and `raster:offset`.
 
@@ -54,7 +54,7 @@ Each year's style sits beside its archives, at `{year}/styles/default.json`,
 and the collection's style draws the latest year.
 
 **To draw a map**, load a year's style in MapLibre GL JS, which decodes custom
-`raster-dem` encodings. The style names its archives relative to itself, as
+`raster-dem` encodings. The style refers to its archives by paths relative to itself, as
 Portolan styles do, while MapLibre and the PMTiles protocol resolve a source URL
 against the page, so resolve them against the style first:
 
