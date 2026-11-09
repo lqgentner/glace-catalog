@@ -38,14 +38,14 @@ degrees north, and the factor varies with latitude across the perimeter.
 COMPOSITE_RESOLUTION = 10.0
 """Pixel size of the per-tile composites on the MGRS grid, in metres."""
 
-ANALYSIS_RESOLUTION = 40.0
+ANALYSIS_RESOLUTION = 20.0
 """Pixel size of the annual analysis mosaics, in metres."""
 
 ANALYSIS_ALIGNMENT = 1000.0
 """Analysis extents are snapped outward to multiples of this, in metres.
 
 Whole-kilometre edges follow the European reference-grid convention, and the
-40 m pixel divides them evenly.
+20 m pixel divides them evenly.
 """
 
 MERCATOR_ORIGIN = -20037508.342789244

@@ -107,7 +107,7 @@ qa:
     stretch: [0.0, 70.0]
     transport: [0.0, 253.0]
     decibel: false
-    # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen
+    # Tiles store an integer count. Each 20 m mosaic pixel averages four
     # 10 m pixels, so the mosaics store a float mean count.
     band:
       tiles: {data_type: uint16, nodata: 0}
@@ -135,7 +135,7 @@ descriptions:
       {{ long }}, {{ pol_word }} ({{ POL }}), composited with local resolution weighting
       over the year's summer window on the 10 m MGRS grid. {{ value }}
     mosaics: >-
-      {{ long }}, {{ pol_word }} ({{ POL }}), resampled from the 10 m tiles onto the 40 m
+      {{ long }}, {{ pol_word }} ({{ POL }}), resampled from the 10 m tiles onto the 20 m
       equal-area grid by averaging in the linear domain. {{ value }}
   num:
     tiles: >-
@@ -143,7 +143,7 @@ descriptions:
       with a non-zero resolution weight.
     mosaics: >-
       Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
-      composite, averaged over the 10 m pixels inside each 40 m pixel: a float
+      composite, averaged over the 10 m pixels inside each 20 m pixel: a float
       mean of the counts.
   cqm:
     tiles: >-
@@ -154,7 +154,7 @@ descriptions:
     mosaics: >-
       Composite quality of the {{ product }} {{ POL }} composite: the local
       resolution of the weighted composite, where higher is better resolved,
-      averaged onto the 40 m grid. Linear scaling; the decibel conversion is
+      averaged onto the 20 m grid. Linear scaling; the decibel conversion is
       declared in the collection's renders.
   viz: >-
     Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad

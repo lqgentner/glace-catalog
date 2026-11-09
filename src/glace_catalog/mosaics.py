@@ -6,7 +6,7 @@ then combined on the scope's fixed extent. Only the final step writes data, as
 a streaming windowed copy.
 
 The chain is built for two grids, each directly from the UTM composites: the
-equal-area ETRS89-LAEA 40 m grid for the annual analysis mosaics, and the
+equal-area ETRS89-LAEA 20 m grid for the annual analysis mosaics, and the
 WebMercatorQuad z13 grid for the web-map archives. Each output is therefore
 resampled once.
 

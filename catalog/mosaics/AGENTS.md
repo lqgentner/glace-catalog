@@ -1,13 +1,13 @@
 # GLACE mosaics – agent guide
 
 Each annual item contains twelve analysis COGs on ETRS89-LAEA
-(EPSG:3035) at 40 m, plus twelve PMTiles archives for web maps.
+(EPSG:3035) at 20 m, plus twelve PMTiles archives for web maps.
 
 ## Grid and analysis
 
 The extent is a fixed constant, so every year has identical `proj:shape` and
 `proj:transform`. Stack years without alignment or resampling. The grid is
-equal-area: multiply a pixel count by 1600 m² to calculate area.
+equal-area: multiply a pixel count by 400 m² to calculate area.
 
 ```python
 import odc.stac

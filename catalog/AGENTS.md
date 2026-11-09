@@ -42,7 +42,7 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
   Higher values mean better resolution. Average in linear units; convert
   with `10*log10(x)` for decibel display.
 - `*_qa_num` is an integer count on tiles and a mean count on mosaics. Each
-  40 m mosaic pixel averages sixteen 10 m counts.
+  20 m mosaic pixel averages four 10 m counts.
 - Nodata is NaN for float32 rasters and 0 for uint16 counts.
 - Asset keys are filenames without `.tif`. Dates are in item properties and
   GeoTIFF tags.

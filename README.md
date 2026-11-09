@@ -29,7 +29,7 @@ that builds and publishes it. The catalog follows the
 [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
 The dataset covers 2015–2026 in two collections: `tiles`, the 10 m
-composites per MGRS tile, and `mosaics`, annual 40 m equal-area mosaics with
+composites per MGRS tile, and `mosaics`, annual 20 m equal-area mosaics with
 web-map archives. Each holds twelve layers: 12-day coherence and
 gamma-nought backscatter in VV and VH, each with a count of contributing
 observations and a composite quality map. To read the data, start at
