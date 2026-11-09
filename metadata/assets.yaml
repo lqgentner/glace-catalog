@@ -143,8 +143,7 @@ descriptions:
       with a non-zero resolution weight.
     mosaics: >-
       Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
-      composite. Each 20 m pixel stores the mean, as a float, of the counts of
-      the 10 m pixels inside it.
+      composite. Each pixel is the average of the original 10 m pixel counts.
   cqm:
     tiles: >-
       Composite quality of the {{ product }} {{ POL }} composite: the local
