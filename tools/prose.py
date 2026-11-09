@@ -8,12 +8,16 @@ writing: hype words, figurative language, filler and formulaic structure.
 
 Two kinds of prose are checked:
 
-- the Markdown documents: the root README.md and AGENTS.md, ``docs/``, and the
-  READMEs and agent guides in ``catalog/``;
-- every ``title`` and ``description`` in the STAC documents of ``catalog/``.
-  Vale reads Markdown only, so each document's strings are written to a
-  Markdown file under ``.cache/prose/stac/``, and each finding is reported
-  against its document and field.
+- the Markdown documents: the root README.md and AGENTS.md, ``docs/``, the
+  READMEs and agent guides in ``catalog/``, and the last year's README and
+  agent guide of the tiles year sub-catalog, which the build renders into the
+  store;
+- every ``title`` and ``description`` in the STAC documents of ``catalog/``,
+  and the descriptions the build writes into the year catalogs, mosaic items
+  and year styles, rendered from ``metadata/``. Vale reads Markdown only, so
+  each document's strings are written to a Markdown file under
+  ``.cache/prose/stac/``, and each finding is reported against its document
+  and field.
 
 Everything in ``catalog/`` is rendered: fix a finding in ``metadata/``, then
 run ``make render``. A finding that is checked and kept goes into
@@ -43,6 +47,8 @@ import tarfile
 import time
 from typing import Any
 import urllib.request
+
+from glace_catalog import documents, metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".cache" / "prose"
@@ -101,27 +107,12 @@ ACCEPTED: dict[tuple[str, str], str] = {
     ): _LIST,
     (
         "ai-tells.VerbTricolon",
-        (
-            ": a reviewer reads the rendered diff, rashid and the Portolan browser read a "
-            "tree, and a tagged release then contains the STAC metadata"
-        ),
-    ): "The three reasons the sentence announces.",
-    (
-        "ai-tells.VerbTricolon",
         ": year links, temporal and spatial extent, the latest year's style",
     ): _LIST,
     (
         "ai-tells.VerbTricolon",
         (
-            "they get their own: **************** accumulates the five values over the "
-            "source VRT, window by window, and passes them to freezebase's ********* as "
-            "band tags"
-        ),
-    ): "Two steps of one procedure.",
-    (
-        "ai-tells.VerbTricolon",
-        (
-            "must be in the canonical form the generator writes (********* indent, "
+            "must be in the canonical form the generator writes: ********* indent, "
             "declaration order, one trailing newline"
         ),
     ): _LIST,
@@ -146,12 +137,39 @@ ACCEPTED: dict[tuple[str, str], str] = {
     ("Portolan-Mechanics.Oxford", "archives, backscatter and "): _JOINED,
     ("Portolan-Mechanics.Oxford", "diff, rashid and "): _JOINED,
     ("Portolan-Mechanics.Oxford", "links, temporal and "): _JOINED,
+    ("Portolan-Terms.Casing", "pmtiles"): "The archive suffix, inside a code span.",
+    ("Microsoft.HeadingAcronyms", "LAEA"): "The grid's name, ETRS89-LAEA.",
+    ("Microsoft.HeadingAcronyms", "MGRS"): "The grid's name.",
+    ("Microsoft.HeadingAcronyms", "QGIS"): "The application's name.",
+    ("Google.Spelling", "colour"): "The product name 'Scientific colour maps'.",
+    ("Microsoft.Percentages", "valid percent"): "The name of a manifest column.",
 }
 """Findings checked by hand and kept, by rule and matched text, with the reason.
 
 The matched text has its whitespace collapsed, so rewrapping a paragraph keeps
 an entry. An entry applies wherever its text appears.
 """
+
+ACCEPTED_PATTERNS: dict[tuple[str, str], str] = {
+    ("Portolan-Mechanics.Headings", r"GLACE .*"): (
+        "GLACE is an acronym; the rest of the heading is in sentence case."
+    ),
+    ("Microsoft.Negative", r"-\d+(\.\d+)?"): (
+        "A value a reader copies into code keeps the ASCII hyphen-minus."
+    ),
+}
+"""Kept findings whose matched text varies, by rule and a full-match regex."""
+
+
+def accepted(finding: Finding) -> tuple[str, str] | None:
+    """Return the ACCEPTED or ACCEPTED_PATTERNS key that keeps ``finding``, if any."""
+    key = (finding.rule, finding.match)
+    if key in ACCEPTED:
+        return key
+    for rule, pattern in ACCEPTED_PATTERNS:
+        if rule == finding.rule and re.fullmatch(pattern, finding.match):
+            return (rule, pattern)
+    return None
 
 
 @dataclass(frozen=True)
@@ -257,26 +275,44 @@ def extract_stac(target: Path) -> dict[Path, list[tuple[int, int, str]]]:
     last line of each paragraph and the ``document: field`` it came from.
     """
     shutil.rmtree(target, ignore_errors=True)
-    spans: dict[Path, list[tuple[int, int, str]]] = {}
+    documents: dict[str, list[tuple[str, str]]] = {}
     for source in sorted((ROOT / "catalog").rglob("*.json")):
-        if "styles" in source.parts:
-            continue
-        fields = prose_fields(json.loads(source.read_text()))
+        if "styles" not in source.parts:
+            documents[str(source.relative_to(ROOT))] = prose_fields(json.loads(source.read_text()))
+    documents["build-time prose"] = build_time_prose()
+    spans: dict[Path, list[tuple[int, int, str]]] = {}
+    for index, (name, fields) in enumerate(documents.items()):
         if not fields:
             continue
-        relative = source.relative_to(ROOT)
-        out = target / relative.with_suffix(".md")
+        out = target / f"{index:03d}.md"
         out.parent.mkdir(parents=True, exist_ok=True)
         lines: list[str] = []
         located: list[tuple[int, int, str]] = []
         for field, text in fields:
             first = len(lines) + 1
             lines.extend(text.splitlines() or [""])
-            located.append((first, len(lines), f"{relative}: {field}"))
+            located.append((first, len(lines), f"{name}: {field}"))
             lines.append("")
         out.write_text("\n".join(lines) + "\n")
         spans[out.relative_to(ROOT)] = located
     return spans
+
+
+def build_time_prose() -> list[tuple[str, str]]:
+    """Render the prose the build writes into documents that are not tracked.
+
+    The year catalogs, the mosaic items and the year styles exist only in the
+    store. Their descriptions are rendered here from ``metadata/`` for the last
+    year, under the template's name.
+    """
+    vocabulary = metadata.vocabulary()
+    year = vocabulary.catalog.last_year
+    return [
+        ("collections.tiles.year_description", vocabulary.year_description(year)),
+        ("collections.mosaics.item_description", vocabulary.mosaic_item_description(year)),
+        ("collections.mosaics.style_description (year)", vocabulary.style_description(year)),
+        ("collections.mosaics.style_description", vocabulary.style_description()),
+    ]
 
 
 def run_vale(
@@ -302,13 +338,38 @@ def run_vale(
     return report
 
 
-def locate(file: str, alert: dict[str, Any], spans: dict[Path, list[tuple[int, int, str]]]) -> str:
+def render_year_documents(target: Path) -> dict[Path, str]:
+    """Render the last year's README.md and AGENTS.md of the tiles year sub-catalog.
+
+    The build writes them into the store only. Returns each written file,
+    relative to the repository, with the template it came from.
+    """
+    vocabulary = metadata.vocabulary()
+    year = vocabulary.catalog.last_year
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(parents=True)
+    written: dict[Path, str] = {}
+    for name, text in zip(
+        ("README.md", "AGENTS.md"), documents.render_year_prose(vocabulary, year), strict=True
+    ):
+        out = target / name
+        out.write_text(text)
+        written[out.relative_to(ROOT)] = f"metadata/templates/tiles/year/{name}.j2 ({year})"
+    return written
+
+
+def locate(
+    file: str,
+    alert: dict[str, Any],
+    spans: dict[Path, list[tuple[int, int, str]]],
+    rendered: dict[Path, str],
+) -> str:
     """Name where a person fixes an alert: the Markdown line, or the STAC field."""
     line = int(alert["Line"])
     for first, last, field in spans.get(Path(file), []):
         if first <= line <= last:
             return field
-    return f"{file}:{line}"
+    return f"{rendered.get(Path(file), file)}:{line}"
 
 
 def sort_key(finding: Finding) -> tuple[str, str]:
@@ -335,12 +396,13 @@ def main() -> int:
     vale = ensure_vale()
     config = ensure_rules(vale)
     spans = extract_stac(CACHE / "stac")
-    files = markdown_documents() + sorted(spans)
+    rendered = render_year_documents(CACHE / "year")
+    files = markdown_documents() + sorted(rendered) + sorted(spans)
     report = run_vale(vale, config, files, args.level)
 
     alerts = [
         Finding(
-            location=locate(file, alert, spans),
+            location=locate(file, alert, spans, rendered),
             level=str(alert["Severity"]),
             rule=str(alert["Check"]),
             message=str(alert["Message"]),
@@ -350,11 +412,11 @@ def main() -> int:
         for alert in file_alerts
         if args.only is None or str(alert["Check"]).startswith(args.only)
     ]
-    findings = [f for f in alerts if (f.rule, f.match) not in ACCEPTED]
-    used = {(f.rule, f.match) for f in alerts}
+    findings = [f for f in alerts if accepted(f) is None]
+    used = {accepted(f) for f in alerts}
     stale = [
         key
-        for key in ACCEPTED
+        for key in [*ACCEPTED, *ACCEPTED_PATTERNS]
         if key not in used
         and LEVELS.index(args.level) <= LEVELS.index("warning")
         and (args.only is None or key[0].startswith(args.only))
