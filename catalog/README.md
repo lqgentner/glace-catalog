@@ -31,7 +31,7 @@ Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 | [Tiles](https://source.coop/giuz/glace-alps/tiles) | (MGRS square, year) | 10 m, UTM 31N/32N/33N | Detailed analysis, machine learning |
 | [Mosaics](https://source.coop/giuz/glace-alps/mosaics) | year | 20 m, ETRS89-LAEA | Regional analysis, inspection, time series |
 
-Both represent the same source composites on different grids. The tiles hold
+Both represent the same source composites on different grids. The tiles are
 the main product for scientific analysis. The mosaics put every year on one
 fixed equal-area grid, so years can be stacked and compared without alignment.
 The mosaics collection also includes PMTiles archives for web maps.
@@ -104,7 +104,7 @@ processing record.
 
 **Low coherence outside glaciers.** Snow patches, lakes, unstable slopes, and other surfaces also decorrelate over 12 days and can have coherence as low as glaciers.
 
-**Validated scope.** The validation covers glacier mapping in Switzerland within 250 m of the glacier outlines, so its scores do not apply to other parts of the Alps or to other applications, which may still benefit from the composites.
+**Validated scope.** The validation covers glacier mapping in Switzerland within 250 m of the glacier outlines. Glacier mapping elsewhere in the Alps and other applications were not validated.
 
 **2015 coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU, and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
 

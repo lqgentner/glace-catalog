@@ -4,7 +4,7 @@
   <br />
 </p>
 
-<h1 align="center">GLACE Catalog</h1>
+<h1 align="center">GLACE catalog</h1>
 
 <p align="center">
   Git-backed Portolan/STAC catalog for GLACE
@@ -80,10 +80,10 @@ The code is MIT, except for the vendored files listed in [Third Party
 Notices](THIRD_PARTY_NOTICES.md), which keep their own licenses. See
 [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
 Copernicus Sentinel data. The collection thumbnails are drawn over
-[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that
+[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and show that
 credit in the image.
 
 ## Comments and contributions
 
-We welcome your feedback! Please raise an issue
-[here](https://github.com/lqgentner/glace-catalog/issues).
+To give feedback or report a problem,
+[open an issue](https://github.com/lqgentner/glace-catalog/issues).

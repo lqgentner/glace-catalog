@@ -1,6 +1,6 @@
 # The twelve assets of the GLACE catalog and their web-map archives.
 #
-# This file is the single source of asset names, descriptions, colour ramps
+# This file is the single source of asset names, descriptions, color ramps
 # and value ranges. The build and `scripts/render-catalog.py` read it (through
 # `glace_catalog.metadata`) to write the collections, items, styles and the
 # asset tables in the READMEs and AGENTS.md files.
@@ -162,7 +162,7 @@ descriptions:
     three channels. Codes 1 to 255 map linearly onto {{ transport }}, with
     values outside it clipped. Code 0 is nodata.
     Decode with the band's raster:scale and raster:offset; the year's style
-    decodes it as a raster-dem source and colours it with a color-relief
+    decodes it as a raster-dem source and colors it with a color-relief
     layer. Lossy (WebP quality 90): for analysis, read the COGs with the
     "data" role.
 

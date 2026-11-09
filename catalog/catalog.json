@@ -6,7 +6,7 @@
   ],
   "id": "glace-alps",
   "title": "GLACE Alps – Sentinel-1 Glacier Coherence and Backscatter",
-  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2015–2026. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites are available in two separate collections: tiles (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on one fixed equal-area grid (ETRS89-LAEA, 20 m grid spacing). Every cloud-optimized GeoTIFF is LERC-compressed and carries its processing record in its own tags. For web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles in Web Mercator hold 8-bit value-encoded WebP tiles.",
+  "description": "Annual summer composites of Sentinel-1 12-day repeat-pass interferometric coherence (COH12) and radiometrically terrain-corrected backscatter (RTC). The data covers the Alpine Convention perimeter, 2015–2026. The analysis-ready composites are locally resolution weighted (LRW) after [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each output pixel is dominated by acquisitions with high spatial resolution. Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI over the target area.\n\nThe composites come in two collections. The tiles collection uses the 10 km × 10 km MGRS grid squares in their UTM zones, at 10 m grid spacing. The mosaics collection uses one fixed equal-area grid, ETRS89-LAEA at 20 m grid spacing. Every cloud-optimized GeoTIFF is LERC-compressed and stores its processing record in its own tags. For web maps, such as the [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles in Web Mercator contain 8-bit value-encoded WebP tiles.",
   "providers": [
     {
       "name": "European Space Agency / Copernicus",
@@ -58,13 +58,13 @@
       "rel": "child",
       "href": "./tiles/collection.json",
       "type": "application/json",
-      "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)"
+      "title": "GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)"
     },
     {
       "rel": "child",
       "href": "./mosaics/collection.json",
       "type": "application/json",
-      "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (20 m)"
+      "title": "GLACE mosaics – Sentinel-1 composites on ETRS89-LAEA (20 m)"
     },
     {
       "rel": "alternate",

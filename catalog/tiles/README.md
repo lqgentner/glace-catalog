@@ -1,4 +1,4 @@
-# GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
+# GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)
 
 Each item contains one year of data for a 10 km MGRS square: twelve
 single-band Cloud-Optimized GeoTIFFs (COGs) at 10 m grid spacing, in the

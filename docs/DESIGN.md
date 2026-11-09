@@ -17,7 +17,7 @@ Portolan compares the producer and host names to decide whether a catalog is
 official or a mirror, and a mirror owes a `via` link to its source. An
 official catalog has none, so the root links its Source Cooperative page as
 `alternate` and the production pipeline as `related`. Source
-Cooperative is the storage vendor, not the host: the spec defines the host as
+Cooperative is the storage vendor, not the host. The spec defines the host as
 the organization operating this copy, "not the underlying cloud vendor whose
 storage it happens to sit on". Listing it as host triggers `PTL-PRO-001` and
 `PTL-PRO-003`.
@@ -29,10 +29,10 @@ role: it operates Sentinel-1, and Copernicus terms govern reuse of the input.
 
 ## 2. The layout
 
-Portolan requires a collection to own its items: a collection directory holds
+Portolan requires a collection to own its items: a collection directory contains
 a `collection.json` and one subdirectory per item. A catalog may sit *below* a
 collection to group items. So each collection has its own year directories,
-and the year sub-catalogs fit naturally.
+and the year sub-catalogs fit below them.
 
 ```
 {root}/
@@ -64,7 +64,7 @@ same providers, license, and prose, and a cross-year query would become a
 concatenation. A data loader needs one collection with year sub-catalogs and one
 mirror covering the series.
 
-**Years are the only grouping level.** A year holds up to 2 210
+**Years are the only grouping level.** A year has up to 2 210
 tiles, so `PTL-CAT-001` warns on each year; [`conformance.md`](conformance.md)
 gives the reasons for taking the warning.
 
@@ -144,28 +144,28 @@ times the bytes on the wire; the data type, not the container, causes it. A
 single-band uint8 display COG saves too little to justify a second product:
 95 % of the LERC baseline for coherence, 49 % for backscatter.
 
-**The archives store values, not colours.** Each tile stores an 8-bit code,
+**The archives store values, not colors.** Each tile stores an 8-bit code,
 repeated in all three channels and linear over a fixed *transport range* per
 layer. Code 0 is nodata, with a binary alpha band. Tiles are lossy WebP at
 quality 90. The year style declares the decoding as a MapLibre `raster-dem`
 source with `"encoding": "custom"` and draws it with a `color-relief` layer
-over a default ramp and stretch. A client can recolour, restretch, and read
+over a default ramp and stretch. A client can recolor, restretch, and read
 values without new tiles. The item asset declares the same decoding as
 `raster:scale` and `raster:offset` on its band. No `layers.json` sits beside
 the archives: the PMTiles header, the item, and the style's `metadata` contain
 every field a client needs.
 
-Lossy grey tiles beat lossless ones on speckled SAR: lossless tiles are twice
-the size of colour-mapped archives, while grey tiles at quality 90 are smaller
-and add no more value error than colour mapping. The transport ranges are
+Lossy gray tiles beat lossless ones on speckled SAR. Lossless tiles are twice
+the size of color-mapped archives. Gray tiles at quality 90 are smaller and add
+no more value error than color mapping. The transport ranges are
 fixed across years and set in `metadata/assets.yaml`. Changing one means
 re-tiling every year; changing a default ramp does not. There are no
-false-colour archives: `color-relief` colours one value, and a client can
+false-color archives: `color-relief` colors one value, and a client can
 combine polarizations itself.
 
 **Two grids, neither derived from the other.** The annual analysis mosaics
 use **ETRS89-LAEA (EPSG:3035) at 20 m**, because WebMercator is not
-equal-area: a nominal 19.1 m pixel covers 13.2 m on the ground at 46.5° N,
+equal-area. A nominal 19.1 m pixel covers 13.2 m on the ground at 46.5° N,
 and the factor varies across the perimeter. Area statistics on it would need
 a correction the catalog does not declare. The web-map archives are tiled on
 WebMercatorQuad up to z13. Both are resampled directly from the 10 m UTM
@@ -175,8 +175,8 @@ warped twice.
 **Each layer is warped once, then tiled locally.** The encoded RGBA VRT over
 the display chain is copied to a local GeoTIFF without overviews, and the
 tiler reads that copy. Tiling from the VRT would re-warp the remote UTM
-composites for every tile at every zoom level: 174 s per layer against 10 s
-from the local copy, on a Swiss test.
+composites for every tile at every zoom level. On a Swiss test, that took
+174 s per layer, against 10 s from the local copy.
 
 The tiler is in-tree (`glace_catalog.tiler`, adapted from rio-pmtiles under
 its MIT license; see `THIRD_PARTY_NOTICES.md`). One worker pool serves every
@@ -187,7 +187,7 @@ layer of a year, and three output rules differ from rio-pmtiles on purpose:
 - a tile is empty only when its own footprint is, with no one-pixel margin;
 - alpha is binary, and the codes beneath transparent pixels are zero.
 
-The pmtiles fingerprint includes the tiler's identity, so changing the tiler
+The fingerprint of the `pmtiles` step includes the tiler's identity, so changing the tiler
 rebuilds every archive. The `pmtiles` package writes the archive file;
 `glace_catalog.tiler` renders each tile.
 
@@ -200,7 +200,7 @@ one copy per year beside the year's archives, `{year}/styles/default.json`,
 registered on the mosaic item as `style-default`, and publishes the latest
 year's copy as the collection's style, a recorded deviation from
 `PORTO-CORE-069` ([`conformance.md`](conformance.md)). One style per year gives
-every archive a layer that draws it; one tracked file per year would copy
+every archive a layer that draws it. A tracked file per year would instead copy
 twelve layers each and let them drift, and one file for all years would contain
 144 sources with one visible. The encoding and default ramp are per product and
 fixed across years, so the copies differ only in the year. Ranges, ramps, and
@@ -241,7 +241,7 @@ in `properties`. It sets per-layer `rescale`, `colormap_name`,
 `resampling`, `nodata` and, for RTC and QA-CQM, `expression:
 "10*log10(...)"`, so the catalog itself declares the decibel convention.
 `colormap_name` names portable matplotlib maps (`magma`, `gray`), because a
-generic client will not have cmcrameri registered; the intended cmcrameri
+generic client does not have cmcrameri registered; the intended cmcrameri
 maps are named in each collection's `AGENTS.md`.
 
 ---
@@ -263,9 +263,9 @@ Metadata in git, data on object storage, one uploader.
 description, and display number is written once, in `metadata/assets.yaml` or
 `metadata/catalog.yaml`. `scripts/render-catalog.py` writes the tracked
 documents from them, and `tests/test_render.py` fails when the tracked tree
-differs from a fresh render. The rendered tree stays in git for three
-reasons: a reviewer reads the rendered diff, rashid and the Portolan browser
-read a tree, and a tagged release then contains the STAC metadata.
+differs from a fresh render. The rendered tree stays in git: a
+reviewer reads the rendered diff, rashid and the Portolan browser read a tree,
+and a tagged release contains the STAC metadata.
 The build uses the same vocabulary (`glace_catalog.metadata`) for every asset
 title it writes, so an item and its collection's `item_assets` always describe a
 file the same way. There is no `.portolan/metadata.yaml`: `portolan add` is
@@ -308,7 +308,7 @@ the same reason: a store copied to a local disk or a preview bucket draws its
 own archives. Item asset hrefs are relative to the item, and the collections'
 style asset hrefs are relative to the collection. The other collection asset
 hrefs and the hrefs in `items.parquet` are absolute HTTPS built from
-`public_base`, because a client reading one object alone has no base to resolve
+`public_base`. A client reading one object alone has no base to resolve
 against, and the file listing on Source Cooperative shows asset hrefs as
 download links that work only when absolute. `s3://` appears only under the `alternate`
 extension. Finalization writes the root `self` link; it is not tracked, because
@@ -330,14 +330,19 @@ glacier-fraction table (`AGENTS.md` step 1), and takes MGRS tile geometry from
 
 **`manifest.parquet` sits beside each year's composites**, one row per file,
 so the build reads one file instead of opening some 26 500. The composite
-driver writes it at the end of a run, beside its `config.yaml`: the bytes' own
-properties are the writer's, but arranging rows in this catalog's vocabulary
-and describing a resumed run belong to the run loop. A row contains the
-filename and what it parses to (tile, asset key, product, QA layer,
-polarization, compositing window), the size from a listing taken last, the
-`sha256`, the valid percent, the band header (name, unit, data type, nodata,
-resolution), the five `STATISTICS_*` values, and one column per GeoTIFF tag.
-`tests/test_manifest_contract.py` holds the producer's column list verbatim,
+driver writes it at the end of a run, beside its `config.yaml`. The writer
+records the properties of each file's bytes; the run loop arranges the rows in
+this catalog's vocabulary and describes a resumed run. A row contains:
+
+- the filename and what it parses to: tile, asset key, product, QA layer,
+  polarization, and compositing window;
+- the size, from a listing taken last;
+- the `sha256` and the valid percent;
+- the band header: name, unit, data type, nodata, and resolution;
+- the five `STATISTICS_*` values;
+- one column per GeoTIFF tag.
+
+`tests/test_manifest_contract.py` contains the producer's column list verbatim,
 and `read_manifest` and `survey_tags` stop the build on a manifest that
 drifts. The parquet metadata records `manifest_version = 2`, bumped when a
 column changes meaning, not when one is added.
@@ -368,12 +373,11 @@ fabricated value is worse than an absent one.
 
 The manifest also records the five `STATISTICS_*` values per band, which
 `PTL-DAT-009/010` require of the *composites*; a run whose files lack them
-cannot be published. The annual mosaics
-are written by this repository, so they get their own: `build_mosaic_cog`
-accumulates the five values over the source VRT, window by window, and passes
-them to freezebase's `write_cog` as band tags, which sets them on the VRT
-before the COG encode, the only point at which they can reach the file's
-header.
+cannot be published. This repository writes the annual mosaics, so it
+computes their statistics. `build_mosaic_cog` accumulates the five values over
+the source VRT, window by window, and passes them to freezebase's `write_cog`
+as band tags. `write_cog` sets them on the VRT before the COG encode, the only
+point at which they can reach the file's header.
 
 ---
 
@@ -396,9 +400,9 @@ re-syncing them from the template does not conflict. Upstream's own pyflakes
 pass covers them in CI.
 
 `tests/test_data_format.py` covers what ruff cannot. Every tracked JSON
-document must be in the canonical form the generator writes (two-space
-indent, declaration order, one trailing newline, non-ASCII kept as is), so a
-hand edit cannot hide a one-line change in a reindented diff. YAML must parse
+document must be in the canonical form the generator writes: two-space
+indent, declaration order, one trailing newline, and non-ASCII kept as is. A
+hand edit then cannot hide a one-line change in a reindented diff. YAML must parse
 under `safe_load` and not indent with tabs. `tests/test_conformance.py`
 refuses a rashid outside `>=0.3.0,<0.4.0`, because a pass from a validator
 with the wrong rule set proves nothing.
@@ -436,5 +440,5 @@ without it.
 **The LaRS record contains no data files.** Its data URL is the product page on
 Source Cooperative. It contains the root README as a PDF (`make landing`) and both
 `items.parquet` of that version, zipped. The indexes list every data file with
-its size and checksum, so a reader can check their bytes against the cited
+its size and checksum. A reader can then check their bytes against the cited
 version after the store has moved on to the next.

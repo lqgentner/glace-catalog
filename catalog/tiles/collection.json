@@ -13,7 +13,7 @@
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-tiles",
-  "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
+  "title": "GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)",
   "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item contains twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
@@ -776,7 +776,7 @@
       "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
       "type": "application/vnd.pmtiles",
       "title": "Tile grid with glacier fractions",
-      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs, with the properties mgrs_tile, glacier_fraction, and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
+      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs. Its properties are mgrs_tile, glacier_fraction, and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
       "roles": [
         "visual"
       ],

@@ -1,8 +1,8 @@
 # {{ mosaics.title }}
 
-One item per year, each carrying {{ n_assets }} single-band analysis rasters on
-ETRS89-LAEA (EPSG:3035) at {{ analysis_grid.resolution | int }} m, plus {{ n_viz }} PMTiles archives
-for drawing them, beside the rasters in the same item directory. Agents: read
+One item per year. Each item contains {{ n_assets }} single-band analysis rasters
+on ETRS89-LAEA (EPSG:3035) at {{ analysis_grid.resolution | int }} m and, in the same directory,
+{{ n_viz }} PMTiles archives that draw them. Agents: read
 [`AGENTS.md`]({{ page_base }}/mosaics/AGENTS.md).
 
 The grid has two deliberate properties:
@@ -45,8 +45,8 @@ composite quality maps are encoded in decibels; coherence is linear. Each
 archive's asset declares the decoding as `raster:scale` and `raster:offset`.
 
 Each year's style declares every archive as a MapLibre `raster-dem` source
-with a custom encoding and draws it as a `color-relief` layer, with a default
-ramp from the [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
+with a custom encoding and draws it as a `color-relief` layer. The default
+ramps come from the [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862)
 ([Crameri et al., 2020](https://doi.org/10.1038/s41467-020-19160-7)). A client
 can change the ramp and the range without re-tiling.
 
@@ -54,9 +54,9 @@ Each year's style sits beside its archives, at `{year}/styles/default.json`,
 and the collection's style draws the latest year.
 
 **To draw a map**, load a year's style in MapLibre GL JS, which decodes custom
-`raster-dem` encodings. The style refers to its archives by paths relative to itself, as
-Portolan styles do, while MapLibre and the PMTiles protocol resolve a source URL
-against the page, so resolve them against the style first:
+`raster-dem` encodings. Like other Portolan styles, the style refers to its
+archives by paths relative to itself. MapLibre and the PMTiles protocol resolve
+a source URL against the page, so resolve the paths against the style first:
 
 ```js
 const protocol = new pmtiles.Protocol();

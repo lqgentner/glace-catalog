@@ -72,7 +72,7 @@ equal-area grid across years.
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once
 per scope from {{ catalog.scope.glacier_inventory }} outlines, plain and buffered by
 {{ catalog.scope.glacier_buffer_m | int }} m, so a tile has the same values every year. The tiles
-collection's `grid` asset, `tiles/grid.pmtiles`, carries them per tile.
+collection's `grid` asset, `tiles/grid.pmtiles`, contains them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
 the year styles. The [GLACE Viewer]({{ catalog.links.viewer.href }}) draws the PMTiles with these styles.

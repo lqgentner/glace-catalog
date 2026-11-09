@@ -59,8 +59,8 @@ usage_notes:
   - title: Validated scope
     text: >-
       The validation covers glacier mapping in Switzerland within 250 m of the
-      glacier outlines, so its scores do not apply to other parts of the Alps or
-      to other applications, which may still benefit from the composites.
+      glacier outlines. Glacier mapping elsewhere in the Alps and other
+      applications were not validated.
   - title: 2015 coverage
     text: >-
       In 2015, coherence is missing on 91 MGRS squares in the north-central
@@ -79,13 +79,13 @@ description: >-
   over the target area.
 
 
-  The composites are available in two separate collections: tiles
-  (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
-  one fixed equal-area grid (ETRS89-LAEA, 20 m grid spacing). Every
-  cloud-optimized GeoTIFF is LERC-compressed and carries its processing
-  record in its own tags. For web maps, such as the
+  The composites come in two collections. The tiles collection uses the
+  10 km × 10 km MGRS grid squares in their UTM zones, at 10 m grid spacing.
+  The mosaics collection uses one fixed equal-area grid, ETRS89-LAEA at 20 m
+  grid spacing. Every cloud-optimized GeoTIFF is LERC-compressed and stores
+  its processing record in its own tags. For web maps, such as the
   [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles
-  in Web Mercator hold 8-bit value-encoded WebP tiles.
+  in Web Mercator contain 8-bit value-encoded WebP tiles.
 
 license: CC-BY-4.0
 
@@ -154,7 +154,7 @@ links:
 
 collections:
   tiles:
-    title: GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
+    title: GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)
     short_title: GLACE tiles
     keywords: [MGRS]
     description: >-
@@ -168,10 +168,10 @@ collections:
       `items.parquet`.
     # Description of each year sub-catalog.
     year_description: >-
-      The MGRS squares composited in {{ year }}, one item each, every item
-      carrying that square's {{ n_assets }} single-band composites.
+      The MGRS squares composited in {{ year }}, one item each. Each item
+      contains that square's {{ n_assets }} single-band composites.
   mosaics:
-    title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (20 m)
+    title: GLACE mosaics – Sentinel-1 composites on ETRS89-LAEA (20 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
     # Description of the style assets: with `year` for the style on that
@@ -180,7 +180,7 @@ collections:
       {% if year is defined %}Every published web-map layer of {{ year }}, the
       first visible and the rest hidden.{% else %}Every web-map layer of the
       latest published year, the first visible and the rest hidden. Each
-      year's mosaic item carries the style of its own year, as
+      year's mosaic item has the style of its own year, as
       styles/default.json beside its archives.{% endif %} Each archive is a
       raster-dem source whose custom encoding decodes its values, drawn by a
       color-relief layer with a default color ramp that a client can change.

@@ -57,7 +57,7 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 
 **Low coherence outside glaciers.** Snow patches, lakes, unstable slopes, and other surfaces also decorrelate over 12 days and can have coherence as low as glaciers.
 
-**Validated scope.** The validation covers glacier mapping in Switzerland within 250 m of the glacier outlines, so its scores do not apply to other parts of the Alps or to other applications, which may still benefit from the composites.
+**Validated scope.** The validation covers glacier mapping in Switzerland within 250 m of the glacier outlines. Glacier mapping elsewhere in the Alps and other applications were not validated.
 
 **2015 coverage.** In 2015, coherence is missing on 91 MGRS squares in the north-central Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU, and 32UPU) because Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and 32TNT24, have no 2015 items. Every other year covers all squares.
 
@@ -70,7 +70,7 @@ equal-area grid across years.
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once
 per scope from RGI7-C-11 outlines, plain and buffered by
 250 m, so a tile has the same values every year. The tiles
-collection's `grid` asset, `tiles/grid.pmtiles`, carries them per tile.
+collection's `grid` asset, `tiles/grid.pmtiles`, contains them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
 the year styles. The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) draws the PMTiles with these styles.

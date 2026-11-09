@@ -6,7 +6,7 @@ Items cover the MGRS squares of the Alpine Convention perimeter.
 
 ## Search tiles
 
-Use `items.parquet` to search all years without fetching each item separately.
+Use `items.parquet` to search all years without fetching each item.
 This DuckDB query selects tiles by year and buffered glacier fraction:
 
 ```sql
@@ -62,7 +62,7 @@ GeoTIFF tags record the processing chain: `PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`,
 `COMPOSITING_*`, `BACKSCATTER_*` and `COHERENCE_*`. The GeoTIFF tags are the
 source of truth; the STAC metadata copies them in three places:
 
-- The collection's `item_assets` hold, per asset key, the `glace:*` fields
+- The collection's `item_assets` state, per asset key, the `glace:*` fields
   that are the same on every tile and in every year, such as
   `glace:compositing_method` and `glace:coherence_window_range`. The build
   refuses a raster whose tags state otherwise.
