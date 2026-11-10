@@ -15,7 +15,7 @@ catalog.json
 
 Use each collection's `items.parquet` to search multiple items. This
 STAC-GeoParquet index has the `collection-mirror` role and stores the item
-properties as columns; each collection's guide lists them. Individual item
+properties as columns. Each collection's guide lists them. Individual item
 JSON files are the authoritative records.
 
 This DuckDB query finds the 2026 tiles with more than 20% glacier
@@ -37,9 +37,9 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 
 - Coherence is dimensionless and linear.
 - Backscatter is linear γ⁰ power. Convert with `10*log10(x)` for decibel
-  display; average values in linear units.
+  display, and average values in linear units.
 - `*_qa_cqm` is a dimensionless linear ratio describing local resolution.
-  Higher values mean better resolution. Average in linear units; convert
+  Higher values mean better resolution. Average in linear units, and convert
   with `10*log10(x)` for decibel display.
 - `*_qa_num` is an integer count on tiles and a mean count on mosaics. Each
   20 m mosaic pixel averages four 10 m counts.
@@ -51,7 +51,7 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 
 ## Common pitfalls
 
-**Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favorable viewing geometries contributed. In the validation, a random forest maps glaciers less accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87) than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
+**Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favorable viewing geometries contributed. In the validation, a random forest maps glaciers less accurately where the CQM is below 0.5, about −3 dB (AUC 0.87), than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
 
 **Coherence bias.** Coherence is estimated over a 35 × 7 (range × azimuth) window. The finite window biases the estimate upwards, so fully decorrelated surfaces do not reach 0: over large lakes, the mean is about 0.09. So absolute values differ from products that use larger windows, such as the global seasonal Sentinel-1 coherence of [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6). Do not compare values across products, and choose thresholds on GLACE itself.
 
@@ -64,7 +64,7 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 ## Compare years and collections
 
 Tiles and mosaics represent the same source composites on different grids.
-Pair them by year; reproject before comparing pixels. Mosaics use a fixed
+Pair them by year, and reproject before comparing pixels. Mosaics use a fixed
 equal-area grid across years.
 
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once

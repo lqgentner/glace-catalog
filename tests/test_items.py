@@ -263,7 +263,6 @@ def _mirror_checks(tile_item: pystac.Item) -> dict[str, bool]:
     """Write both mirrors as the build and finalization do; check their columns and links."""
     base = "https://example.org/glace"
     mosaic = _mosaic_item()
-    mosaic.properties["glace:build_fingerprint"] = "0" * 64
     mosaic.properties["description"] = vocabulary().mosaic_item_description(2023)
     # Finalization reads the mosaic items back from the store, as written.
     stored = pystac.Item.from_dict(item_document(mosaic))
@@ -412,7 +411,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     ).startswith("1220")
     checks["a rendering is a PMTiles archive"] = viz.media_type == "application/vnd.pmtiles"
     checks["a rendering's href is beside the COG"] = viz.href == "coh12_vv_viz.pmtiles"
-    checks["a rendering says what it is"] = 'read the COGs with the "data" role' in (
+    checks["a rendering says what it is"] = "For analysis, use the COGs." in (
         viz.description or ""
     )
     band = viz.extra_fields.get("bands", [{}])[0]

@@ -14,7 +14,7 @@
   ],
   "id": "glace-alps-tiles",
   "title": "GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)",
-  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item contains twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item contains twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear. The renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -41,7 +41,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction, and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "description": "Produced the composites and annual mosaics from Copernicus Sentinel-1 SLC data, and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -296,7 +296,7 @@
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Coherence VV composite with a non-zero resolution weight.",
+      "description": "Number of interferometric pairs that contributed to the Coherence VV composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -325,7 +325,7 @@
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Composite Quality Map",
-      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Coherence VV composite, its local resolution. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -388,7 +388,7 @@
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Contributing Observations",
-      "description": "Number of acquisitions that contributed to the Coherence VH composite with a non-zero resolution weight.",
+      "description": "Number of interferometric pairs that contributed to the Coherence VH composite with a non-zero resolution weight.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -417,7 +417,7 @@
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Composite Quality Map",
-      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Coherence VH composite, its local resolution. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -447,7 +447,7 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -503,7 +503,7 @@
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Backscatter VV composite, its local resolution. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -531,7 +531,7 @@
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), composited with local resolution weighting over the year's summer window on the 10 m MGRS grid. Linear power.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -587,7 +587,7 @@
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Backscatter VH composite, its local resolution. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -618,7 +618,7 @@
       "href": "https://data.source.coop/giuz/glace-alps/tiles/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
-      "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
+      "description": "Item index in STAC-GeoParquet, one row per item. Query it instead of the item files.",
       "roles": [
         "collection-mirror"
       ],
@@ -646,7 +646,7 @@
         },
         {
           "name": "bbox",
-          "description": "Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups."
+          "description": "Bounds of the footprint in WGS84, the GeoParquet covering column."
         },
         {
           "name": "links",
@@ -750,7 +750,7 @@
         },
         {
           "name": "processing:level",
-          "description": "Always `L3`, a composite over many acquisitions."
+          "description": "Always `L3`."
         },
         {
           "name": "glace:dem",

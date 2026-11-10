@@ -38,8 +38,8 @@ usage_notes:
       Lower `*_qa_cqm` values indicate a lower local resolution of the
       composite: the closer to 0, the fewer favorable viewing geometries
       contributed. In the validation, a random forest maps glaciers less
-      accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87)
-      than elsewhere (0.97). These pixels make up 3% of the pixels within
+      accurately where the CQM is below 0.5, about −3 dB (AUC 0.87), than
+      elsewhere (0.97). These pixels make up 3% of the pixels within
       250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or
       downweight them, or use the CQM as an additional model input.
   - title: Coherence bias
@@ -74,7 +74,9 @@ description: >-
   The data covers {{ region }}, {{ first_year }}–{{ last_year }}. The
   analysis-ready composites are locally resolution weighted (LRW) after
   [Small et al. (2022)](https://doi.org/10.1109/TGRS.2021.3055562), so each
-  output pixel is dominated by acquisitions with high spatial resolution.
+  output pixel is dominated by observations with high spatial resolution. An
+  observation is an acquisition for backscatter and a 12-day pair for
+  coherence.
   Each year's 90-day averaging period was chosen by minimizing the MODIS NDSI
   over the target area.
 
@@ -119,10 +121,8 @@ providers:
     url: https://sentinel.esa.int/web/sentinel/missions/sentinel-1
   - name: University of Zurich, Department of Geography
     description: >-
-      Produced the composites from Copernicus Sentinel-1 SLC data: burst
-      extraction, coherence estimation, radiometric terrain correction, and
-      local resolution weighted compositing. Derived the annual mosaics and
-      maintains this catalog.
+      Produced the composites and annual mosaics from Copernicus Sentinel-1
+      SLC data, and maintains this catalog.
     roles: [producer, processor, licensor, host]
     url: https://www.geo.uzh.ch/en.html
 
@@ -163,7 +163,7 @@ collections:
       {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
       backscatter in VV and VH, and for each of the four a
       contributing-observations count and a composite quality map. Stored
-      values are linear; the renders declare the decibel conversion
+      values are linear. The renders declare the decibel conversion
       (`10*log10(x)`) for display. Search the tiles with the item index
       `items.parquet`.
     # Description of each year sub-catalog.
@@ -177,13 +177,11 @@ collections:
     # Description of the style assets: with `year` for the style on that
     # year's mosaic item, without it for the collection's style.
     style_description: >-
-      {% if year is defined %}Every published web-map layer of {{ year }}, the
-      first visible and the rest hidden.{% else %}Every web-map layer of the
-      latest published year, the first visible and the rest hidden. Each
-      year's mosaic item has the style of its own year, as
-      styles/default.json beside its archives.{% endif %} Each archive is a
-      raster-dem source whose custom encoding decodes its values, drawn by a
-      color-relief layer with a default color ramp that a client can change.
+      {% if year is defined %}Style of the {{ year }} web maps, with the first
+      layer visible.{% else %}Style of the latest year's web maps, with the
+      first layer visible. Each mosaic item has its own year's style.{% endif %}
+      The layers decode the archives as raster-dem sources and color them with
+      color-relief.
     description: >-
       One mosaic per year of the GLACE composites, resampled from the MGRS
       tiles onto ETRS89-LAEA (EPSG:3035) at {{ analysis_resolution }} m.

@@ -41,7 +41,7 @@ WebMercatorQuad up to zoom 13, resampled from the MGRS tiles.
 
 Each archive pixel stores an 8-bit code in all three channels of a lossy WebP
 tile, linear over a fixed range per layer. Backscatter and
-composite quality maps are encoded in decibels; coherence is linear. Each
+composite quality maps are encoded in decibels, and coherence is linear. Each
 archive's asset declares the decoding as `raster:scale` and `raster:offset`.
 
 Each year's style declares every archive as a MapLibre `raster-dem` source

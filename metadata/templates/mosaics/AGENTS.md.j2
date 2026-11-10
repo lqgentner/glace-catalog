@@ -28,7 +28,7 @@ yearly = cube.groupby("time.year").first()
 change = yearly.sel(year={{ last_year }}) - yearly.sel(year={{ first_year }})
 ```
 
-Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
+Read COGs for analysis. Values are linear, and `*_qa_num` contains mean observation
 counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
 ## Item index
@@ -37,7 +37,7 @@ counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata
 every column with its type and description as `table:columns`. These are the
 ones queries use:
 
-{% for column in mirror_columns.mosaics | selectattr("name", "in", ["id", "assets", "datetime", "glace:build_fingerprint"]) %}
+{% for column in mirror_columns.mosaics | selectattr("name", "in", ["id", "assets", "datetime"]) %}
 - `{{ column.name }}`: {{ column.description }}
 {% endfor %}
 
@@ -66,4 +66,4 @@ the COGs and declares their decibel conversions.
 ## Compare with tiles
 
 Mosaics are derived from the 10 m tiles. Match items by year and reproject
-before comparing pixels: tiles use UTM zones; mosaics use ETRS89-LAEA.
+before comparing pixels. Tiles use UTM zones, and mosaics use ETRS89-LAEA.

@@ -512,7 +512,6 @@ def build_mosaic_item(
     start: datetime,
     end: datetime,
     assets: Mapping[str, MosaicAsset],
-    build_fingerprint: str | None = None,
     version: str = DATASET_VERSION,
 ) -> pystac.Item:
     """Build the annual-mosaic item for one year.
@@ -530,9 +529,6 @@ def build_mosaic_item(
         day, and the midnight after its last day.
     assets
         Written mosaic COGs and per-year documents, keyed by asset key.
-    build_fingerprint
-        Fingerprint of the inputs this year was built from, so a store can be
-        checked against its inputs directly.
     version
         Published edition; see :data:`DATASET_VERSION`.
     """
@@ -556,8 +552,6 @@ def build_mosaic_item(
             "version": version,
         },
     )
-    if build_fingerprint is not None:
-        item.properties["glace:build_fingerprint"] = build_fingerprint
     item.stac_extensions.extend(
         [
             SAR_EXTENSION_URI,

@@ -40,7 +40,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction, and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "description": "Produced the composites and annual mosaics from Copernicus Sentinel-1 SLC data, and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -279,7 +279,7 @@
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Coherence VV composite. Each pixel is the average of the original 10 m pixel counts.",
+      "description": "Mean number of interferometric pairs that contributed to the Coherence VV composite. Each pixel is the average of the original 10 m pixel counts.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -296,7 +296,7 @@
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Composite Quality Map",
-      "description": "Composite quality of the Coherence VV composite, averaged onto the 20 m grid: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Coherence VV composite, its local resolution, averaged onto the 20 m grid. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -330,7 +330,7 @@
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Coherence VH composite. Each pixel is the average of the original 10 m pixel counts.",
+      "description": "Mean number of interferometric pairs that contributed to the Coherence VH composite. Each pixel is the average of the original 10 m pixel counts.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -347,7 +347,7 @@
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Composite Quality Map",
-      "description": "Composite quality of the Coherence VH composite, averaged onto the 20 m grid: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Coherence VH composite, its local resolution, averaged onto the 20 m grid. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -364,7 +364,7 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -398,7 +398,7 @@
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VV composite, averaged onto the 20 m grid: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Backscatter VV composite, its local resolution, averaged onto the 20 m grid. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -415,7 +415,7 @@
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power.",
       "roles": [
         "data",
         "cloud-optimized"
@@ -449,7 +449,7 @@
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VH composite, averaged onto the 20 m grid: the local resolution of the weighted composite, where higher is better resolved. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality map of the Backscatter VH composite, its local resolution, averaged onto the 20 m grid. Higher values are better resolved. Linear.",
       "roles": [
         "quality",
         "cloud-optimized"
@@ -466,7 +466,7 @@
     "coh12_vv_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VV – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VV on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 1, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VV on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 1, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -482,7 +482,7 @@
     "coh12_vv_qa_num_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VV – Contributing Observations – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VV – Contributing Observations on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VV – Contributing Observations on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -498,7 +498,7 @@
     "coh12_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VV – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VV – Composite Quality Map on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 14 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VV – Composite Quality Map on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 14 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -515,7 +515,7 @@
     "coh12_vh_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VH – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VH on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 1, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VH on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 1, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -531,7 +531,7 @@
     "coh12_vh_qa_num_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VH – Contributing Observations – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VH – Contributing Observations on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VH – Contributing Observations on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -547,7 +547,7 @@
     "coh12_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Coherence VH – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Coherence VH – Composite Quality Map on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 14 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Coherence VH – Composite Quality Map on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 14 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -564,7 +564,7 @@
     "rtc_vv_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VV – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VV on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -25 to 10 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VV on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -25 to 10 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -581,7 +581,7 @@
     "rtc_vv_qa_num_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VV – Contributing Observations – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VV – Contributing Observations on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VV – Contributing Observations on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -597,7 +597,7 @@
     "rtc_vv_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VV – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VV – Composite Quality Map on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 12 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VV – Composite Quality Map on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 12 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -614,7 +614,7 @@
     "rtc_vh_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VH – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VH on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -31 to 2 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VH on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -31 to 2 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -631,7 +631,7 @@
     "rtc_vh_qa_num_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VH – Contributing Observations – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VH – Contributing Observations on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VH – Contributing Observations on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto 0 to 253, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -647,7 +647,7 @@
     "rtc_vh_qa_cqm_viz": {
       "type": "application/vnd.pmtiles",
       "title": "Backscatter VH – Composite Quality Map – PMTiles",
-      "description": "Value-encoded WebP tiles of Backscatter VH – Composite Quality Map on WebMercatorQuad z5-z13. Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 12 dB, with values outside it clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset; the year's style decodes it as a raster-dem source and colors it with a color-relief layer. Lossy (WebP quality 90): for analysis, read the COGs with the \"data\" role.",
+      "description": "Web-map tiles of Backscatter VH – Composite Quality Map on WebMercatorQuad z5-z13, as lossy WebP (quality 90). Each pixel stores an 8-bit code in all three channels. Codes 1 to 255 map linearly onto -20 to 12 dB, with values beyond clipped. Code 0 is nodata. Decode with the band's raster:scale and raster:offset. For analysis, use the COGs.",
       "roles": [
         "visual"
       ],
@@ -675,7 +675,7 @@
       "href": "https://data.source.coop/giuz/glace-alps/mosaics/items.parquet",
       "type": "application/vnd.apache.parquet",
       "title": "STAC-GeoParquet item mirror",
-      "description": "Every item of every year, one row each. The item JSON in the tree is the normative representation; this is the one to query.",
+      "description": "Item index in STAC-GeoParquet, one row per item. Query it instead of the item files.",
       "roles": [
         "collection-mirror"
       ],
@@ -703,7 +703,7 @@
         },
         {
           "name": "bbox",
-          "description": "Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups."
+          "description": "Bounds of the footprint in WGS84, the GeoParquet covering column."
         },
         {
           "name": "links",
@@ -762,10 +762,6 @@
           "description": "Dataset version the item belongs to."
         },
         {
-          "name": "glace:build_fingerprint",
-          "description": "Fingerprint of the inputs and settings the year's mosaics were built from. It changes when any of them change."
-        },
-        {
           "name": "description",
           "description": "Description of the item."
         },
@@ -793,7 +789,7 @@
       "href": "./styles/default.json",
       "type": "application/vnd.mapbox.style+json",
       "title": "Map style – latest year",
-      "description": "Every web-map layer of the latest published year, the first visible and the rest hidden. Each year's mosaic item has the style of its own year, as styles/default.json beside its archives. Each archive is a raster-dem source whose custom encoding decodes its values, drawn by a color-relief layer with a default color ramp that a client can change.",
+      "description": "Style of the latest year's web maps, with the first layer visible. Each mosaic item has its own year's style. The layers decode the archives as raster-dem sources and color them with color-relief.",
       "roles": [
         "style",
         "default"

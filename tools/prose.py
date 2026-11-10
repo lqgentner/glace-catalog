@@ -76,10 +76,6 @@ _COVERAGE = "The 2015 coverage is checked against every year's source manifest."
 ACCEPTED: dict[tuple[str, str], str] = {
     (
         "ai-tells.VerbTricolon",
-        ": burst extraction, coherence estimation, radiometric terrain correction",
-    ): _LIST,
-    (
-        "ai-tells.VerbTricolon",
         (
             ": to add a missing one, rerun the upstream year, which skips complete tiles "
             "and describes and hashes their files"

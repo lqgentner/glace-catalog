@@ -29,6 +29,8 @@ products:
   coh12:
     name: Coherence
     long: 12-day repeat-pass interferometric coherence
+    # What one observation is, as the count descriptions name it.
+    observations: interferometric pairs
     sar_product_type: COH
     # What the stored values are; appended to each data asset's description.
     value: Dimensionless, in [0, 1].
@@ -68,10 +70,9 @@ products:
   rtc:
     name: Backscatter
     long: Radiometrically terrain-corrected gamma-nought backscatter
+    observations: acquisitions
     sar_product_type: RTC
-    value: >-
-      Linear power. For display, the collection's renders declare the decibel
-      conversion, 10*log10.
+    value: Linear power.
     cmap: cmc.grayC
     portable_cmap: gray
     decibel: true
@@ -127,8 +128,8 @@ qa:
       QA_LAYER: Composite Quality Map Image
       CQM_CONVERSION_EQ: dB = 10*log10(DN)
 
-# Asset descriptions. Jinja2 variables: long, product (short name), POL,
-# pol_word, value, source_title, transport, min_zoom, max_zoom.
+# Asset descriptions. Jinja2 variables: long, product (short name),
+# observations, POL, pol_word, value, source_title, transport, min_zoom, max_zoom.
 descriptions:
   data:
     tiles: >-
@@ -139,31 +140,26 @@ descriptions:
       equal-area grid by averaging in the linear domain. {{ value }}
   num:
     tiles: >-
-      Number of acquisitions that contributed to the {{ product }} {{ POL }} composite
+      Number of {{ observations }} that contributed to the {{ product }} {{ POL }} composite
       with a non-zero resolution weight.
     mosaics: >-
-      Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
+      Mean number of {{ observations }} that contributed to the {{ product }} {{ POL }}
       composite. Each pixel is the average of the original 10 m pixel counts.
   cqm:
     tiles: >-
-      Composite quality of the {{ product }} {{ POL }} composite: the local
-      resolution of the weighted composite, where higher is better resolved.
-      Linear scaling; the decibel conversion is declared in the collection's
-      renders.
+      Composite quality map of the {{ product }} {{ POL }} composite, its local
+      resolution. Higher values are better resolved. Linear.
     mosaics: >-
-      Composite quality of the {{ product }} {{ POL }} composite, averaged onto
-      the 20 m grid: the local resolution of the weighted composite, where
-      higher is better resolved. Linear scaling; the decibel conversion is
-      declared in the collection's renders.
+      Composite quality map of the {{ product }} {{ POL }} composite, its local
+      resolution, averaged onto the 20 m grid. Higher values are better
+      resolved. Linear.
   viz: >-
-    Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad
-    z{{ min_zoom }}-z{{ max_zoom }}. Each pixel stores an 8-bit code in all
-    three channels. Codes 1 to 255 map linearly onto {{ transport }}, with
-    values outside it clipped. Code 0 is nodata.
-    Decode with the band's raster:scale and raster:offset; the year's style
-    decodes it as a raster-dem source and colors it with a color-relief
-    layer. Lossy (WebP quality 90): for analysis, read the COGs with the
-    "data" role.
+    Web-map tiles of {{ source_title }} on WebMercatorQuad
+    z{{ min_zoom }}-z{{ max_zoom }}, as lossy WebP (quality 90). Each pixel
+    stores an 8-bit code in all three channels. Codes 1 to 255 map linearly
+    onto {{ transport }}, with values beyond clipped. Code 0 is nodata.
+    Decode with the band's raster:scale and raster:offset. For analysis, use
+    the COGs.
 
 # The columns of each collection's item mirror, `items.parquet`, in the order
 # the files hold them. The collections publish them as `table:columns` and the collection AGENTS.md
@@ -192,8 +188,7 @@ mirror_columns:
         union of the year's tiles, simplified.
   - name: bbox
     description: >-
-      Bounds of the footprint in WGS84. The GeoParquet covering column, with
-      statistics per row group, so a bounding-box filter skips row groups.
+      Bounds of the footprint in WGS84, the GeoParquet covering column.
   - name: links
     description: >-
       The item document's links, with absolute hrefs: root, collection,
@@ -251,11 +246,6 @@ mirror_columns:
   - name: version
     collections: [mosaics]
     description: Dataset version the item belongs to.
-  - name: glace:build_fingerprint
-    collections: [mosaics]
-    description: >-
-      Fingerprint of the inputs and settings the year's mosaics were built
-      from. It changes when any of them change.
   - name: description
     collections: [mosaics]
     description: Description of the item.
@@ -286,7 +276,7 @@ mirror_columns:
       {{ glacier_buffer_m }} m, 0 to 1. The same every year.
   - name: processing:level
     collections: [tiles]
-    description: Always `L3`, a composite over many acquisitions.
+    description: Always `L3`.
   - name: glace:dem
     collections: [tiles]
     description: DEM used for terrain correction and geocoding.

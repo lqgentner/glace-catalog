@@ -91,7 +91,7 @@ gdal.BuildVRT(
 )
 ```
 
-Tiles from different UTM zones need one VRT per zone; the index's `proj:code`
+Tiles from different UTM zones need one VRT per zone. The index's `proj:code`
 column gives each tile's zone.
 
 Open the resulting `.vrt` file as a raster layer in QGIS.
@@ -111,7 +111,7 @@ tiles over it.
 - Coherence (`coh12_vv`, `coh12_vh`) is dimensionless and linear.
 - Backscatter (`rtc_vv`, `rtc_vh`) is linear power. Use `10*log10(x)` to display
   it in decibels.
-- Observation counts (`*_qa_num`) are integers; 0 is nodata.
+- Observation counts (`*_qa_num`) are integers, and 0 is nodata.
 - Composite quality maps (`*_qa_cqm`) are dimensionless linear ratios of local
   resolution. Higher values indicate better resolution. Use `10*log10(x)` for
   decibel display.

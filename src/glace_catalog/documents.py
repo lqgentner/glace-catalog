@@ -260,8 +260,8 @@ def _collection_assets(
             "type": "application/vnd.apache.parquet",
             "title": "STAC-GeoParquet item mirror",
             "description": (
-                "Every item of every year, one row each. The item JSON in the tree is the "
-                "normative representation; this is the one to query."
+                "Item index in STAC-GeoParquet, one row per item. "
+                "Query it instead of the item files."
             ),
             "roles": ["collection-mirror"],
             # Finalization adds each column's type and the row count.

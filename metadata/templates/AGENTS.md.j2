@@ -21,7 +21,7 @@ catalog.json
 
 Use each collection's `items.parquet` to search multiple items. This
 STAC-GeoParquet index has the `collection-mirror` role and stores the item
-properties as columns; each collection's guide lists them. Individual item
+properties as columns. Each collection's guide lists them. Individual item
 JSON files are the authoritative records.
 
 This DuckDB query finds the {{ last_year }} tiles with more than 20% glacier
@@ -43,9 +43,9 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 
 - Coherence is dimensionless and linear.
 - Backscatter is linear γ⁰ power. Convert with `10*log10(x)` for decibel
-  display; average values in linear units.
+  display, and average values in linear units.
 - `*_qa_cqm` is a dimensionless linear ratio describing local resolution.
-  Higher values mean better resolution. Average in linear units; convert
+  Higher values mean better resolution. Average in linear units, and convert
   with `10*log10(x)` for decibel display.
 - `*_qa_num` is an integer count on tiles and a mean count on mosaics. Each
   20 m mosaic pixel averages four 10 m counts.
@@ -66,7 +66,7 @@ instructions, see [tiles](tiles/AGENTS.md) and [mosaics](mosaics/AGENTS.md).
 ## Compare years and collections
 
 Tiles and mosaics represent the same source composites on different grids.
-Pair them by year; reproject before comparing pixels. Mosaics use a fixed
+Pair them by year, and reproject before comparing pixels. Mosaics use a fixed
 equal-area grid across years.
 
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once

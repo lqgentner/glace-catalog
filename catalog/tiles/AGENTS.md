@@ -24,7 +24,7 @@ lists every column with its type and description as `table:columns`. These
 are the ones queries use:
 
 - `id`: Item id, `{mgrs_tile}-{year}`, such as `32TMS55-2024`.
-- `bbox`: Bounds of the footprint in WGS84. The GeoParquet covering column, with statistics per row group, so a bounding-box filter skips row groups.
+- `bbox`: Bounds of the footprint in WGS84, the GeoParquet covering column.
 - `assets`: One struct per asset key, with absolute https hrefs. An asset a tile lacks, such as coherence on the 2015 gap tiles, is null.
 - `glace:mgrs_tile`: The 10 km MGRS square, such as `32TMS55`.
 - `proj:code`: CRS of the item's rasters, which is the square's UTM zone, such as `EPSG:32632`.
@@ -42,7 +42,7 @@ vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
 polygon has `mgrs_tile`, `glacier_fraction`, and `glacier_fraction_buffered`,
 the share of the tile within RGI7-C-11 outlines,
 plain and buffered by 250 m. The grid is the same every year.
-Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
+Its style is `styles/grid.json`. Use it to draw or pick tiles on a map, and
 `items.parquet` to query them. The collection's default style,
 `styles/default.json`, draws the latest year's `coh12_vv` from the mosaics
 collection's archive, `mosaics/{year}/coh12_vv_viz.pmtiles`, under the grid's
@@ -60,7 +60,7 @@ collection's `item_assets` give each key's data type and nodata, and its
 
 GeoTIFF tags record the processing chain: `PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`,
 `COMPOSITING_*`, `BACKSCATTER_*` and `COHERENCE_*`. The GeoTIFF tags are the
-source of truth; the STAC metadata copies them in three places:
+source of truth. The STAC metadata copies them in three places:
 
 - The collection's `item_assets` state, per asset key, the `glace:*` fields
   that are the same on every tile and in every year, such as
@@ -88,7 +88,7 @@ both images of a coherence pair must lie inside the window.
   LERC's validity mask.
 - Tiles use LERC_ZSTD compression with error bounds based on each quantity's
   measurement noise.
-- Pair tiles with mosaics by year. Reproject before comparing pixels: tiles
-  use UTM zones; mosaics use ETRS89-LAEA.
+- Pair tiles with mosaics by year. Reproject before comparing pixels. Tiles
+  use UTM zones, and mosaics use ETRS89-LAEA.
 
 See the [README](README.md) for cube and QGIS examples.

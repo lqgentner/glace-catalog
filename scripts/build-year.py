@@ -382,7 +382,6 @@ def step_items(
     frame: pd.DataFrame,
     files: Sequence[stac.CompositeFile],
     state: stac.BuildState,
-    build_fingerprint: str,
 ) -> None:
     """Write the year's tile items, its mosaic item and its GeoParquet index.
 
@@ -430,7 +429,6 @@ def step_items(
         start=start,
         end=end,
         assets={**mosaic_assets(state, frame), **visual_assets(state)},
-        build_fingerprint=build_fingerprint,
     )
     mosaic_item.properties["description"] = vocabulary().mosaic_item_description(args.year)
 
@@ -659,7 +657,7 @@ def main() -> None:
             )
             state.record(step, prints[step], step_pmtiles(args, layout, chain, files))
         elif step == "items":
-            step_items(args, scope, layout, frame, files, state, prints["items"])
+            step_items(args, scope, layout, frame, files, state)
             state.record(step, prints[step])
 
     logger.info("Done: %s", ", ".join(steps))

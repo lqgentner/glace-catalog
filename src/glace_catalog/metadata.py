@@ -421,6 +421,7 @@ class Vocabulary:
             template,
             long=str(product["long"]),
             product=str(product["name"]),
+            observations=str(product["observations"]),
             POL=ref.polarization.upper(),
             pol_word=self._pol_word(ref),
             value=str(product["value"]),

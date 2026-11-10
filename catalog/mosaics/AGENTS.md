@@ -28,7 +28,7 @@ yearly = cube.groupby("time.year").first()
 change = yearly.sel(year=2026) - yearly.sel(year=2015)
 ```
 
-Read COGs for analysis. Values are linear; `*_qa_num` contains mean observation
+Read COGs for analysis. Values are linear, and `*_qa_num` contains mean observation
 counts. See the [root guide](../AGENTS.md#interpret-values) for units and nodata.
 
 ## Item index
@@ -39,7 +39,6 @@ ones queries use:
 
 - `id`: Item id, `{scope}-mosaic-{year}`, such as `alps-mosaic-2024`.
 - `assets`: One struct per asset key, with absolute https hrefs.
-- `glace:build_fingerprint`: Fingerprint of the inputs and settings the year's mosaics were built from. It changes when any of them change.
 - `datetime`: Midpoint of the compositing window.
 
 ## Web maps
@@ -67,4 +66,4 @@ the COGs and declares their decibel conversions.
 ## Compare with tiles
 
 Mosaics are derived from the 10 m tiles. Match items by year and reproject
-before comparing pixels: tiles use UTM zones; mosaics use ETRS89-LAEA.
+before comparing pixels. Tiles use UTM zones, and mosaics use ETRS89-LAEA.
