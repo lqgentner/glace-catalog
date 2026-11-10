@@ -9,8 +9,8 @@ Use this guide to change the repository. To use the published data, read
 
 | Source | Output | Generator |
 | --- | --- | --- |
-| `metadata/catalog.yaml`, `metadata/assets.yaml`, `metadata/templates/` | Tracked STAC documents, default style, READMEs and agent guides in `catalog/` | `scripts/render-catalog.py` |
-| Composite manifests, rasters and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles and updated collections | `scripts/build-year.py`, `scripts/finalize-catalog.py` |
+| `metadata/catalog.yaml`, `metadata/assets.yaml`, `metadata/templates/` | Tracked STAC documents, default style, READMEs, and agent guides in `catalog/` | `scripts/render-catalog.py` |
+| Composite manifests, rasters, and build settings | Store items, annual mosaics, PMTiles, item indexes, year styles, and updated collections | `scripts/build-year.py`, `scripts/finalize-catalog.py` |
 
 The rendered catalog is committed, for review and for release archives; built
 store outputs live only in the store. The other hand-maintained files are
@@ -33,10 +33,10 @@ fails the gate.
 
 `rashid` is the Portolan conformance gate; `stac-check` is advisory. Where they
 disagree, rashid takes precedence. Do not widen `ACCEPTED` in
-`tests/test_conformance.py` just to pass CI. Any new exception needs a row in
+`tests/test_conformance.py` to pass CI. Any new exception needs a row in
 `docs/conformance.md` naming a tracking issue, or the structural reason none
 applies; otherwise fix the finding.
-The two existing exceptions arise because the tracked tree holds the
+Both existing exceptions arise because the tracked tree contains the
 collections while their items live in the store. Validate the full built tree
 before publication.
 
@@ -70,7 +70,7 @@ Preserve these rules:
 - Analysis COGs store linear values. PMTiles store 8-bit value codes: each
   layer is encoded over a fixed transport range from `metadata/assets.yaml`,
   backscatter and QA-CQM in decibels. The style decodes the codes
-  (`raster-dem`, custom encoding) and colours them (`color-relief`) with a
+  (`raster-dem`, custom encoding) and colors them (`color-relief`) with a
   default ramp. Changing a ramp or stretch means re-rendering documents;
   changing a transport range means re-tiling every year.
 - `{stem}_viz.pmtiles` belongs in its year's item directory, as an item asset
@@ -83,8 +83,8 @@ Preserve these rules:
 
 ## Build a store
 
-A store holds a region's COGs, mosaics, web maps and STAC documents, on object
-storage or a local disk. Run commands from this checkout unless stated
+A store contains a region's COGs, mosaics, web maps, and STAC documents, on
+object storage or a local disk. Run commands from this checkout unless stated
 otherwise.
 
 ### Settings
@@ -106,12 +106,12 @@ local root works offline and publishes the same way. The scope comes from
 `metadata/catalog.yaml` and the public address from `public_base` in
 `catalog.publish.yaml`.
 
-Set `FREEZEBASE_CACHE` to a volume with room for an Alpine year: about 9 GB
-of staged mosaics, or 1.1 GB per concurrently warped web-map layer plus 1.8 GB
-of staged archives. Unset, the cache falls back to `~/.cache/freezebase`, which
-is usually the system disk. `build-year.py` stops before any work when the
-cache has less room than its estimate, and removes each step's staged files
-after the upload.
+Set `FREEZEBASE_CACHE` to a volume with room for an Alpine year. The mosaics
+step stages about 9 GB of mosaics. The web-map step needs 1.1 GB per
+concurrently warped layer, plus 1.8 GB of staged archives. Unset, the cache
+falls back to `~/.cache/freezebase`, which is usually the system disk.
+`build-year.py` stops before any work when the cache has less room than its
+estimate, and removes each step's staged files after the upload.
 
 Use named profiles only; do not pass access keys through the environment.
 Publication uses the separate profile in `catalog.publish.yaml`.
@@ -129,12 +129,12 @@ Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
       --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
-Every year reuses this lookup, so a tile's glacier fraction stays constant. Its
+Every year reuses this lookup, so a tile's glacier fraction is the same every year. Its
 columns are `mgrs_code`, `glacier_fraction`, `glacier_fraction_buffered`,
-`rgi_version` and `buffer_m`. The build checks that the table names the scope's
-inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
+`rgi_version`, and `buffer_m`. The build checks that the table states the
+scope's inventory and buffer (`src/glace_catalog/scopes.py`), and stops on a missing
 tile rather than computing a fallback. The leading dot keeps the table out of
-the upload: the items and the tile grid carry its values.
+the upload: the items and the tile grid contain its values.
 
 ### 2. Build each year
 
@@ -151,13 +151,13 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 
 | Step | Result |
 | --- | --- |
-| `copy` | Validates the manifest and supported assets, leaves out each measurement with no valid pixel and its QA layers, then copies composites server-side without re-encoding; on one local disk it hard-links them. |
+| `copy` | Validates the manifest and supported assets, and leaves out each measurement with no valid pixel and its QA layers. Copies composites server-side without re-encoding, or hard-links them on one local disk. |
 | `mosaics` | Builds a temporary VRT chain onto the analysis grid, then writes twelve annual analysis mosaics. |
 | `pmtiles` | Builds a temporary VRT chain onto the display grid, then writes twelve value-encoded web-map archives. |
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
-source composites, grids or settings change.
+source composites, grids, or settings change.
 
 A hard-linked store shares its composites' bytes with the source archive, so
 never rewrite an archive file in place: the store copy would change with it,
@@ -180,7 +180,7 @@ first, then `--tiler-workers`.
 
 The Alpine years 2015–2026 on 2026-11-09, with 15 cores and 60 GB RAM,
 source and store on one local disk, `--mosaic-workers 12`,
-`--concurrent-layers 12` and 15 tiler workers, per year:
+`--concurrent-layers 12`, and 15 tiler workers, per year:
 
 | Step | Time | Peak process-tree RSS |
 | --- | --- | --- |
@@ -219,7 +219,7 @@ Finalization:
   mosaic item, and points the collection's style to the latest year;
 - validates the store.
 
-Prose, providers, license and `item_assets` come from the tracked metadata.
+Prose, providers, license, and `item_assets` come from the tracked metadata.
 
 `public_base` in `catalog.publish.yaml` is written into the root `self` link
 and every asset href in `items.parquet`, as it is into the collection asset
@@ -275,9 +275,9 @@ uv run --env-file .env tools/publish.py --prefix tiles/2024 --confirm
 ```
 
 The plan lists the proposed uploads and their reasons, and changes nothing.
-`--prefix` limits the subtree, `--force` re-uploads matching objects and
-`--workers` sets concurrency. Publishing only adds and replaces objects; remove
-remote objects separately.
+`--prefix` limits the subtree, `--force` re-uploads matching objects, and
+`--workers` sets concurrency. Publishing only adds and replaces objects; it
+never deletes remote ones.
 
 After publishing, run both checks:
 
@@ -321,7 +321,7 @@ Each release has one version string and a DOI at LaRS
 
 They share files, not imports (`docs/DESIGN.md` §5).
 
-- `../deep-glacier-mapping`: composite production, labels and ML. Its
+- `../deep-glacier-mapping`: composite production, labels, and ML. Its
   composite run writes the source archives and their manifests.
 - `../s1bursts`: Sentinel-1 processing. Its COG writer (0.5.0 and later)
   embeds band statistics (`PTL-DAT-009`) and computes checksums. This

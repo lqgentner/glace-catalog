@@ -1,6 +1,6 @@
 # The twelve assets of the GLACE catalog and their web-map archives.
 #
-# This file is the single source of asset names, descriptions, colour ramps
+# This file is the single source of asset names, descriptions, color ramps
 # and value ranges. The build and `scripts/render-catalog.py` read it (through
 # `glace_catalog.metadata`) to write the collections, items, styles and the
 # asset tables in the READMEs and AGENTS.md files.
@@ -143,8 +143,7 @@ descriptions:
       with a non-zero resolution weight.
     mosaics: >-
       Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
-      composite, averaged over the 10 m pixels inside each 20 m pixel: a float
-      mean of the counts.
+      composite. Each pixel is the average of the original 10 m pixel counts.
   cqm:
     tiles: >-
       Composite quality of the {{ product }} {{ POL }} composite: the local
@@ -152,16 +151,17 @@ descriptions:
       Linear scaling; the decibel conversion is declared in the collection's
       renders.
     mosaics: >-
-      Composite quality of the {{ product }} {{ POL }} composite: the local
-      resolution of the weighted composite, where higher is better resolved,
-      averaged onto the 20 m grid. Linear scaling; the decibel conversion is
+      Composite quality of the {{ product }} {{ POL }} composite, averaged onto
+      the 20 m grid: the local resolution of the weighted composite, where
+      higher is better resolved. Linear scaling; the decibel conversion is
       declared in the collection's renders.
   viz: >-
     Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad
-    z{{ min_zoom }}-z{{ max_zoom }}: an 8-bit code in all three channels,
-    linear over {{ transport }} and clipped to it, with code 0 as nodata.
+    z{{ min_zoom }}-z{{ max_zoom }}. Each pixel stores an 8-bit code in all
+    three channels. Codes 1 to 255 map linearly onto {{ transport }}, with
+    values outside it clipped. Code 0 is nodata.
     Decode with the band's raster:scale and raster:offset; the year's style
-    decodes it as a raster-dem source and colours it with a color-relief
+    decodes it as a raster-dem source and colors it with a color-relief
     layer. Lossy (WebP quality 90): for analysis, read the COGs with the
     "data" role.
 
@@ -197,7 +197,7 @@ mirror_columns:
   - name: links
     description: >-
       The item document's links, with absolute hrefs: root, collection,
-      parent and the CEOS-ARD specification.
+      parent, and the CEOS-ARD specification.
   - name: assets
     description:
       tiles: >-
@@ -239,10 +239,10 @@ mirror_columns:
     description: MGRS latitude band of the square.
   - name: mgrs:grid_square
     collections: [tiles]
-    description: MGRS 100 km grid square identifier, the two letters after the band.
+    description: Identifier of the MGRS 100 km grid square, the two letters after the band.
   - name: proj:code
     description:
-      tiles: CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`.
+      tiles: CRS of the item's rasters, which is the square's UTM zone, such as `EPSG:32632`.
       mosaics: CRS of the item's COGs, `EPSG:3035`.
   - name: proj:shape
     description: Raster shape of the item's COGs, `[rows, columns]`.
@@ -267,7 +267,7 @@ mirror_columns:
     description: >-
       Date of the last acquisition in the square's coherence composites. About
       twelve days before the last backscatter date, because both images of a
-      pair must fall in the window.
+      pair must lie inside the window.
   - name: glace:rtc_first_acquisition
     collections: [tiles]
     description: Date of the first acquisition in the square's backscatter composites.

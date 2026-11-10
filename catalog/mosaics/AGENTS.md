@@ -44,10 +44,10 @@ ones queries use:
 
 ## Web maps
 
-`{stem}_viz.pmtiles` archives contain value-encoded WebP tiles: an 8-bit code
-in all three channels, code 0 nodata, linear over a fixed transport range per
-layer. Decode a code with the asset band's `raster:scale` and `raster:offset`:
-`value = code * scale + offset`. Backscatter and quality maps hold decibels;
+`{stem}_viz.pmtiles` archives contain value-encoded WebP tiles. Each pixel
+stores an 8-bit code in all three channels, linear over a fixed transport range
+per layer, and code 0 is nodata. Decode a code with the asset band's `raster:scale` and `raster:offset`:
+`value = code * scale + offset`. Backscatter and quality maps are in decibels;
 coherence remains linear. The tiles are lossy and values outside the range are
 clipped, so read the COGs for measurements.
 
@@ -61,7 +61,7 @@ it as the `color-relief` layer `glace-{stem}-{year}`. The collection's
 
 Each layer's transport range is the same every year, so years compare like
 with like. The styles draw a default ramp over a default range, which a client
-can change without re-tiling. The `renders` block holds the same defaults for
+can change without re-tiling. The `renders` block has the same defaults for
 the COGs and declares their decibel conversions.
 
 ## Compare with tiles

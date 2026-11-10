@@ -1,4 +1,4 @@
-# GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
+# GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)
 
 Each item contains one year of data for a 10 km MGRS square: twelve
 single-band Cloud-Optimized GeoTIFFs (COGs) at 10 m grid spacing, in the
@@ -98,7 +98,7 @@ Open the resulting `.vrt` file as a raster layer in QGIS.
 
 ## Tile grid
 
-`grid.pmtiles` holds every tile of any year as a polygon in the vector layer
+`grid.pmtiles` contains every tile of any year as a polygon in the vector layer
 `mgrs`, with its MGRS code and glacier fractions: the share of the tile within
 RGI7-C-11 glacier outlines, plain and buffered by 250 m.
 `styles/grid.json` draws it, each tile filled by its buffered fraction. The

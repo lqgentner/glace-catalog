@@ -13,8 +13,8 @@
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-tiles",
-  "title": "GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)",
-  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item carries twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
+  "title": "GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)",
+  "description": "The GLACE composites on 10 km MGRS grid squares in their own UTM zone at 10 m grid spacing, one item per square and year. Each item contains twelve single-band Cloud-Optimized GeoTIFFs: coherence and backscatter in VV and VH, and for each of the four a contributing-observations count and a composite quality map. Stored values are linear; the renders declare the decibel conversion (`10*log10(x)`) for display. Search the tiles with the item index `items.parquet`.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -41,7 +41,7 @@
     },
     {
       "name": "University of Zurich, Department of Geography",
-      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
+      "description": "Produced the composites from Copernicus Sentinel-1 SLC data: burst extraction, coherence estimation, radiometric terrain correction, and local resolution weighted compositing. Derived the annual mosaics and maintains this catalog.",
       "roles": [
         "producer",
         "processor",
@@ -650,7 +650,7 @@
         },
         {
           "name": "links",
-          "description": "The item document's links, with absolute hrefs: root, collection, parent and the CEOS-ARD specification."
+          "description": "The item document's links, with absolute hrefs: root, collection, parent, and the CEOS-ARD specification."
         },
         {
           "name": "assets",
@@ -710,11 +710,11 @@
         },
         {
           "name": "mgrs:grid_square",
-          "description": "MGRS 100 km grid square identifier, the two letters after the band."
+          "description": "Identifier of the MGRS 100 km grid square, the two letters after the band."
         },
         {
           "name": "proj:code",
-          "description": "CRS of the item's rasters, the square's UTM zone, such as `EPSG:32632`."
+          "description": "CRS of the item's rasters, which is the square's UTM zone, such as `EPSG:32632`."
         },
         {
           "name": "proj:shape",
@@ -730,7 +730,7 @@
         },
         {
           "name": "glace:coh_last_acquisition",
-          "description": "Date of the last acquisition in the square's coherence composites. About twelve days before the last backscatter date, because both images of a pair must fall in the window."
+          "description": "Date of the last acquisition in the square's coherence composites. About twelve days before the last backscatter date, because both images of a pair must lie inside the window."
         },
         {
           "name": "glace:rtc_first_acquisition",
@@ -776,7 +776,7 @@
       "href": "https://data.source.coop/giuz/glace-alps/tiles/grid.pmtiles",
       "type": "application/vnd.pmtiles",
       "title": "Tile grid with glacier fractions",
-      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs, with the properties mgrs_tile, glacier_fraction and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
+      "description": "Every MGRS tile of any year as a polygon in the vector layer mgrs. Its properties are mgrs_tile, glacier_fraction, and glacier_fraction_buffered: the share of the tile covered by RGI7-C-11 outlines, plain and buffered by 250 m.",
       "roles": [
         "visual"
       ],

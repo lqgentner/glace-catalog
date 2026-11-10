@@ -20,12 +20,12 @@ catalog.json
 ```
 
 Use each collection's `items.parquet` to search multiple items. This
-STAC-GeoParquet index has the `collection-mirror` role and holds the item
+STAC-GeoParquet index has the `collection-mirror` role and stores the item
 properties as columns; each collection's guide lists them. Individual item
 JSON files are the authoritative records.
 
 This DuckDB query finds the {{ last_year }} tiles with more than 20% glacier
-cover. The index holds one row per tile and year, so filter by year:
+cover. The index has one row per tile and year, so filter by year:
 
 ```sql
 INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs;
@@ -72,7 +72,7 @@ equal-area grid across years.
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once
 per scope from {{ catalog.scope.glacier_inventory }} outlines, plain and buffered by
 {{ catalog.scope.glacier_buffer_m | int }} m, so a tile has the same values every year. The tiles
-collection's `grid` asset, `tiles/grid.pmtiles`, carries them per tile.
+collection's `grid` asset, `tiles/grid.pmtiles`, contains them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
 the year styles. The [GLACE Viewer]({{ catalog.links.viewer.href }}) draws the PMTiles with these styles.

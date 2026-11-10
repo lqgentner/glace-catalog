@@ -266,8 +266,8 @@ def _collection_assets(
             "type": PMTILES_MEDIA_TYPE,
             "title": "Tile grid with glacier fractions",
             "description": (
-                f"Every MGRS tile of any year as a polygon in the vector layer {GRID_LAYER}, "
-                "with the properties mgrs_tile, glacier_fraction and "
+                f"Every MGRS tile of any year as a polygon in the vector layer {GRID_LAYER}. "
+                "Its properties are mgrs_tile, glacier_fraction, and "
                 "glacier_fraction_buffered: the share of the tile covered by "
                 f"{scope.glacier_inventory} outlines, plain and buffered by "
                 f"{scope.glacier_buffer_m:g} m."

@@ -6,7 +6,7 @@ Items cover the MGRS squares of {{ region }}.
 
 ## Search tiles
 
-Use `items.parquet` to search all years without fetching each item separately.
+Use `items.parquet` to search all years without fetching each item.
 This DuckDB query selects tiles by year and buffered glacier fraction:
 
 ```sql
@@ -34,7 +34,7 @@ and `grid:code` gives it the grid extension's prefix, `MGRS-`.
 
 `tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a
 vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
-polygon has `mgrs_tile`, `glacier_fraction` and `glacier_fraction_buffered`,
+polygon has `mgrs_tile`, `glacier_fraction`, and `glacier_fraction_buffered`,
 the share of the tile within {{ catalog.scope.glacier_inventory }} outlines,
 plain and buffered by {{ catalog.scope.glacier_buffer_m | int }} m. The grid is the same every year.
 Its style is `styles/grid.json`. Use it to draw or pick tiles on a map; use
@@ -57,15 +57,15 @@ GeoTIFF tags record the processing chain: `PRODUCT_TYPE`, `PIPELINE_SOFTWARE*`,
 `COMPOSITING_*`, `BACKSCATTER_*` and `COHERENCE_*`. The GeoTIFF tags are the
 source of truth; the STAC metadata copies them in three places:
 
-- The collection's `item_assets` hold, per asset key, the `glace:*` fields
+- The collection's `item_assets` state, per asset key, the `glace:*` fields
   that are the same on every tile and in every year, such as
   `glace:compositing_method` and `glace:coherence_window_range`. The build
   refuses a raster whose tags state otherwise.
-- Each item asset holds the values that are its file's own:
+- Each item asset contains the values specific to its file:
   `glace:contributing_observations`, and for coherence `glace:coherence_average`
   and `glace:coherence_std`. In `items.parquet` they are fields of the asset's
   struct in the `assets` column.
-- Item properties hold what applies to the whole tile: `processing:level`,
+- Item properties contain what applies to the whole tile: `processing:level`,
   `processing:software`, `glace:dem` and the acquisition dates below. These
   are columns of `items.parquet`, so filter on them there.
 
@@ -74,7 +74,7 @@ compositing window selected for that year's lowest-snow period. Actual
 acquisition dates vary by tile and product. Read `glace:coh_first_acquisition`,
 `glace:coh_last_acquisition` and the corresponding `rtc` properties. The last
 coherence date is about twelve days before the last backscatter date, because
-both images of a coherence pair must fall within the window.
+both images of a coherence pair must lie inside the window.
 
 ## Reading and comparing
 

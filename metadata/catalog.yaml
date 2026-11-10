@@ -47,25 +47,24 @@ usage_notes:
       Coherence is estimated over a 35 × 7 (range × azimuth) window. The
       finite window biases the estimate upwards, so fully decorrelated
       surfaces do not reach 0: over large lakes, the mean is about 0.09.
-      Absolute values therefore differ from products that use larger windows,
+      So absolute values differ from products that use larger windows,
       such as the global seasonal Sentinel-1 coherence of
       [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6).
       Do not compare values across products, and choose thresholds on GLACE
       itself.
   - title: Low coherence outside glaciers
     text: >-
-      Other surfaces also decorrelate over 12 days and can have similarly low
-      coherence, such as snow patches, lakes and unstable slopes.
+      Snow patches, lakes, unstable slopes, and other surfaces also
+      decorrelate over 12 days and can have coherence as low as glaciers.
   - title: Validated scope
     text: >-
-      The validation covers glacier mapping in Switzerland only. Its scores
-      do not describe glacier mapping performance in other parts of the Alps,
-      or farther than 250 m from the glacier outlines. Other applications may
-      also benefit from the composites, but were not validated.
+      The validation covers glacier mapping in Switzerland within 250 m of the
+      glacier outlines. Glacier mapping elsewhere in the Alps and other
+      applications were not validated.
   - title: 2015 coverage
     text: >-
       In 2015, coherence is missing on 91 MGRS squares in the north-central
-      Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU and 32UPU) because
+      Alps (100 km squares 32TNT, 32TNU, 32TPT, 32TPU, and 32UPU) because
       Sentinel-1 coverage was limited that summer. Two of them, 32TNT14 and
       32TNT24, have no 2015 items. Every other year covers all squares.
 
@@ -80,13 +79,13 @@ description: >-
   over the target area.
 
 
-  The composites are available in two separate collections: tiles
-  (10 km × 10 km MGRS grid squares, UTM, 10 m grid spacing) and mosaics on
-  one fixed equal-area grid (ETRS89-LAEA, 20 m grid spacing). Every
-  cloud-optimized GeoTIFF is LERC-compressed and carries its processing
-  record in its own tags. For web maps, such as the
+  The composites come in two collections. The tiles collection uses the
+  10 km × 10 km MGRS grid squares in their UTM zones, at 10 m grid spacing.
+  The mosaics collection uses one fixed equal-area grid, ETRS89-LAEA at 20 m
+  grid spacing. Every cloud-optimized GeoTIFF is LERC-compressed and stores
+  its processing record in its own tags. For web maps, such as the
   [GLACE Viewer](https://lqgentner.github.io/glace-viewer), raster PMTiles
-  in Web Mercator hold 8-bit value-encoded WebP tiles.
+  in Web Mercator contain 8-bit value-encoded WebP tiles.
 
 license: CC-BY-4.0
 
@@ -121,7 +120,7 @@ providers:
   - name: University of Zurich, Department of Geography
     description: >-
       Produced the composites from Copernicus Sentinel-1 SLC data: burst
-      extraction, coherence estimation, radiometric terrain correction and
+      extraction, coherence estimation, radiometric terrain correction, and
       local resolution weighted compositing. Derived the annual mosaics and
       maintains this catalog.
     roles: [producer, processor, licensor, host]
@@ -155,12 +154,12 @@ links:
 
 collections:
   tiles:
-    title: GLACE tiles – Sentinel-1 Composites on MGRS squares (10 m)
+    title: GLACE tiles – Sentinel-1 composites on MGRS squares (10 m)
     short_title: GLACE tiles
     keywords: [MGRS]
     description: >-
       The GLACE composites on 10 km MGRS grid squares in their own UTM zone at
-      10 m grid spacing, one item per square and year. Each item carries
+      10 m grid spacing, one item per square and year. Each item contains
       {{ n_assets }} single-band Cloud-Optimized GeoTIFFs: coherence and
       backscatter in VV and VH, and for each of the four a
       contributing-observations count and a composite quality map. Stored
@@ -169,10 +168,10 @@ collections:
       `items.parquet`.
     # Description of each year sub-catalog.
     year_description: >-
-      The MGRS squares composited in {{ year }}, one item each, every item
-      carrying that square's {{ n_assets }} single-band composites.
+      The MGRS squares composited in {{ year }}, one item each. Each item
+      contains that square's {{ n_assets }} single-band composites.
   mosaics:
-    title: GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (20 m)
+    title: GLACE mosaics – Sentinel-1 composites on ETRS89-LAEA (20 m)
     short_title: GLACE mosaics
     keywords: [mosaic]
     # Description of the style assets: with `year` for the style on that
@@ -181,7 +180,7 @@ collections:
       {% if year is defined %}Every published web-map layer of {{ year }}, the
       first visible and the rest hidden.{% else %}Every web-map layer of the
       latest published year, the first visible and the rest hidden. Each
-      year's mosaic item carries the style of its own year, as
+      year's mosaic item has the style of its own year, as
       styles/default.json beside its archives.{% endif %} Each archive is a
       raster-dem source whose custom encoding decodes its values, drawn by a
       color-relief layer with a default color ramp that a client can change.

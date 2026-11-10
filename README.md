@@ -4,7 +4,7 @@
   <br />
 </p>
 
-<h1 align="center">GLACE Catalog</h1>
+<h1 align="center">GLACE catalog</h1>
 
 <p align="center">
   Git-backed Portolan/STAC catalog for GLACE
@@ -23,16 +23,16 @@
 
 ## About
 
-This repository holds the metadata of the **GLACE** STAC catalog on
+This repository contains the metadata of the **GLACE** STAC catalog on
 [Source Cooperative](https://source.coop/giuz/glace-alps), and the pipeline
 that builds and publishes it. The catalog follows the
 [Portolan SDI](https://www.portolan-sdi.org/) spec.
 
 The dataset covers 2015–2026 in two collections: `tiles`, the 10 m
 composites per MGRS tile, and `mosaics`, annual 20 m equal-area mosaics with
-web-map archives. Each holds twelve layers: 12-day coherence and
-gamma-nought backscatter in VV and VH, each with a count of contributing
-observations and a composite quality map. To read the data, start at
+web-map archives. Both collections have twelve layers: 12-day coherence and
+gamma-nought backscatter in VV and VH, and for each of these four a count of
+contributing observations and a composite quality map. To read the data, start at
 [`catalog/README.md`](catalog/README.md).
 
 > **Not yet listed.** **`glace-alps`** is published on Source Cooperative;
@@ -80,10 +80,10 @@ The code is MIT, except for the vendored files listed in [Third Party
 Notices](THIRD_PARTY_NOTICES.md), which keep their own licenses. See
 [`LICENSE`](LICENSE). The published data is CC-BY-4.0 and contains modified
 Copernicus Sentinel data. The collection thumbnails are drawn over
-[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and carry that
+[OpenStreetMap](https://www.openstreetmap.org/copyright) tiles and show that
 credit in the image.
 
 ## Comments and contributions
 
-We welcome your feedback! Please raise an issue
-[here](https://github.com/lqgentner/glace-catalog/issues).
+To give feedback or report a problem,
+[open an issue](https://github.com/lqgentner/glace-catalog/issues).
