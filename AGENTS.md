@@ -108,10 +108,10 @@ local root works offline and publishes the same way. The scope comes from
 
 Set `FREEZEBASE_CACHE` to a volume with room for an Alpine year. The mosaics
 step stages about 9 GB of mosaics. The web-map step needs 1.1 GB per
-concurrently warped layer, plus 1.8 GB of staged archives. Unset, the cache falls back to `~/.cache/freezebase`, which
-is usually the system disk. `build-year.py` stops before any work when the
-cache has less room than its estimate, and removes each step's staged files
-after the upload.
+concurrently warped layer, plus 1.8 GB of staged archives. Unset, the cache
+falls back to `~/.cache/freezebase`, which is usually the system disk.
+`build-year.py` stops before any work when the cache has less room than its
+estimate, and removes each step's staged files after the upload.
 
 Use named profiles only; do not pass access keys through the environment.
 Publication uses the separate profile in `catalog.publish.yaml`.
@@ -178,21 +178,21 @@ writes a local RGBA raster of the whole scope: 1.1 GB for the Alps. The
 defaults suit a 16 GB laptop. If memory runs out, lower `--concurrent-layers`
 first, then `--tiler-workers`.
 
-The Alpine years 2015–2026 on 2026-10-16, with 15 cores and 60 GB RAM,
+The Alpine years 2015–2026 on 2026-11-09, with 15 cores and 60 GB RAM,
 source and store on one local disk, `--mosaic-workers 12`,
 `--concurrent-layers 12`, and 15 tiler workers, per year:
 
 | Step | Time | Peak process-tree RSS |
 | --- | --- | --- |
-| `copy` | 4 s | |
-| analysis VRT chain | 2 min | |
-| `mosaics` | 10 min | 33 GB |
-| `pmtiles` | 41 min | 17 GB |
+| `copy` | 3 s | |
+| analysis VRT chain | 3 min | |
+| `mosaics` | 23 min | 29 GB |
+| `pmtiles` | 43 min | 17 GB |
 | `items` | 1 min | |
-| Total | 54 min | |
+| Total | 70 min | |
 
-The six decibel layers take longest to warp, about 30 min against 18 min for
-the others.
+The six decibel layers take longest to warp, about 34 min, against 18 min for
+the counts and 25 min for coherence.
 
 ### 3. Finalize after adding or changing a year
 
