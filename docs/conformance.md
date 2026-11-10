@@ -42,7 +42,7 @@ publish base: about ten hours for the Alps. It reads that base from the root
 catalog's `self` link, so `make conformance-live` mirrors the documents
 without it (`tools/mirror_docs.py --drop-self`).
 
-The last run over the published catalog, on 2026-10-27 over the Alpine years
+The last run over the published catalog, on 2026-11-10 over the Alpine years
 2015–2026 (`make conformance-live`, 26 545 files, rashid 0.3.0, every
 extension schema), gave 0 errors and only the twelve `PTL-CAT-001` warnings
 accepted below.
