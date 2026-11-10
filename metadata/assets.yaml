@@ -24,7 +24,6 @@ provenance:
   PIPELINE_SOFTWARE_URL: https://github.com/lqgentner/s1bursts
   COMPOSITING_METHOD: Local resolution weighting
   COMPOSITING_METHOD_REFERENCE: https://doi.org/10.1109/TGRS.2021.3055562
-  COMPOSITING_PARAMETERS: aggregation=mean;clip_max_resolution=5
 
 products:
   coh12:
@@ -52,6 +51,9 @@ products:
       all:
         PRODUCT_FAMILY: Composite Coherence
         PRODUCT_TYPE: COH_LRW
+        COMPOSITING_PARAMETERS: aggregation=mean;clip_max_resolution=5;burst_edge_trim_px=7
+        COHERENCE_WINDOW_RANGE: 35
+        COHERENCE_WINDOW_AZIMUTH: 7
       data:
         COMPOSITING_METHOD: >-
           Local resolution weighting (Small et al. 2022) applied to 12-day
@@ -62,8 +64,6 @@ products:
         PHASE_QUALITY_REFERENCE: >-
           Magnitude of the complex correlation coefficient over the estimation
           window, as computed by the ESA SNAP Coherence operator.
-        COHERENCE_WINDOW_RANGE: 35
-        COHERENCE_WINDOW_AZIMUTH: 7
         COHERENCE_WEIGHTING_SHAPE: Rectangular
   rtc:
     name: Backscatter
@@ -88,6 +88,7 @@ products:
       all:
         PRODUCT_FAMILY: Composite Backscatter
         PRODUCT_TYPE: RTC_LRW
+        COMPOSITING_PARAMETERS: aggregation=mean;clip_max_resolution=5;burst_edge_trim_px=4
       data:
         BACKSCATTER_MEASUREMENT: Gamma-0
         BACKSCATTER_CONVENTION: Power
@@ -106,7 +107,7 @@ qa:
     stretch: [0.0, 70.0]
     transport: [0.0, 253.0]
     decibel: false
-    # Tiles store an integer count. Each 40 m mosaic pixel averages sixteen
+    # Tiles store an integer count. Each 20 m mosaic pixel averages four
     # 10 m pixels, so the mosaics store a float mean count.
     band:
       tiles: {data_type: uint16, nodata: 0}
@@ -134,7 +135,7 @@ descriptions:
       {{ long }}, {{ pol_word }} ({{ POL }}), composited with local resolution weighting
       over the year's summer window on the 10 m MGRS grid. {{ value }}
     mosaics: >-
-      {{ long }}, {{ pol_word }} ({{ POL }}), resampled from the 10 m tiles onto the 40 m
+      {{ long }}, {{ pol_word }} ({{ POL }}), resampled from the 10 m tiles onto the 20 m
       equal-area grid by averaging in the linear domain. {{ value }}
   num:
     tiles: >-
@@ -142,7 +143,7 @@ descriptions:
       with a non-zero resolution weight.
     mosaics: >-
       Mean number of acquisitions that contributed to the {{ product }} {{ POL }}
-      composite, averaged over the 10 m pixels inside each 40 m pixel: a float
+      composite, averaged over the 10 m pixels inside each 20 m pixel: a float
       mean of the counts.
   cqm:
     tiles: >-
@@ -153,7 +154,7 @@ descriptions:
     mosaics: >-
       Composite quality of the {{ product }} {{ POL }} composite: the local
       resolution of the weighted composite, where higher is better resolved,
-      averaged onto the 40 m grid. Linear scaling; the decibel conversion is
+      averaged onto the 20 m grid. Linear scaling; the decibel conversion is
       declared in the collection's renders.
   viz: >-
     Value-encoded WebP tiles of {{ source_title }} on WebMercatorQuad
@@ -293,6 +294,6 @@ mirror_columns:
     collections: [tiles]
     description: >-
       Versions of the software that made the square's composites, such as
-      `{"s1bursts": "0.6.0", "ESA SNAP": "14.0.0"}`.
+      `{"s1bursts": "0.9.0", "ESA SNAP": "14.0.0"}`.
   - name: datetime
     description: Midpoint of the compositing window.

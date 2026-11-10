@@ -1,13 +1,13 @@
-# GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)
+# GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (20 m)
 
 One item per year, each carrying twelve single-band analysis rasters on
-ETRS89-LAEA (EPSG:3035) at 40 m, plus twelve PMTiles archives
+ETRS89-LAEA (EPSG:3035) at 20 m, plus twelve PMTiles archives
 for drawing them, beside the rasters in the same item directory. Agents: read
 [`AGENTS.md`](https://source.coop/giuz/glace-alps/mosaics/AGENTS.md).
 
 The grid has two deliberate properties:
 
-- **It is equal-area.** A pixel covers the same 1600 m² everywhere, so a
+- **It is equal-area.** A pixel covers the same 400 m² everywhere, so a
   glacier area or an area change is a pixel count.
 - **It is the same every year.** The extent is a fixed constant, so every year
   has identical `proj:shape` and `proj:transform`.

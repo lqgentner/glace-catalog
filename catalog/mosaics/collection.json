@@ -12,8 +12,8 @@
     "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
   ],
   "id": "glace-alps-mosaics",
-  "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (40 m)",
-  "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 40 m. The grid is equal-area, for area statistics, and every year shares the same extent, so years stack directly. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. For web maps, each year also has twelve PMTiles archives on the WebMercatorQuad grid up to zoom 13.",
+  "title": "GLACE mosaics – Sentinel-1 Composites on ETRS89-LAEA (20 m)",
+  "description": "One mosaic per year of the GLACE composites, resampled from the MGRS tiles onto ETRS89-LAEA (EPSG:3035) at 20 m. The grid is equal-area, for area statistics, and every year shares the same extent, so years stack directly. Twelve single-band analysis rasters per year, in linear units, each a Cloud-Optimized GeoTIFF with internal overviews. For web maps, each year also has twelve PMTiles archives on the WebMercatorQuad grid up to zoom 13.",
   "license": "CC-BY-4.0",
   "keywords": [
     "Sentinel-1",
@@ -262,12 +262,12 @@
     "coh12_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV",
-      "description": "12-day repeat-pass interferometric coherence, co-polarized (VV), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
+      "description": "12-day repeat-pass interferometric coherence, co-polarized (VV), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vv",
@@ -279,12 +279,12 @@
     "coh12_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Coherence VV composite, averaged over the 10 m pixels inside each 40 m pixel: a float mean of the counts.",
+      "description": "Mean number of acquisitions that contributed to the Coherence VV composite, averaged over the 10 m pixels inside each 20 m pixel: a float mean of the counts.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vv_qa_num",
@@ -296,12 +296,12 @@
     "coh12_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VV – Composite Quality Map",
-      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 40 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Coherence VV composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 20 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vv_qa_cqm",
@@ -313,12 +313,12 @@
     "coh12_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH",
-      "description": "12-day repeat-pass interferometric coherence, cross-polarized (VH), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
+      "description": "12-day repeat-pass interferometric coherence, cross-polarized (VH), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Dimensionless, in [0, 1].",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vh",
@@ -330,12 +330,12 @@
     "coh12_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Coherence VH composite, averaged over the 10 m pixels inside each 40 m pixel: a float mean of the counts.",
+      "description": "Mean number of acquisitions that contributed to the Coherence VH composite, averaged over the 10 m pixels inside each 20 m pixel: a float mean of the counts.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vh_qa_num",
@@ -347,12 +347,12 @@
     "coh12_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Coherence VH – Composite Quality Map",
-      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 40 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Coherence VH composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 20 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "coh12_vh_qa_cqm",
@@ -364,12 +364,12 @@
     "rtc_vv": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, co-polarized (VV), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vv",
@@ -381,12 +381,12 @@
     "rtc_vv_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Backscatter VV composite, averaged over the 10 m pixels inside each 40 m pixel: a float mean of the counts.",
+      "description": "Mean number of acquisitions that contributed to the Backscatter VV composite, averaged over the 10 m pixels inside each 20 m pixel: a float mean of the counts.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vv_qa_num",
@@ -398,12 +398,12 @@
     "rtc_vv_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VV – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 40 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Backscatter VV composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 20 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vv_qa_cqm",
@@ -415,12 +415,12 @@
     "rtc_vh": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH",
-      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), resampled from the 10 m tiles onto the 40 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
+      "description": "Radiometrically terrain-corrected gamma-nought backscatter, cross-polarized (VH), resampled from the 10 m tiles onto the 20 m equal-area grid by averaging in the linear domain. Linear power. For display, the collection's renders declare the decibel conversion, 10*log10.",
       "roles": [
         "data",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vh",
@@ -432,12 +432,12 @@
     "rtc_vh_qa_num": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Contributing Observations",
-      "description": "Mean number of acquisitions that contributed to the Backscatter VH composite, averaged over the 10 m pixels inside each 40 m pixel: a float mean of the counts.",
+      "description": "Mean number of acquisitions that contributed to the Backscatter VH composite, averaged over the 10 m pixels inside each 20 m pixel: a float mean of the counts.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vh_qa_num",
@@ -449,12 +449,12 @@
     "rtc_vh_qa_cqm": {
       "type": "image/tiff; application=geotiff; profile=cloud-optimized",
       "title": "Backscatter VH – Composite Quality Map",
-      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 40 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
+      "description": "Composite quality of the Backscatter VH composite: the local resolution of the weighted composite, where higher is better resolved, averaged onto the 20 m grid. Linear scaling; the decibel conversion is declared in the collection's renders.",
       "roles": [
         "quality",
         "cloud-optimized"
       ],
-      "raster:spatial_resolution": 40.0,
+      "raster:spatial_resolution": 20.0,
       "bands": [
         {
           "name": "rtc_vh_qa_cqm",

@@ -164,7 +164,7 @@ false-colour archives: `color-relief` colours one value, and a client can
 combine polarizations itself.
 
 **Two grids, neither derived from the other.** The annual analysis mosaics
-use **ETRS89-LAEA (EPSG:3035) at 40 m**, because WebMercator is not
+use **ETRS89-LAEA (EPSG:3035) at 20 m**, because WebMercator is not
 equal-area: a nominal 19.1 m pixel covers 13.2 m on the ground at 46.5° N,
 and the factor varies across the perimeter. Area statistics on it would need
 a correction the catalog does not declare. The web-map archives are tiled on

@@ -29,7 +29,7 @@ Cloud-Optimized GeoTIFFs (COGs), described by a STAC catalog.
 | Collection | One item per | Grid | Use it for |
 | --- | --- | --- | --- |
 | [Tiles](https://source.coop/giuz/glace-alps/tiles) | (MGRS square, year) | 10 m, UTM 31N/32N/33N | Detailed analysis, machine learning |
-| [Mosaics](https://source.coop/giuz/glace-alps/mosaics) | year | 40 m, ETRS89-LAEA | Regional analysis, inspection, time series |
+| [Mosaics](https://source.coop/giuz/glace-alps/mosaics) | year | 20 m, ETRS89-LAEA | Regional analysis, inspection, time series |
 
 Both represent the same source composites on different grids. The tiles hold
 the main product for scientific analysis. The mosaics put every year on one
