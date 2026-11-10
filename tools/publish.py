@@ -65,9 +65,12 @@ SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
 
 
 def content_type_for(path: str) -> str:
-    """Freezebase's content type for ``path``, plus ``image/webp`` for thumbnails."""
-    if PurePosixPath(path).suffix.lower() == ".webp":
+    """Freezebase's content type for ``path``, plus thumbnails and citation metadata."""
+    suffix = PurePosixPath(path).suffix.lower()
+    if suffix == ".webp":
         return "image/webp"
+    if suffix == ".cff":
+        return "application/yaml"
     return default_content_type_for(path)
 
 

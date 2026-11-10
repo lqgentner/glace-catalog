@@ -52,6 +52,10 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[2]
 PUBLISH_CONFIG = ROOT / "catalog.publish.yaml"
+CITATION_FILE = ROOT / "CITATION.cff"
+CITATION_NAME = "CITATION.cff"
+"""The citation metadata, published at the catalog root as a copy of the repository's."""
+CITATION_MEDIA_TYPE = "application/yaml"
 TEMPLATES_DIR = METADATA_DIR / "templates"
 
 RENDER_EXTENSION_URI = "https://stac-extensions.github.io/render/v2.0.0/schema.json"
@@ -215,6 +219,12 @@ def catalog_document(vocabulary: Vocabulary) -> Document:
         _link("describedby", "./README.md", "Catalog README", "text/markdown"),
         _link("agents", "./AGENTS.md", "Catalog agent guide", "text/markdown"),
         _link("icon", "./_assets/glace-wordmark.svg", "GLACE wordmark", "image/svg+xml"),
+        _link(
+            "describedby",
+            f"./{CITATION_NAME}",
+            "Citation metadata (Citation File Format)",
+            CITATION_MEDIA_TYPE,
+        ),
         *[
             _link(
                 "child", f"./{directory}/collection.json", vocabulary.collection_title(directory)
@@ -689,6 +699,12 @@ def stale_documents(vocabulary: Vocabulary, tracked: Path) -> list[str]:
     return problems
 
 
+def published_citation(source: Path = CITATION_FILE) -> str:
+    """Return ``CITATION.cff`` without its comment lines, which address maintainers."""
+    lines = source.read_text().splitlines(keepends=True)
+    return "".join(line for line in lines if not line.lstrip().startswith("#"))
+
+
 def render_tree(
     vocabulary: Vocabulary | None = None,
     out: Path = ROOT / "catalog",
@@ -717,6 +733,7 @@ def render_tree(
             style_document(vocabulary, vocabulary.catalog.last_year),
         ),
         **{name: render_markdown(vocabulary, name, bases) for name in MARKDOWN_TEMPLATES},
+        CITATION_NAME: published_citation(),
     }
     written: list[Path] = []
     for name, text in documents.items():

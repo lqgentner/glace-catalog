@@ -55,6 +55,12 @@
       "title": "GLACE wordmark"
     },
     {
+      "rel": "describedby",
+      "href": "./CITATION.cff",
+      "type": "application/yaml",
+      "title": "Citation metadata (Citation File Format)"
+    },
+    {
       "rel": "child",
       "href": "./tiles/collection.json",
       "type": "application/json",

@@ -2,19 +2,16 @@
 # is one string with DATASET_VERSION and the two collection documents;
 # tests/test_version.py enforces that. `date-released` is written in the release commit itself.
 cff-version: 1.2.0
-message: If you use this dataset, please cite it as below.
+message: Use the version-specific DOI to cite the exact dataset version used.
 type: dataset
 title: GLACE Alps
 abstract: >-
-  Annual summer composites of Sentinel-1 12-day repeat-pass InSAR coherence
-  (COH12) and radiometrically terrain-corrected backscatter (RTC) over the
-  Alpine Convention perimeter, 2015–2026. Composites are locally resolution
-  weighted, so each output pixel is dominated by the acquisitions that resolve
-  it best rather than by whichever orbit happened to observe it most often. Two
-  collections are published: per-tile composites on the 10 m MGRS grid for
-  analysis and machine learning, and one annual mosaic per year on a fixed
-  equal-area grid (ETRS89-LAEA, 20 m) for mapping, inspection and area
-  statistics.
+  Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
+  coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
+  the Alpine Convention perimeter, 2015–2026. Each composite covers a 90-day
+  summer window and weights the observations by their local resolution. The
+  data is distributed as single tiles (MGRS grid, 10 m) per year and grid cell
+  and as mosaics (ETRS89-LAEA, 20 m) per year.
 authors:
   - family-names: Gentner
     given-names: Luis Q.

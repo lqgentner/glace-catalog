@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: Use the version-specific DOI to cite the exact dataset version used.
+type: dataset
+title: GLACE Alps
+abstract: >-
+  Annual summer composites of Sentinel-1 12-day repeat-pass interferometric
+  coherence (COH12) and radiometrically terrain-corrected backscatter (RTC) for
+  the Alpine Convention perimeter, 2015–2026. Each composite covers a 90-day
+  summer window and weights the observations by their local resolution. The
+  data is distributed as single tiles (MGRS grid, 10 m) per year and grid cell
+  and as mosaics (ETRS89-LAEA, 20 m) per year.
+authors:
+  - family-names: Gentner
+    given-names: Luis Q.
+    email: luis.gentner@geo.uzh.ch
+    orcid: https://orcid.org/0009-0006-4453-0881
+    affiliation: University of Zurich, Department of Geography
+  - family-names: Piermattei
+    given-names: Livia
+    orcid: https://orcid.org/0000-0003-2814-8659
+    affiliation: University of Zurich, Department of Geography
+  - family-names: Wulf
+    given-names: Hendrik
+    orcid: https://orcid.org/0000-0002-6161-428X
+    affiliation: University of Zurich, Department of Geography
+license: CC-BY-4.0
+repository-code: https://github.com/lqgentner/glace-catalog
+url: https://source.coop/giuz/glace-alps
+doi: 10.48656/60er-3j55
+identifiers:
+  - type: doi
+    value: 10.48656/d4r9-fj97
+    description: Canonical DOI, every version
+version: "1.0"
+keywords:
+  - Sentinel-1
+  - SAR
+  - InSAR coherence
+  - backscatter
+  - glaciers
+  - cryosphere
+  - Alps
+  - STAC

@@ -51,7 +51,7 @@ from upath import UPath
 
 from glace_catalog import stac, webmap
 from glace_catalog.config import settings
-from glace_catalog.documents import load_public_bases, stale_documents
+from glace_catalog.documents import CITATION_NAME, load_public_bases, stale_documents
 from glace_catalog.grid import grid_frame, write_grid
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
@@ -459,6 +459,9 @@ def write_documents(
             (staged / directory).mkdir(parents=True, exist_ok=True)
             for name in ("README.md", "AGENTS.md"):
                 shutil.copyfile(source_dir / directory / name, staged / directory / name)
+
+        # The citation metadata sits beside the root catalog, which links to it.
+        shutil.copyfile(source_dir / CITATION_NAME, staged / CITATION_NAME)
 
         # `_assets/` holds files the documents link to, such as the root
         # catalog's icon. They are published beside the documents.

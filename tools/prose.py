@@ -48,6 +48,8 @@ import time
 from typing import Any
 import urllib.request
 
+import yaml
+
 from glace_catalog import documents, metadata
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,7 +271,7 @@ def prose_fields(document: Any, path: str = "") -> list[tuple[str, str]]:
 
 
 def extract_stac(target: Path) -> dict[Path, list[tuple[int, int, str]]]:
-    """Write each STAC document's prose to a Markdown file under ``target``.
+    """Write the prose of each STAC document and of CITATION.cff to Markdown under ``target``.
 
     Each field becomes one paragraph. Returns, per written file, the first and
     last line of each paragraph and the ``document: field`` it came from.
@@ -280,6 +282,10 @@ def extract_stac(target: Path) -> dict[Path, list[tuple[int, int, str]]]:
         if "styles" not in source.parts:
             documents[str(source.relative_to(ROOT))] = prose_fields(json.loads(source.read_text()))
     documents["build-time prose"] = build_time_prose()
+    citation = yaml.safe_load((ROOT / "CITATION.cff").read_text())
+    documents["CITATION.cff"] = [
+        (field, str(citation[field])) for field in ("title", "abstract") if citation.get(field)
+    ]
     spans: dict[Path, list[tuple[int, int, str]]] = {}
     for index, (name, fields) in enumerate(documents.items()):
         if not fields:
