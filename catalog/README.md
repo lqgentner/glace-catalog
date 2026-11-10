@@ -98,7 +98,7 @@ processing record.
 
 ## Usage notes
 
-**Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favourable viewing geometries contributed. In the validation, a random forest maps glaciers less accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87) than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
+**Composite quality.** Lower `*_qa_cqm` values indicate a lower local resolution of the composite: the closer to 0, the fewer favorable viewing geometries contributed. In the validation, a random forest maps glaciers less accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87) than elsewhere (0.97). These pixels make up 3% of the pixels within 250 m of the glacier outlines and 1.5% of the glacier pixels. Mask or downweight them, or use the CQM as an additional model input.
 
 **Coherence bias.** Coherence is estimated over a 35 × 7 (range × azimuth) window. The finite window biases the estimate upwards, so fully decorrelated surfaces do not reach 0: over large lakes, the mean is about 0.09. So absolute values differ from products that use larger windows, such as the global seasonal Sentinel-1 coherence of [Kellndorfer et al. (2022)](https://doi.org/10.1038/s41597-022-01189-6). Do not compare values across products, and choose thresholds on GLACE itself.
 
@@ -127,7 +127,7 @@ See the [production pipeline](https://github.com/lqgentner/glace-production) for
 
 Cite this version of the dataset as:
 
-> Gentner, L. Q. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
+> Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
 
 To refer to the dataset across versions, use
 https://doi.org/10.48656/d4r9-fj97.

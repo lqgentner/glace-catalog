@@ -68,8 +68,9 @@ To edit the metadata, or to build and publish the store, see
 
 Cite version 1.0 of the dataset as:
 
-> Gentner, L. Q. (2026). *GLACE Alps* (Version 1.0) [Data set]. LaRS –
-> Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
+> Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). *GLACE Alps* (Version 1.0)
+> [Data set]. LaRS – Language Repository of Switzerland.
+> https://doi.org/10.48656/60er-3j55
 
 To refer to the dataset across versions, use its canonical DOI,
 https://doi.org/10.48656/d4r9-fj97.

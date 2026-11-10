@@ -36,7 +36,7 @@ usage_notes:
   - title: Composite quality
     text: >-
       Lower `*_qa_cqm` values indicate a lower local resolution of the
-      composite: the closer to 0, the fewer favourable viewing geometries
+      composite: the closer to 0, the fewer favorable viewing geometries
       contributed. In the validation, a random forest maps glaciers less
       accurately where the CQM is below 0.5 (linear, about −3 dB; AUC 0.87)
       than elsewhere (0.97). These pixels make up 3% of the pixels within
@@ -98,8 +98,8 @@ doi:
   versions:
     "1.0": 10.48656/60er-3j55
 citation: >-
-  Gentner, L. Q. (2026). GLACE Alps (Version {{ version }}) [Data set]. LaRS –
-  Language Repository of Switzerland. https://doi.org/{{ doi }}
+  Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). GLACE Alps (Version
+  {{ version }}) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/{{ doi }}
 
 keywords:
   - Sentinel-1

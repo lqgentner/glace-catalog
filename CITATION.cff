@@ -21,6 +21,14 @@ authors:
     email: luis.gentner@geo.uzh.ch
     orcid: https://orcid.org/0009-0006-4453-0881
     affiliation: University of Zurich, Department of Geography
+  - family-names: Piermattei
+    given-names: Livia
+    orcid: https://orcid.org/0000-0003-2814-8659
+    affiliation: University of Zurich, Department of Geography
+  - family-names: Wulf
+    given-names: Hendrik
+    orcid: https://orcid.org/0000-0002-6161-428X
+    affiliation: University of Zurich, Department of Geography
 license: CC-BY-4.0
 repository-code: https://github.com/lqgentner/glace-catalog
 url: https://source.coop/giuz/glace-alps
