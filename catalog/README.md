@@ -131,6 +131,7 @@ Cite this version of the dataset as:
 
 To refer to the dataset across versions, use
 https://doi.org/10.48656/d4r9-fj97.
+The paper is under review, and its citation follows here once it is published.
 
 ## Feedback and contributions
 

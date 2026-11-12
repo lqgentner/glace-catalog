@@ -2,7 +2,7 @@
 """Checks the tile grid: its fraction input and the archive built from it.
 
 The build reads each tile's glacier fractions from a table that
-deep-glacier-mapping writes once per scope (AGENTS.md step 1). The table pins
+glace-production writes once per scope (AGENTS.md step 1). The table pins
 one inventory and one buffer, and a table computed with others would give the
 items different values from the ones the catalog describes, so reading it
 checks both against the scope.
@@ -44,7 +44,7 @@ SCOPE = get_scope("alps")
 
 
 def _fractions(path: Path, *, rgi_version: str = "RGI7-C-11", buffer_m: float = 250.0) -> Path:
-    """Write a two-tile fraction table as deep-glacier-mapping does."""
+    """Write a two-tile fraction table as glace-production does."""
     pd.DataFrame(
         {
             "mgrs_code": ["32TMS55", "32TMS56"],

@@ -97,7 +97,7 @@ MANIFEST_COLUMNS: tuple[str, ...] = (
 )
 """The columns :func:`read_manifest` requires, before the one column per tag.
 
-The composite driver in ``deep-glacier-mapping`` writes the manifest: these
+The composite driver in ``glace-production`` writes the manifest: these
 columns, then one column per GeoTIFF tag. To create a manifest for an archive,
 rerun its year upstream; complete tiles are skipped, and every file is
 described and hashed. ``tests/test_manifest_contract.py`` holds the driver's

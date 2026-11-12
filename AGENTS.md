@@ -118,15 +118,17 @@ Publication uses the separate profile in `catalog.publish.yaml`.
 
 ### 1. Compute glacier fractions once per region
 
-Run this in `deep-glacier-mapping`, which provides the inventory data and the
-`glacier_mapping` package. It runs on pixi, which loads that checkout's `.env`.
-Write the output prefix in full, matching this store's `GLACE_STORE_ROOT`.
+Run this in [`glace-production`](https://github.com/lqgentner/glace-production),
+which provides the inventory data and the `glace_production` package. It runs
+on pixi, which loads that checkout's `.env`. The task runs
+`scripts/inventories/derive-glacier-fractions.py` and writes to
+`$GLACIERS_DATA_DIR/glace-alps/tiles/.glacier-fractions.parquet` by default.
+To write into this store, pass the prefix in full, matching `GLACE_STORE_ROOT`.
 
 ```bash
-( cd ../deep-glacier-mapping &&
-  pixi run python scripts/inventories/derive-glacier-fractions.py \
-      --scope alps --perimeter-tiles 2210 \
-      --out s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
+( cd ../glace-production &&
+  pixi run glacier-fractions \
+      s3://s1-bursts/data/glace-alps/tiles/.glacier-fractions.parquet )
 ```
 
 Every year reuses this lookup, so a tile's glacier fraction is the same every year. Its
@@ -139,7 +141,7 @@ the upload: the items and the tile grid contain its values.
 ### 2. Build each year
 
 The source archive must contain `manifest.parquet`, one row per file, written
-by the composite run in `deep-glacier-mapping` (`docs/DESIGN.md` §5). Source
+by the composite run in `glace-production` (`docs/DESIGN.md` §5). Source
 manifests come only from that run: to add a missing one, rerun the upstream
 year, which skips complete tiles and describes and hashes their files.
 
@@ -321,8 +323,11 @@ Each release has one version string and a DOI at LaRS
 
 They share files, not imports (`docs/DESIGN.md` §5).
 
-- `../deep-glacier-mapping`: composite production, labels, and ML. Its
-  composite run writes the source archives and their manifests.
+- [`../glace-production`](https://github.com/lqgentner/glace-production): the
+  production pipeline. Its composite run (`pixi run composites <year>`, or
+  `pixi run fleet jobs-lrw.yml` for one VM per year) writes the source
+  archives and their manifests, and `pixi run glacier-fractions` writes the
+  glacier-fraction table.
 - `../s1bursts`: Sentinel-1 processing. Its COG writer (0.5.0 and later)
   embeds band statistics (`PTL-DAT-009`) and computes checksums. This
   repository only reads its output files.

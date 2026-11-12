@@ -322,7 +322,9 @@ and every diff.
 
 ## 5. The source archive, checksums, and band statistics
 
-The composites come from the composite run in `deep-glacier-mapping`, which
+The composites come from the composite run in
+[`glace-production`](https://github.com/lqgentner/glace-production)
+(`pixi run composites <year>`, or `pixi run fleet jobs-lrw.yml`), which
 calls the `s1bursts` writer. **No repository imports another**; they share
 files. This catalog reads the composites, their run manifest and the
 glacier-fraction table (`AGENTS.md` step 1), and takes MGRS tile geometry from

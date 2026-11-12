@@ -1,6 +1,6 @@
 """The MGRS tile grid and the glacier fractions it carries.
 
-deep-glacier-mapping computes each tile's glacier fractions once per scope
+glace-production computes each tile's glacier fractions once per scope
 (AGENTS.md step 1) and writes them to a table in the store. The build copies
 them onto every tile item; the table itself is a build input and is not
 published.
@@ -81,7 +81,7 @@ def read_glacier_fractions(path: Path | UPath, scope: Scope) -> dict[str, tuple[
     """
     if not path.exists():
         msg = (
-            f"{path} is absent. Run deep-glacier-mapping's "
+            f"{path} is absent. Run glace-production's "
             "scripts/inventories/derive-glacier-fractions.py for this scope first; "
             "the fractions are pinned per scope so they cannot drift between years."
         )
@@ -91,7 +91,7 @@ def read_glacier_fractions(path: Path | UPath, scope: Scope) -> dict[str, tuple[
     missing = sorted(set(FRACTION_COLUMNS) - set(frame.columns))
     if missing:
         msg = (
-            f"{path} has no column {', '.join(missing)}. Rerun deep-glacier-mapping's "
+            f"{path} has no column {', '.join(missing)}. Rerun glace-production's "
             "scripts/inventories/derive-glacier-fractions.py, which records the "
             "inventory and buffer the fractions were computed with."
         )

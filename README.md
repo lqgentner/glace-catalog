@@ -73,7 +73,8 @@ Cite version 1.0 of the dataset as:
 > https://doi.org/10.48656/60er-3j55
 
 To refer to the dataset across versions, use its canonical DOI,
-https://doi.org/10.48656/d4r9-fj97.
+https://doi.org/10.48656/d4r9-fj97. The paper is under review, and its
+citation follows here once it is published.
 
 ## License
 

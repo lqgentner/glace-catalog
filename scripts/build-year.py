@@ -83,7 +83,7 @@ def load_and_verify_manifest(src: Any, year: int) -> tuple[pd.DataFrame, list[st
     manifest_path = src / MANIFEST_NAME
     if not manifest_path.exists():
         msg = (
-            f"{manifest_path} is absent. The composite run in deep-glacier-mapping "
+            f"{manifest_path} is absent. The composite run in glace-production "
             "emits it; rerunning the year over a complete archive writes one too."
         )
         raise SystemExit(msg)

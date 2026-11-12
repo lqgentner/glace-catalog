@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks the run-manifest contract with ``deep-glacier-mapping``.
+"""Checks the run-manifest contract with ``glace-production``.
 
 The composite run in that repository writes ``manifest.parquet``, and the
 build here reads it. The file is the only contract between the two
@@ -10,7 +10,7 @@ statistics, which the build takes from the manifest alone. It also checks
 how the build writes files into a store.
 
 The column list below is copied verbatim from
-``glacier_mapping/manifest.py::COLUMNS``; keep the two identical.
+``glace_production/manifest.py::COLUMNS``; keep the two identical.
 
 Reads no data and needs no network.
 
