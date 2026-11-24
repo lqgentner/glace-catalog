@@ -42,15 +42,14 @@ publish base: about ten hours for the Alps. It reads that base from the root
 catalog's `self` link, so `make conformance-live` mirrors the documents
 without it (`tools/mirror_docs.py --drop-self`).
 
-The last run over the published catalog, on 2026-11-10 over the Alpine years
-2015–2026 (`make conformance-live`, 26 545 files, rashid 0.3.0, every
-extension schema), gave 0 errors and only the twelve `PTL-CAT-001` warnings
-accepted below.
-
-The last run over the built store, on 2026-11-24 (`make conformance`, 26 545
-files, rashid 0.4.0, spec v0.3.0), gave the 144 `PTL-AST-009` errors
+The last run over the published catalog, on 2026-11-24 over the Alpine years
+2015–2026 (`make conformance-live`, 26 545 files, rashid 0.4.0, spec v0.3.0,
+every extension schema), gave the 144 `PTL-AST-009` errors
 [recorded below](#ptl-ast-009--raster-web-map-archives), the twelve
-`PTL-CAT-001` warnings and the one `PTL-VIZ-007` warning, and nothing else.
+`PTL-CAT-001` warnings and the one `PTL-VIZ-007` warning, and nothing else
+above INFO. Its one INFO note says that the mosaics item mirror, 12 rows, is
+too small for rashid to judge its spatial order. `make links-live` found every
+one of the 344 568 published hrefs answering with its recorded size.
 
 ## Findings in `ACCEPTED`
 
