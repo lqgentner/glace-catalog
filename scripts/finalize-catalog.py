@@ -12,13 +12,14 @@ years and writes what spans them:
   tiles or items, and the mosaics collection's style draws the latest year;
 - the run's time as ``updated`` on the root catalog and both collections;
 - a thumbnail per collection, drawn from the latest year's COGs;
-- ``tiles/grid.pmtiles``, the tile grid with each tile's glacier fractions,
-  and the tiles collection's styles: ``tiles/styles/grid.json``, and
+- ``tiles/grid.parquet`` and ``tiles/grid.pmtiles``, the tile grid with each
+  tile's glacier fractions, as a table and as a web map, and the tiles
+  collection's styles: ``tiles/styles/grid.json``, and
   ``tiles/styles/default.json``, which draws the latest year's coherence;
 - ``tiles/items.parquet``, the per-year indexes combined, and
   ``mosaics/items.parquet``, one row per year; both with absolute hrefs under
-  the public address, and described by their ``items`` assets' column types
-  and row counts.
+  the public address. Each Parquet asset records its column types and row
+  count.
 
 It then validates the result against the STAC schemas.
 
@@ -51,8 +52,13 @@ from upath import UPath
 
 from glace_catalog import stac, webmap
 from glace_catalog.config import settings
-from glace_catalog.documents import CITATION_NAME, load_public_bases, stale_documents
-from glace_catalog.grid import grid_frame, write_grid
+from glace_catalog.documents import (
+    CITATION_NAME,
+    GRID_TABLE_KEY,
+    load_public_bases,
+    stale_documents,
+)
+from glace_catalog.grid import grid_frame, write_grid, write_grid_table
 from glace_catalog.metadata import vocabulary
 from glace_catalog.stac.items import extent_from_items
 from glace_catalog.stac.save import (
@@ -502,6 +508,7 @@ def stamped_asset_paths(
         TILES_DIR: {
             "items": layout.tiles_index,
             "grid": layout.tiles_grid,
+            GRID_TABLE_KEY: layout.tiles_grid_table,
             "thumbnail": layout.tiles_thumbnail,
         },
         MOSAICS_DIR: {
@@ -562,7 +569,7 @@ def stamp_collection_assets(
 ) -> None:
     """Fill ``file:size`` and ``file:checksum`` on the collection-level assets.
 
-    These are the item indexes, the thumbnails and the glacier fractions. The
+    These are the item indexes, the thumbnails and the tile grid's two files. The
     run manifest holds no digest for them, so they are measured here from the
     bytes in the store. Readers can then verify a download, as they can for
     item assets (Portolan rule ``PTL-AST-003``).
@@ -583,52 +590,61 @@ def stamp_collection_assets(
             logger.info("Stamped %s/%s: %d bytes", directory, key, asset["file:size"])
 
 
-def describe_mirrors(
+TABLE_SOURCES = {
+    "items": "mirror_columns in metadata/assets.yaml",
+    GRID_TABLE_KEY: "grid_table_columns in src/glace_catalog/documents.py",
+}
+"""Parquet assets whose columns finalization types, and where each documents them."""
+
+
+def describe_tables(
     documents: Mapping[str, Document],
     layout: stac.StoreLayout,
 ) -> None:
-    """Add each column's type and the row count to the ``items`` assets.
+    """Add each column's type and the row count to the Parquet assets.
 
-    The rendered ``table:columns`` name and describe the columns from
-    ``metadata/assets.yaml``; the types and the count come from the written
-    mirror, read from its footer alone.
+    These are the item mirrors, ``items``, and the tile grid's table. The
+    rendered ``table:columns`` name and describe the columns; the types and
+    the count come from the written file, read from its footer alone.
 
     Raises
     ------
     SystemExit
-        If a mirror's columns differ from the documented ones.
+        If a file's columns differ from the documented ones.
     """
     paths = stamped_asset_paths(layout)
     for directory, document in documents.items():
-        asset = document.get("assets", {}).get("items")
-        if asset is None:
-            continue
-        with UPath(paths[directory]["items"]).open("rb") as handle:
-            mirror = pq.ParquetFile(handle)
-            schema, rows = mirror.schema_arrow, mirror.metadata.num_rows
-        columns = asset.get("table:columns", [])
-        documented = {column["name"] for column in columns}
-        undocumented = sorted(set(schema.names) - documented)
-        absent = sorted(documented - set(schema.names))
-        if undocumented or absent:
-            msg = (
-                f"{directory}/items.parquet differs from mirror_columns in "
-                f"metadata/assets.yaml: undocumented {undocumented}, absent {absent}. "
-                "Describe or remove them, render, then finalize again"
+        for key, source in TABLE_SOURCES.items():
+            asset = document.get("assets", {}).get(key)
+            if asset is None:
+                continue
+            path = UPath(paths[directory][key])
+            with path.open("rb") as handle:
+                table = pq.ParquetFile(handle)
+                schema, rows = table.schema_arrow, table.metadata.num_rows
+            columns = asset.get("table:columns", [])
+            documented = {column["name"] for column in columns}
+            undocumented = sorted(set(schema.names) - documented)
+            absent = sorted(documented - set(schema.names))
+            if undocumented or absent:
+                msg = (
+                    f"{directory}/{path.name} differs from {source}: "
+                    f"undocumented {undocumented}, absent {absent}. "
+                    "Describe or remove them, render, then finalize again"
+                )
+                raise SystemExit(msg)
+            asset["table:columns"] = [
+                {
+                    "name": column["name"],
+                    "type": mirror_column_type(schema.field(column["name"]).type),
+                    "description": column["description"],
+                }
+                for column in columns
+            ]
+            asset["table:row_count"] = rows
+            logger.info(
+                "Described %s/%s: %d columns, %d rows", directory, path.name, len(columns), rows
             )
-            raise SystemExit(msg)
-        asset["table:columns"] = [
-            {
-                "name": column["name"],
-                "type": mirror_column_type(schema.field(column["name"]).type),
-                "description": column["description"],
-            }
-            for column in columns
-        ]
-        asset["table:row_count"] = rows
-        logger.info(
-            "Described %s/items.parquet: %d columns, %d rows", directory, len(columns), rows
-        )
 
 
 def validate(layout: stac.StoreLayout) -> None:
@@ -764,6 +780,7 @@ def main() -> None:
     )
     if mosaic_items:
         stac.index_from_items(mosaic_items, layout.mosaics_index, base_url=base_url)
+    write_grid_table(grid, layout.tiles_grid_table)
     write_grid(grid, layout.tiles_grid)
     logger.info("Wrote the tile grid: %d tiles", len(grid))
     if args.skip_thumbnail:
@@ -776,7 +793,7 @@ def main() -> None:
             attribution=args.thumbnail_attribution,
         )
 
-    describe_mirrors(documents, layout)
+    describe_tables(documents, layout)
     stamp_collection_assets(documents, layout)
     write_documents(
         SOURCE_DIR,

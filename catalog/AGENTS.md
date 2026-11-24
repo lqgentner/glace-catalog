@@ -70,7 +70,7 @@ equal-area grid across years.
 `glace:glacier_fraction` and `glace:glacier_fraction_buffered` are computed once
 per scope from RGI7-C-11 outlines, plain and buffered by
 250 m, so a tile has the same values every year. The tiles
-collection's `grid` asset, `tiles/grid.pmtiles`, contains them per tile.
+collection's `grid-table` asset, `tiles/grid.parquet`, contains them per tile.
 
 Default display ramps and ranges are in the collections' `renders` blocks and
 the year styles. The [GLACE Viewer](https://lqgentner.github.io/glace-viewer) draws the PMTiles with these styles.

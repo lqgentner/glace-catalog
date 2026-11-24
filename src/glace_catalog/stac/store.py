@@ -28,7 +28,7 @@ from freezebase.utils import file_sha256
 import pandas as pd
 from upath import UPath
 
-from glace_catalog.grid import GRID_ARCHIVE
+from glace_catalog.grid import GRID_ARCHIVE, GRID_TABLE
 from glace_catalog.stac.naming import CompositeFile, parse_composite_name
 from glace_catalog.stac.tags import PROVENANCE_TAGS, RasterInfo, band_statistics
 
@@ -128,7 +128,8 @@ class StoreLayout:
         |   |-- collection.json  README.md  AGENTS.md
         |   |-- items.parquet          # collection-mirror, every year
         |   |-- thumbnail.webp
-        |   |-- grid.pmtiles           # tile grid with glacier fractions
+        |   |-- grid.parquet           # tile grid with glacier fractions
+        |   |-- grid.pmtiles           # the same grid as a web map
         |   |-- styles/grid.json
         |   |-- .glacier-fractions.parquet  # build input, not published
         |   `-- {year}/
@@ -193,6 +194,11 @@ class StoreLayout:
     def tiles_grid(self) -> Path | UPath:
         """Vector PMTiles of the tile grid, with each tile's glacier fractions."""
         return self.tiles / GRID_ARCHIVE
+
+    @property
+    def tiles_grid_table(self) -> Path | UPath:
+        """GeoParquet of the tile grid, the rows :attr:`tiles_grid` draws."""
+        return self.tiles / GRID_TABLE
 
     @property
     def glacier_fractions(self) -> Path | UPath:

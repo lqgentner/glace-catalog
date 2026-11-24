@@ -98,9 +98,10 @@ Open the resulting `.vrt` file as a raster layer in QGIS.
 
 ## Tile grid
 
-`grid.pmtiles` contains every tile of any year as a polygon in the vector layer
-`mgrs`, with its MGRS code and glacier fractions: the share of the tile within
+`grid.parquet` contains every tile of any year as a polygon, with its MGRS code
+and glacier fractions: the share of the tile within
 RGI7-C-11 glacier outlines, plain and buffered by 250 m.
+`grid.pmtiles` contains the same polygons in the vector layer `mgrs`, and
 `styles/grid.json` draws it, each tile filled by its buffered fraction. The
 collection's default style, `styles/default.json`, draws the latest year's
 coherence VV from the mosaics collection's web-map archive and outlines the

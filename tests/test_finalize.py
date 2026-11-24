@@ -288,11 +288,12 @@ def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
 
 
 def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
-    """Check that the grid asset records the size of the archive in the store."""
+    """Check that both grid assets record the size of their file in the store."""
     layout = stac.StoreLayout(store)
     grid = Path(str(layout.tiles_grid))
     grid.parent.mkdir(parents=True, exist_ok=True)
     grid.write_bytes(b"PMTiles" * 10)
+    Path(str(layout.tiles_grid_table)).write_bytes(b"PAR1" * 5)
     Path(str(layout.tiles_index)).write_bytes(b"")
     documents = {"tiles": json.loads((SOURCE / "tiles" / "collection.json").read_text())}
     fin.stamp_collection_assets(documents, layout)
@@ -301,6 +302,8 @@ def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -
     checks["the grid asset records its checksum"] = str(asset.get("file:checksum", "")).startswith(
         "1220"
     )
+    table = documents["tiles"]["assets"]["grid-table"]
+    checks["the grid table records its size"] = table.get("file:size") == 20
 
 
 def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
@@ -312,7 +315,7 @@ def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Pa
     names = [column["name"] for column in collection["assets"]["items"]["table:columns"]]
     pq.write_table(pa.Table.from_pylist([dict.fromkeys(names, "x")] * 3), index)
     documents = {"mosaics": collection}
-    fin.describe_mirrors(documents, layout)
+    fin.describe_tables(documents, layout)
     asset = collection["assets"]["items"]
     checks["a mirror records its row count"] = asset.get("table:row_count") == 3
     checks["a mirror records each column's type"] = all(
@@ -320,7 +323,7 @@ def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Pa
     )
     pq.write_table(pa.Table.from_pylist([dict.fromkeys([*names, "stray"], "x")]), index)
     try:
-        fin.describe_mirrors(
+        fin.describe_tables(
             {"mosaics": json.loads((SOURCE / "mosaics" / "collection.json").read_text())}, layout
         )
         checks["an undocumented mirror column stops finalization"] = False

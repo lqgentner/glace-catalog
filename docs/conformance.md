@@ -12,7 +12,7 @@ and the list never grows without a row here. Each entry names a tracking
 issue, or the structural reason none applies; a silently widened allow-list
 is a false claim about conformance.
 
-Checked against **rashid 0.3.0** and spec **v0.2.0**.
+Checked against **rashid 0.4.0** and spec **v0.3.0**, which the catalog declares.
 
 ## What the gate reads
 
@@ -47,6 +47,11 @@ The last run over the published catalog, on 2026-11-10 over the Alpine years
 extension schema), gave 0 errors and only the twelve `PTL-CAT-001` warnings
 accepted below.
 
+The last run over the built store, on 2026-11-24 (`make conformance`, 26 545
+files, rashid 0.4.0, spec v0.3.0), gave the 144 `PTL-AST-009` errors
+[recorded below](#ptl-ast-009--raster-web-map-archives), the twelve
+`PTL-CAT-001` warnings and the one `PTL-VIZ-007` warning, and nothing else.
+
 ## Findings in `ACCEPTED`
 
 These are the rules `ACCEPTED` in `tests/test_conformance.py` lets through.
@@ -54,7 +59,7 @@ These are the rules `ACCEPTED` in `tests/test_conformance.py` lets through.
 | Rule | Where | Why accepted | Tracking |
 |---|---|---|---|
 | `PTL-COL-005` | both collections, tracked tree only | Each collection registers its `items.parquet` mirror, and a fresh clone holds no items for it to mirror. Not a metadata defect: the finding disappears against any built tree. | none; structural, see below |
-| `PTL-AST-007` | both collections, tracked tree only | `PORTO-CORE-082`: a collection refers to its primary data through a `data` asset on itself or its items. Both collections keep their data on their items, which a fresh clone does not hold. The finding disappears against any built tree. | none; structural, as above |
+| `PTL-AST-007` | mosaics collection, tracked tree only | `PORTO-CORE-082`: a collection refers to its primary data through a `data` asset on itself or its items. The mosaics collection keeps its data on its items, which a fresh clone does not hold. The finding disappears against any built tree. The tiles collection passes on its own `data` asset, the tile grid's table. | none; structural, as above |
 
 `PTL-COL-005` reads: *"a collection whose scene files or item mirror imply
 items must publish them."* Both collections register a `collection-mirror`
@@ -66,6 +71,28 @@ same, for the same reason, at 45 000 items.
 Leaving the mirror out of the committed `collection.json`, for the generator
 to add, was rejected: the committed document would then differ from the
 published one, which is worse than a finding whose cause is written down.
+
+## Errors in the built tree
+
+The gate does not see these, because they fire on items, and the tracked tree
+holds none. `make conformance` reports them, and fails on them.
+
+### `PTL-AST-009` — raster web-map archives
+
+| Rule | Where | Why accepted | Tracking |
+|---|---|---|---|
+| `PTL-AST-009` (`PORTO-FMT-062`) | mosaics items, built tree: all 144 `{stem}_viz.pmtiles` | The archives are raster tiles drawn from the mosaic COGs. No GeoParquet exists for them to reference. | rashid issue to be filed |
+
+*"A PMTiles asset MUST meet both conditions: the asset has the `visual` role;
+the asset belongs to a collection that references the GeoParquet data used to
+create the PMTiles file."* The requirement is in the Vector section of the
+specification and was written for vector archives (portolan-spec#225). rashid
+0.4.0 applies it to every PMTiles asset. The archives meet the first
+condition. The mosaics collection's primary data is the COGs on its items, so
+`PTL-AST-007` passes for it.
+
+The one vector archive, the tile grid, meets both conditions: it is drawn from
+`tiles/grid.parquet`, a `data` asset of the same collection.
 
 ## Deviations rashid does not report
 
@@ -88,7 +115,8 @@ links they would form a list that long on the collection page.
 rashid does not report the omission: `PTL-VIZ-003` checks only a collection
 that carries a PMTiles asset or link, and the mosaics collection carries
 neither. The tiles collection conforms: its one archive, the tile grid, is a
-`visual` asset with a `rel: "pmtiles"` link and a style.
+`visual` asset with a `rel: "pmtiles"` link and a style, drawn from the
+collection's `data` asset `grid.parquet` (`PORTO-FMT-062`).
 
 The archives are still fully described. Each year's item lists its archives as
 assets, with size and checksum. Each year's style draws the archive
@@ -115,7 +143,7 @@ visual derivative register some style, and the mosaics collection keeps one.
 
 ## Warnings Carried Deliberately
 
-Neither of these fails the build; both are recorded so that a clean run is not
+None of these fails the build; each is recorded so that a clean run is not
 mistaken for an empty one.
 
 ### `PTL-CAT-001` — one per year sub-catalog
@@ -156,6 +184,19 @@ Portolan treats a stale value as a conformance failure and asks a publisher who
 cannot keep one current to omit it, so an absent field here is correct. Item
 assets carry both fields from the run manifest
 ([`DESIGN.md`](DESIGN.md#5-the-source-archive-checksums-and-band-statistics)).
+
+### `PTL-VIZ-007` — no overview COG on the tiles collection
+
+*"a collection of two or more rasters should provide an overview COG with the
+visual and overview roles"* (`PORTO-FMT-067` to `PORTO-FMT-072`, new in spec
+v0.3.0). The overview is an 8-bit RGB COG in a web map projection, so that a
+client can show the whole area without reading every tile.
+
+The catalog serves that need in two other ways. The mosaics collection holds
+each year's mosaic of all tiles, and each year's web-map archives draw it at
+every zoom. Neither is the asset the rule asks for: the mosaics are float32
+analysis data in ETRS89-LAEA, and the archives are PMTiles. An overview COG
+would be a third rendering of the same mosaic. Revisit if a client needs it.
 
 ## Advisory Gate
 

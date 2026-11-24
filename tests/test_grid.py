@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks the tile grid: its fraction input and the archive built from it.
+"""Checks the tile grid: its fraction input and the table and archive built from it.
 
 The build reads each tile's glacier fractions from a table that
 glace-production writes once per scope (AGENTS.md step 1). The table pins
@@ -20,20 +20,25 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING
 
+import geopandas as gpd
 import pandas as pd
 from pmtiles.reader import MmapSource, Reader
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pyogrio
 import shapely
 from upath import UPath
 
+from glace_catalog.documents import grid_table_columns
 from glace_catalog.grid import (
     GRID_LAYER,
     GRID_MAX_ZOOM,
     GRID_MIN_ZOOM,
+    GRID_TABLE_ROW_GROUP_SIZE,
     grid_frame,
     read_glacier_fractions,
     write_grid,
+    write_grid_table,
 )
 from glace_catalog.scopes import get_scope
 
@@ -228,6 +233,42 @@ def check_grid_archive(checks: dict[str, bool], work: Path) -> None:
         }
 
 
+def check_grid_table(checks: dict[str, bool], work: Path) -> None:
+    """Check the table's columns, its order, its covering column and its row groups."""
+    frame = grid_frame([_year(list(CELLS))])
+    target = UPath(work / "store" / "tiles" / "grid.parquet")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    write_grid_table(frame, target)
+    path = Path(str(target))
+    checks["table: written to the target"] = path.is_file()
+    if not path.is_file():
+        return
+    parquet = pq.ParquetFile(path)
+    documented = [
+        column["name"]
+        for column in grid_table_columns(SCOPE.glacier_inventory, SCOPE.glacier_buffer_m)
+    ]
+    checks["table: columns as documented"] = parquet.schema_arrow.names == documented
+    geo = json.loads(parquet.schema_arrow.metadata[b"geo"])
+    checks["table: GeoParquet 1.1 with a bbox covering"] = geo["version"] == "1.1.0" and (
+        geo["columns"]["geometry"].get("covering", {}).get("bbox", {}).get("xmin")
+        == ["bbox", "xmin"]
+    )
+    checks["table: row groups hold at most GRID_TABLE_ROW_GROUP_SIZE rows"] = all(
+        parquet.metadata.row_group(index).num_rows <= GRID_TABLE_ROW_GROUP_SIZE
+        for index in range(parquet.metadata.num_row_groups)
+    )
+    read = gpd.read_parquet(path)
+    checks["table: rows follow the Hilbert curve"] = (
+        read.geometry.hilbert_distance().is_monotonic_increasing
+    )
+    checks["table: same tiles and fractions as the frame"] = (
+        read.sort_values("mgrs_tile")
+        .reset_index(drop=True)[["mgrs_tile", "glacier_fraction", "glacier_fraction_buffered"]]
+        .equals(frame[["mgrs_tile", "glacier_fraction", "glacier_fraction_buffered"]])
+    )
+
+
 def main() -> int:
     """Run every check; print the failures."""
     checks: dict[str, bool] = {}
@@ -237,6 +278,7 @@ def main() -> int:
         check_grid_frame(checks)
         check_grid_conflict(checks)
         check_grid_archive(checks, work)
+        check_grid_table(checks, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

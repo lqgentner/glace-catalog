@@ -91,7 +91,7 @@ class UPathStacIO(pystac.stac_io.DefaultStacIO):
         return self._path(href).read_text()
 
 
-PORTOLAN_SCHEMA = "https://schemas.portolan-sdi.org/portolan/v0.2.0/schema.json"
+PORTOLAN_SCHEMA = "https://schemas.portolan-sdi.org/portolan/v0.3.0/schema.json"
 """Portolan profile version every generated catalog declares.
 
 The versioned schema URI is the only marker of the specification version, and

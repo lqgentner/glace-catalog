@@ -37,13 +37,16 @@ and `grid:code` gives it the grid extension's prefix, `MGRS-`.
 
 ## Tile grid
 
-`tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) is a
-vector PMTiles of every tile of any year, layer `mgrs`, zooms 0–10. Each
-polygon has `mgrs_tile`, `glacier_fraction`, and `glacier_fraction_buffered`,
-the share of the tile within RGI7-C-11 outlines,
-plain and buffered by 250 m. The grid is the same every year.
-Its style is `styles/grid.json`. Use it to draw or pick tiles on a map, and
-`items.parquet` to query them. The collection's default style,
+`tiles/grid.parquet` (asset `grid-table`) is a GeoParquet of every tile of any
+year, one row per tile: `mgrs_tile`, `glacier_fraction`, and
+`glacier_fraction_buffered`, the share of the tile within
+RGI7-C-11 outlines, plain and buffered by 250 m, and the
+polygon in `geometry`. The grid is the same every year. Query it to select
+tiles by glacier cover, then join on `glace:mgrs_tile` in `items.parquet`.
+
+`tiles/grid.pmtiles` (asset `grid`, also linked as `rel: "pmtiles"`) draws the
+same rows as a vector PMTiles, layer `mgrs`, zooms 0–10. Its style is
+`styles/grid.json`. Use it to draw or pick tiles on a map. The collection's default style,
 `styles/default.json`, draws the latest year's `coh12_vv` from the mosaics
 collection's archive, `mosaics/{year}/coh12_vv_viz.pmtiles`, under the grid's
 outlines.

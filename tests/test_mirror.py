@@ -37,18 +37,19 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from rashid.catalog import CatalogGraph, Node
-from rashid.data import DAT_ORDERING, DAT_ROWGROUP_STATS
-from rashid.data.checks import (
+from rashid.data._files import AssetFiles
+from rashid.data.geoparquet import (
     _MAX_ROW_GROUP_ROWS,
-    _bbox_struct,
-    _check_geoparquet,
-    _check_mirror,
     _covering_bboxes,
-    _geo_metadata,
-    _is_spatially_ordered,
     _rowgroup_stat_defects,
+    bbox_struct,
+    check_geoparquet,
+    geo_metadata,
 )
+from rashid.data.mirror import check_mirror
 from rashid.data.reader import Locator
+from rashid.model import Severity
+from rashid.registry import DAT_ORDERING, DAT_ROWGROUP_STATS
 
 from glace_catalog.stac.save import (
     _write_mirror,
@@ -68,10 +69,10 @@ COLLECTION_ID = "glace-ch-tiles"
 MIRROR_KEY = "items"
 BASE_URL = "https://data.source.coop/giuz/glace-alps"
 
-# Small row groups give the 400-row fixture enough groups (rashid needs at least
-# five) for its row-group metrics to apply. The real store gets there with the
-# writer's default of 2 048 rows per group over about 24 000 rows.
-SMALL_ROW_GROUP = 64
+# Small row groups give the 400-row fixture enough groups for rashid to judge
+# its order from the row-group boxes alone (eight or more). The real store gets
+# there with the writer's default of 2 048 rows per group over about 24 000 rows.
+SMALL_ROW_GROUP = 32
 
 
 def _tile_codes() -> list[str]:
@@ -122,9 +123,14 @@ def _year_payloads(tiles: Sequence[str], year: int) -> list[dict[str, Any]]:
     return [_item_payload(tiles[int(i)], year) for i in order]
 
 
-def _locator(path: Path) -> Locator:
+def _files(path: Path) -> AssetFiles:
     """Point rashid's data checks at a local parquet file."""
-    return Locator(is_remote=False, source=str(path))
+    return AssetFiles(Locator(is_remote=False, source=str(path)))
+
+
+def _blocking(defects: Sequence[DataDefect]) -> list[DataDefect]:
+    """Keep the findings above INFO; rashid reports ordering statistics at INFO."""
+    return [defect for defect in defects if defect.severity != Severity.INFO]
 
 
 def _graph(payloads: Sequence[dict[str, Any]], root: Path) -> tuple[CatalogGraph, Node]:
@@ -163,7 +169,8 @@ def _rule_ids(defects: Sequence[DataDefect]) -> set[str]:
 
 def _covering_paths(path: Path) -> dict[str, list[str]] | None:
     """Read the ``geo`` metadata's covering declaration for the geometry column."""
-    geo = _geo_metadata(pq.ParquetFile(path)) or {}
+    geo = geo_metadata(pq.ParquetFile(path)) or {}
+    assert isinstance(geo, dict)
     columns = geo.get("columns", {})
     return columns.get(geo.get("primary_column"), {}).get("covering", {}).get("bbox")
 
@@ -171,12 +178,13 @@ def _covering_paths(path: Path) -> dict[str, list[str]] | None:
 def _check_file(path: Path, checks: dict[str, bool], label: str) -> None:
     """Run rashid's GeoParquet rules over one mirror and record what they said."""
     parquet = pq.ParquetFile(path)
-    geo = _geo_metadata(parquet) or {}
+    geo = geo_metadata(parquet) or {}
+    assert isinstance(geo, dict)
     boxes, stat_defects = _rowgroup_stat_defects(MIRROR_KEY, parquet, geo, subject=label)
     groups = parquet.metadata.num_row_groups
     rows = [parquet.metadata.row_group(i).num_rows for i in range(groups)]
     checks[f"{label}: rashid's GeoParquet rules pass"] = (
-        _check_geoparquet(MIRROR_KEY, _locator(path)) == []
+        _blocking(check_geoparquet(MIRROR_KEY, _files(path))) == []
     )
     checks[f"{label}: the geo metadata names the bbox covering column"] = _covering_paths(
         path
@@ -186,12 +194,12 @@ def _check_file(path: Path, checks: dict[str, bool], label: str) -> None:
         "xmax": ["bbox", "xmax"],
         "ymax": ["bbox", "ymax"],
     }
-    checks[f"{label}: the covering column is a readable bbox struct"] = _bbox_struct(
+    checks[f"{label}: the covering column is a readable bbox struct"] = bbox_struct(
         parquet,
         geo,
     ) == ("bbox", ["xmin", "ymin", "xmax", "ymax"])
     checks[f"{label}: every row group carries bbox min/max statistics"] = (
-        stat_defects == [] and boxes is not None and len(boxes) == groups
+        stat_defects == [] and boxes is not None and len(boxes[0]) == groups
     )
     checks[f"{label}: no row group exceeds the ceiling"] = max(rows) <= _MAX_ROW_GROUP_ROWS
     column = geo.get("columns", {}).get("geometry", {})
@@ -312,25 +320,30 @@ def main() -> int:
         _write_mirror(pq.read_table(year_paths[0]), grouped, row_group_size=SMALL_ROW_GROUP)
         _check_file(grouped, checks, "several row groups")
         parquet = pq.ParquetFile(grouped)
-        boxes = _covering_bboxes(parquet, _geo_metadata(parquet) or {})
+        geo = geo_metadata(parquet) or {}
+        assert isinstance(geo, dict)
+        boxes = _covering_bboxes(parquet, geo)
+        checks["several row groups: enough groups to judge the order from the footer"] = (
+            boxes is not None and len(boxes[0]) >= 8
+        )
         checks["several row groups: the row groups are spatially ordered"] = (
-            boxes is not None and len(boxes) >= 5 and _is_spatially_ordered(boxes)
+            DAT_ORDERING not in _rule_ids(check_geoparquet(MIRROR_KEY, _files(grouped)))
         )
 
         shuffled = root / "shuffled.parquet"
         _shuffled_copy(grouped, shuffled)
         checks["shuffled rows fail the ordering rule"] = DAT_ORDERING in _rule_ids(
-            _check_geoparquet(MIRROR_KEY, _locator(shuffled)),
+            check_geoparquet(MIRROR_KEY, _files(shuffled)),
         )
         uncovered = root / "uncovered.parquet"
         _uncovered_copy(year_paths[0], uncovered)
         checks["a mirror with no covering declaration fails the statistics rule"] = (
-            DAT_ROWGROUP_STATS in _rule_ids(_check_geoparquet(MIRROR_KEY, _locator(uncovered)))
+            DAT_ROWGROUP_STATS in _rule_ids(check_geoparquet(MIRROR_KEY, _files(uncovered)))
         )
 
         graph, collection = _graph(first, root)
         checks["one year: the mirror reproduces the collection's items"] = (
-            _check_mirror(collection, MIRROR_KEY, _locator(year_paths[0]), graph) == []
+            check_mirror(collection, MIRROR_KEY, _files(year_paths[0]), graph) == []
         )
 
         store = root / "items.parquet"
@@ -339,7 +352,7 @@ def main() -> int:
         checks["two years concatenated: one row per item"] = rows == len(first) + len(second)
         both, both_collection = _graph([*first, *second], root)
         checks["two years concatenated: the mirror reproduces every item"] = (
-            _check_mirror(both_collection, MIRROR_KEY, _locator(store), both) == []
+            check_mirror(both_collection, MIRROR_KEY, _files(store), both) == []
         )
         table = pq.read_table(store)
         hrefs = {

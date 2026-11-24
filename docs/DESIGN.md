@@ -40,7 +40,7 @@ and the year sub-catalogs fit below them.
 ├── tiles/
 │   ├── collection.json  README.md  AGENTS.md
 │   ├── items.parquet            ← collection-mirror, every year in one file
-│   ├── thumbnail.webp  grid.pmtiles  styles/{default,grid}.json
+│   ├── thumbnail.webp  grid.parquet  grid.pmtiles  styles/{default,grid}.json
 │   ├── .glacier-fractions.parquet               ← build input, never published
 │   └── {year}/
 │       ├── catalog.json  README.md  AGENTS.md
@@ -87,16 +87,19 @@ year's style, also an item asset, as layer `glace-{stem}-{year}`. The
 mosaics collection has no `rel: "pmtiles"` links, a recorded deviation
 from `PORTO-FMT-011` ([`conformance.md`](conformance.md)).
 
-**The tile grid is the tiles collection's one archive.** `tiles/grid.pmtiles`
-is a vector PMTiles, layer `mgrs`, zooms 0–10, with a polygon per tile of any
-year and its two glacier fractions as properties. The grid does not change
-between years, so one archive serves all of them. It is registered as
-`PORTO-FMT-011` asks: a `visual` asset, a `rel: "pmtiles"` link, and the style
-`styles/grid.json`, whose stepped fill gives the Portolan browser a legend. A
-web map draws the grid from it without reading `items.parquet`, whose footer is
-most of what such a read costs. Finalization draws the grid from the item
-indexes; the fraction table they came from is a build input under a leading
-dot, so publishing skips it.
+**The tile grid is published as a table and as a web map.**
+`tiles/grid.parquet` holds a polygon per tile of any year and its two glacier
+fractions, as GeoParquet 1.1 with Hilbert-ordered rows and a `bbox` covering
+column; it is the `data` asset the archive is drawn from, as `PORTO-FMT-062`
+asks. `tiles/grid.pmtiles` is a vector PMTiles of the same rows, layer `mgrs`,
+zooms 0–10. The grid does not change between years, so one pair of files
+serves all of them. The archive is registered as `PORTO-FMT-011` asks: a
+`visual` asset, a `rel: "pmtiles"` link, and the style `styles/grid.json`,
+whose stepped fill gives the Portolan browser a legend. A web map draws the
+grid from it without reading `items.parquet`, whose footer is most of what
+such a read costs. Finalization collects the grid from the item indexes; the
+fraction table they came from is a build input under a leading dot, so
+publishing skips it.
 
 **The tiles collection's default style shows coherence, not the grid.**
 The grid is an index; coherence is the product. `styles/default.json` draws the

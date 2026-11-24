@@ -26,7 +26,13 @@ import jinja2
 from pyproj import Transformer
 import yaml
 
-from glace_catalog.grid import GRID_ARCHIVE, GRID_LAYER, GRID_MAX_ZOOM, GRID_MIN_ZOOM
+from glace_catalog.grid import (
+    GRID_ARCHIVE,
+    GRID_LAYER,
+    GRID_MAX_ZOOM,
+    GRID_MIN_ZOOM,
+    GRID_TABLE,
+)
 from glace_catalog.metadata import (
     METADATA_DIR,
     PMTILES_MEDIA_TYPE,
@@ -246,6 +252,30 @@ def catalog_document(vocabulary: Vocabulary) -> Document:
     }
 
 
+GRID_TABLE_KEY = "grid-table"
+"""Asset key of the grid table in the tiles collection."""
+
+
+def grid_table_columns(inventory: str, buffer_m: float) -> list[dict[str, str]]:
+    """Name and describe each column of the grid table, in file order."""
+    return [
+        {"name": "mgrs_tile", "description": "MGRS tile code, such as `32TMS55`."},
+        {
+            "name": "glacier_fraction",
+            "description": f"Share of the tile within {inventory} glacier outlines, 0 to 1.",
+        },
+        {
+            "name": "glacier_fraction_buffered",
+            "description": (
+                f"Share of the tile within {inventory} glacier outlines buffered by "
+                f"{buffer_m:g} m, 0 to 1."
+            ),
+        },
+        {"name": "geometry", "description": "Tile footprint, a polygon in WGS84."},
+        {"name": "bbox", "description": "Bounding box of the footprint, the covering column."},
+    ]
+
+
 def _collection_assets(
     vocabulary: Vocabulary,
     collection: str,
@@ -271,16 +301,32 @@ def _collection_assets(
         },
     }
     if collection == TILES_DIR:
+        fractions = (
+            f"the share of the tile covered by {scope.glacier_inventory} outlines, "
+            f"plain and buffered by {scope.glacier_buffer_m:g} m"
+        )
+        assets[GRID_TABLE_KEY] = {
+            "href": bases.href(f"{collection}/{GRID_TABLE}"),
+            "type": "application/vnd.apache.parquet",
+            "title": "Tile grid with glacier fractions",
+            "description": (
+                "Every MGRS tile of any year as a polygon, in GeoParquet, with its "
+                f"glacier fractions: {fractions}. The grid is the same every year."
+            ),
+            "roles": ["data"],
+            # Finalization adds each column's type and the row count.
+            "table:primary_geometry": "geometry",
+            "table:columns": grid_table_columns(scope.glacier_inventory, scope.glacier_buffer_m),
+            "alternate": bases.alternate(f"{collection}/{GRID_TABLE}"),
+        }
         assets["grid"] = {
             "href": bases.href(f"{collection}/{GRID_ARCHIVE}"),
             "type": PMTILES_MEDIA_TYPE,
-            "title": "Tile grid with glacier fractions",
+            "title": "Tile grid with glacier fractions, web map",
             "description": (
-                f"Every MGRS tile of any year as a polygon in the vector layer {GRID_LAYER}. "
-                "Its properties are mgrs_tile, glacier_fraction, and "
-                "glacier_fraction_buffered: the share of the tile covered by "
-                f"{scope.glacier_inventory} outlines, plain and buffered by "
-                f"{scope.glacier_buffer_m:g} m."
+                f"The rows of {GRID_TABLE} as polygons in the vector layer {GRID_LAYER}. "
+                "Their properties are mgrs_tile, glacier_fraction, and "
+                f"glacier_fraction_buffered: {fractions}."
             ),
             "roles": ["visual"],
             "alternate": bases.alternate(f"{collection}/{GRID_ARCHIVE}"),
@@ -289,6 +335,12 @@ def _collection_assets(
         "href": bases.href(f"{collection}/thumbnail.webp"),
         "type": "image/webp",
         "title": f"{short} preview",
+        "description": (
+            "The latest year's COH12 VV composite of one tile, around the Aletsch Glacier, "
+            "over a basemap."
+            if collection == TILES_DIR
+            else "The latest year's COH12 VV mosaic over a basemap."
+        ),
         "roles": ["thumbnail"],
     }
     if collection == TILES_DIR:

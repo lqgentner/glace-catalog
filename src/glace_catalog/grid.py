@@ -5,10 +5,12 @@ glace-production computes each tile's glacier fractions once per scope
 them onto every tile item; the table itself is a build input and is not
 published.
 
-Finalization draws the grid from the item indexes into one vector PMTiles,
-``tiles/grid.pmtiles``: a polygon per tile of any year, with both fractions as
-properties. The grid does not depend on the year, so one archive serves all of
-them, and a web map draws it without reading the item index.
+Finalization collects the grid from the item indexes, a polygon per tile of
+any year with both fractions, and writes it twice: as GeoParquet,
+``tiles/grid.parquet``, the collection's data asset for querying, and as a
+vector PMTiles drawn from the same rows, ``tiles/grid.pmtiles``, for web maps.
+The grid does not depend on the year, so one pair of files serves all of them,
+and a web map draws it without reading the item index.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyogrio
@@ -32,6 +35,12 @@ if TYPE_CHECKING:
 
 GRID_ARCHIVE = "grid.pmtiles"
 """File name of the grid archive in the tiles collection."""
+
+GRID_TABLE = "grid.parquet"
+"""File name of the grid table in the tiles collection."""
+
+GRID_TABLE_ROW_GROUP_SIZE = 256
+"""Rows per row group of the grid table: several groups, each over a small area."""
 
 GRID_LAYER = "mgrs"
 """Vector layer of the grid archive."""
@@ -178,6 +187,32 @@ def grid_frame(tables: Sequence[pa.Table]) -> gpd.GeoDataFrame:
         geometry=polygons[latest.index],
         crs="EPSG:4326",
     ).reset_index(drop=True)
+
+
+def write_grid_table(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:
+    """Write the grid as GeoParquet 1.1 at ``target``.
+
+    The rows follow a Hilbert curve over the tiles, and a ``bbox`` covering
+    column gives each row group spatial statistics, as Portolan asks of every
+    GeoParquet (``PORTO-FMT-006`` to ``PORTO-FMT-008``). The file is written
+    locally and then put in place, as :func:`write_grid` does.
+    """
+    # glace_catalog.stac.store imports this module.
+    from glace_catalog.stac.store import put_object  # noqa: PLC0415
+
+    ordered = frame.iloc[np.argsort(frame.geometry.hilbert_distance(), kind="stable")]
+    with tempfile.TemporaryDirectory() as tmp:
+        local = Path(tmp) / GRID_TABLE
+        ordered.to_parquet(
+            local,
+            index=False,
+            schema_version="1.1.0",
+            write_covering_bbox=True,
+            row_group_size=GRID_TABLE_ROW_GROUP_SIZE,
+            write_statistics=True,
+            compression="zstd",
+        )
+        put_object(local, target)
 
 
 def write_grid(frame: gpd.GeoDataFrame, target: Path | UPath) -> None:

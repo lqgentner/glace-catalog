@@ -38,19 +38,19 @@ ROOT = Path(__file__).resolve().parent.parent
 #   PTL-COL-005  each collection lists its items.parquet index, and a fresh
 #                clone has no items to index. The tracked collection.json keeps
 #                the entry so that it matches the published document.
-#   PTL-AST-007  each collection's data assets are on its items, and a fresh
-#                clone has none.
+#   PTL-AST-007  the mosaics collection's data assets are on its items, and a
+#                fresh clone has none.
 ACCEPTED: set[str] = {"PTL-COL-005", "PTL-AST-007"}
 
 # Local deviation from upstream: the catalog directory is fixed here.
 target = ROOT / "catalog"
 
-# 0.3.0 validates every declared extension schema and requires each
-# collection to refer to its primary data (PORTO-CORE-082). The upper bound
-# means a new 0.4 rule set is reviewed before this gate adopts it.
-MIN_VERSION = (0, 3, 0)
-MAX_VERSION = (0, 4, 0)
-SPEC = "rashid>=0.3.0,<0.4.0"
+# 0.4.0 applies the Portolan v0.3.0 requirements, which the catalog declares.
+# The upper bound means a new 0.5 rule set is reviewed before this gate
+# adopts it.
+MIN_VERSION = (0, 4, 0)
+MAX_VERSION = (0, 5, 0)
+SPEC = "rashid>=0.4.0,<0.5.0"
 INSTALL = f"python -m pip install '{SPEC}'"
 
 

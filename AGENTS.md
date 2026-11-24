@@ -79,7 +79,8 @@ Preserve these rules:
   MapLibre style, `{year}/styles/default.json`, is an asset of its mosaic item
   with the `style` and `default` roles; the collection's one style asset is the
   latest year's copy, a recorded deviation from `PORTO-CORE-069`. The `data`
-  role is for the COGs alone.
+  role is for the COGs and the tile grid's table, `tiles/grid.parquet`, which
+  `tiles/grid.pmtiles` is drawn from (`PORTO-FMT-062`).
 
 ## Build a store
 
@@ -211,11 +212,11 @@ Finalization:
   tiles collection by its tiles and the mosaics collection by its items;
 - combines the item-index slices into `items.parquet`, and refuses an index
   whose columns differ from `mirror_columns` in `metadata/assets.yaml`;
-- writes the tile grid, `tiles/grid.pmtiles`, with each tile's glacier
-  fractions;
+- writes the tile grid with each tile's glacier fractions, as GeoParquet,
+  `tiles/grid.parquet`, and as a web map, `tiles/grid.pmtiles`;
 - draws the thumbnails;
-- records asset sizes and checksums, and the item indexes' column types
-  and row counts;
+- records asset sizes and checksums, and the column types and row counts
+  of the item indexes and the grid table;
 - sets `updated` on the root catalog and the collections;
 - writes each year's style beside its archives and registers it on the
   mosaic item, and points the collection's style to the latest year;
