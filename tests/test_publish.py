@@ -19,6 +19,7 @@ from __future__ import annotations
 from argparse import ArgumentTypeError
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime, timedelta
+import hashlib
 from io import BytesIO, StringIO
 import os
 from pathlib import Path
@@ -670,6 +671,101 @@ def check_dry_run_sees_a_same_size_edit() -> dict[str, bool]:
     }
 
 
+def _one_part(content: bytes) -> str:
+    """Derive the ETag Source Cooperative lists for ``content`` uploaded in one chunk."""
+    return publish.one_part_etag(hashlib.md5(content, usedforsecurity=False).hexdigest())
+
+
+def check_one_part_etags() -> dict[str, bool]:
+    """Check that a rewritten store file with the published bytes stays in place.
+
+    Source Cooperative lists a one-part multipart ETag for an object uploaded
+    in one chunk. A store file of the same size that is newer than its copy is
+    hashed, and its MD5 is compared with that ETag. An older store file, or one
+    published in several parts, is not read.
+    """
+    same = b"s" * SIZE
+    source_root = memory_root({})
+    contents = {
+        "same.json": same,
+        "edited.json": b"e" * SIZE,
+        "older.tif": b"o" * SIZE,
+        "several-parts.tif": b"p" * SIZE,
+        "quoted.json": same,
+    }
+    for relative, content in contents.items():
+        (source_root / relative).write_bytes(content)
+        touch(source_root, relative, BUILT if relative == "older.tif" else REBUILT)
+    source = publish.list_subtree(source_root, "")
+    target = {
+        "same.json": Entry(SIZE, _one_part(same), PUBLISHED_AT),
+        "edited.json": Entry(SIZE, _one_part(same), PUBLISHED_AT),
+        "older.tif": Entry(SIZE, _one_part(same), PUBLISHED_AT),
+        "several-parts.tif": Entry(SIZE, MULTIPART, PUBLISHED_AT),
+        "quoted.json": Entry(SIZE, f'"{_one_part(same).upper()}"', PUBLISHED_AT),
+    }
+    read: list[str] = []
+    real_md5 = publish.file_md5
+
+    def counting_md5(path: UPath) -> str:
+        read.append(path.name)
+        return real_md5(path)
+
+    with patch.object(publish, "file_md5", counting_md5):
+        hashed = publish.with_content_digests(source_root, source, target)
+    plan = publish.plan_upload(hashed, target)
+    return {
+        "the one-part ETag of known content is reproduced": _one_part(b"")
+        == "59adb24ef3cdbe0297f05b395827453f-1",
+        "a rewrite with the published bytes is unchanged": {"same.json", "quoted.json"}
+        <= set(plan.unchanged),
+        "a same-size edit against a one-part ETag is changed": "edited.json" in plan.changed,
+        "an older store file is unchanged and not read": "older.tif" in plan.unchanged
+        and "older.tif" not in read,
+        "an object published in several parts falls back to time": "several-parts.tif"
+        in plan.changed
+        and "several-parts.tif" not in read,
+        "only the candidates are read": sorted(read)
+        == ["edited.json", "quoted.json", "same.json"],
+    }
+
+
+def check_dry_run_hashes_rewritten_files() -> dict[str, bool]:
+    """Check that the dry run hashes rewritten files, and ``--force`` skips the hashing."""
+    source_root = memory_root(SOURCE, REBUILT)
+    target_root = memory_root(SOURCE, PUBLISHED_AT)
+    real_list = publish.list_objects
+
+    def listing_one_part_etags(directory: UPath) -> dict[str, Entry]:
+        listed = real_list(directory)
+        if str(directory).startswith(str(target_root)):
+            return {
+                name: Entry(entry.size, _one_part(b"x" * entry.size), entry.modified)
+                for name, entry in listed.items()
+            }
+        return listed
+
+    def run(argv: list[str]) -> list[str]:
+        printed = StringIO()
+        with (
+            TwoRoots(source_root, target_root),
+            patch.object(publish, "list_objects", listing_one_part_etags),
+            redirect_stdout(printed),
+        ):
+            publish.main(argv)
+        return printed.getvalue().splitlines()
+
+    plain, forced = run([]), run(["--force"])
+    return {
+        "a dry run over rewritten, identical files uploads nothing": any(
+            line.split()[:2] == ["upload", "0"] for line in plain
+        ),
+        "--force still uploads every published file": any(
+            line.split()[:2] == ["upload", "6"] for line in forced
+        ),
+    }
+
+
 def main() -> int:
     """Run every check, printing one line per failure."""
     checks: dict[str, bool] = {}
@@ -686,6 +782,8 @@ def main() -> int:
         check_workers_floor,
         check_summary,
         check_dry_run_sees_a_same_size_edit,
+        check_one_part_etags,
+        check_dry_run_hashes_rewritten_files,
     ):
         checks.update(group())
     failed = [name for name, ok in checks.items() if not ok]

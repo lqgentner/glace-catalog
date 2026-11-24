@@ -10,11 +10,14 @@ Each object streams from source to target in chunks. Files whose name starts
 with a dot are build state and stay local.
 
 An object is uploaded when it is new or changed. Changes are judged from one
-listing per side:
+listing per side, and from the bytes of rewritten store files:
 
 1. A different size means changed.
-2. At equal size, when both sides list an MD5 ETag (single-part uploads), the
-   ETags decide.
+2. At equal size, the content is compared where both sides give it: two MD5
+   ETags (single-part uploads), or the store file's MD5 against a published
+   one-part multipart ETag, ``md5(md5 digest)-1``. Source Cooperative lists
+   the latter for every object uploaded in one chunk, so a store file that was
+   rewritten with the same bytes is hashed and left in place.
 3. Otherwise, the object is uploaded when the source copy is newer.
 
 ``--force`` uploads every object, for example to replace a truncated object
@@ -33,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import hashlib
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -62,6 +66,8 @@ COPY_CHUNK = 8 << 20
 """Bytes moved per read on a transfer; a COG is hundreds of megabytes."""
 SINGLE_PART_ETAG = re.compile(r"^[0-9a-f]{32}$")
 """An ETag that is the object's MD5: one hex digest, no part count after it."""
+ONE_PART_ETAG = re.compile(r"^[0-9a-f]{32}-1$")
+"""The ETag of a multipart upload in one part: the MD5 of the part's MD5 digest."""
 
 
 def content_type_for(path: str) -> str:
@@ -143,6 +149,23 @@ class Entry:
         digest = self.etag.strip('"').lower()
         return digest if SINGLE_PART_ETAG.match(digest) else None
 
+    @property
+    def one_part(self) -> str | None:
+        """The ETag when it is a one-part multipart ETag, else ``None``.
+
+        It derives from the content alone (:func:`one_part_etag`), whatever
+        part size the upload used.
+        """
+        if self.etag is None:
+            return None
+        etag = self.etag.strip('"').lower()
+        return etag if ONE_PART_ETAG.match(etag) else None
+
+
+def one_part_etag(md5: str) -> str:
+    """Derive the ETag that a one-part multipart upload of content with MD5 ``md5`` lists."""
+    return f"{hashlib.md5(bytes.fromhex(md5), usedforsecurity=False).hexdigest()}-1"
+
 
 @dataclass(frozen=True)
 class Plan:
@@ -170,7 +193,8 @@ def is_unchanged(source: Entry, target: Entry) -> bool:
     The first rule that applies decides:
 
     1. Different sizes: changed.
-    2. Both sides list an MD5 ETag: unchanged when the two match.
+    2. Both sides give the content: unchanged when it matches. That is two MD5
+       ETags, or an MD5 on one side and a one-part multipart ETag on the other.
     3. Unchanged when the source is no newer than the published copy, since
        the build writes the store before publication copies it. When either
        side lists no time, the object counts as changed.
@@ -179,9 +203,78 @@ def is_unchanged(source: Entry, target: Entry) -> bool:
         return False
     if source.md5 is not None and target.md5 is not None:
         return source.md5 == target.md5
+    if source.md5 is not None and target.one_part is not None:
+        return one_part_etag(source.md5) == target.one_part
+    if target.md5 is not None and source.one_part is not None:
+        return one_part_etag(target.md5) == source.one_part
     if source.modified is None or target.modified is None:
         return False
     return source.modified <= target.modified
+
+
+def digest_candidates(source: Mapping[str, Entry], target: Mapping[str, Entry]) -> list[str]:
+    """List the store files whose MD5 decides what the listings leave to time.
+
+    These are the published objects of the same size that list a one-part
+    ETag, when the store's copy lists no MD5 and is newer, or either side lists
+    no time. Rule 3 of :func:`is_unchanged` would upload each of them; their
+    MD5 tells a rewrite with the same bytes from a change. An older store copy
+    is unchanged by rule 3 already and is not read.
+    """
+    candidates: list[str] = []
+    for relative, entry in source.items():
+        published = target.get(relative)
+        if (
+            published is None
+            or is_build_state(relative)
+            or entry.size != published.size
+            or entry.md5 is not None
+            or published.one_part is None
+        ):
+            continue
+        if (
+            entry.modified is None
+            or published.modified is None
+            or entry.modified > published.modified
+        ):
+            candidates.append(relative)
+    return sorted(candidates)
+
+
+def file_md5(path: UPath) -> str:
+    """Hash one store file with MD5, in chunks."""
+    digest = hashlib.md5(usedforsecurity=False)
+    with path.open("rb") as handle:
+        while chunk := handle.read(COPY_CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def with_content_digests(
+    root: UPath,
+    source: Mapping[str, Entry],
+    target: Mapping[str, Entry],
+    *,
+    workers: int = DEFAULT_WORKERS,
+) -> dict[str, Entry]:
+    """Return the store listing with an MD5 ETag on each :func:`digest_candidates` file.
+
+    Reading a candidate costs no more than uploading it, which rule 3 would
+    otherwise do.
+    """
+    candidates = digest_candidates(source, target)
+
+    def digest(relative: str) -> str:
+        return file_md5(root / relative)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        digests = dict(zip(candidates, pool.map(digest, candidates), strict=True))
+    return {
+        relative: Entry(entry.size, digests[relative], entry.modified)
+        if relative in digests
+        else entry
+        for relative, entry in source.items()
+    }
 
 
 def plan_upload(
@@ -470,6 +563,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         root = store_root()
         source = list_subtree(root, subtree)
         published = list_subtree(target, subtree)
+        if not args.force:
+            source = with_content_digests(root, source, published, workers=args.workers)
     except (BotoCoreError, ClientError, OSError, ValueError) as error:
         print(f"error  {error}", file=sys.stderr)
         return 1

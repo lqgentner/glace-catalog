@@ -252,9 +252,12 @@ would overwrite the collection updates made by finalization. Do not use
 uploader.
 
 Change detection lists each side once. An object uploads when its size differs.
-At equal sizes, single-part MD5 ETags decide where both sides have them;
-otherwise the object uploads when the source is newer. `--force` uploads
-regardless. Dot-prefixed build files, such as `.build-state.json` and
+At equal sizes, the content is compared where both sides give it: two
+single-part MD5 ETags, or the store file's MD5 against the one-part multipart
+ETag that Source Cooperative lists for an object uploaded in one chunk. A
+store file newer than its copy is hashed for that, so rewritten documents with
+unchanged bytes stay in place. Otherwise the object uploads when the source is
+newer. `--force` uploads regardless. Dot-prefixed build files, such as `.build-state.json` and
 `.items.parquet`, stay in the store.
 
 ### Endpoint
