@@ -101,7 +101,7 @@ doi:
     "1.0": 10.48656/60er-3j55
 citation: >-
   Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). GLACE Alps (Version
-  {{ version }}) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/{{ doi }}
+  {{ version }}) [Data set]. LaRS - Language Repository of Switzerland. https://doi.org/{{ doi }}
 
 keywords:
   - Sentinel-1

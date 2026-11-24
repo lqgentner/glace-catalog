@@ -32,6 +32,7 @@ identifiers:
     value: 10.48656/d4r9-fj97
     description: Canonical DOI, every version
 version: "1.0"
+date-released: 2026-11-24
 keywords:
   - Sentinel-1
   - SAR

@@ -127,7 +127,7 @@ See the [production pipeline](https://github.com/lqgentner/glace-production) for
 
 Cite this version of the dataset as:
 
-> Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS – Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
+> Gentner, L. Q., Piermattei, L., & Wulf, H. (2026). GLACE Alps (Version 1.0) [Data set]. LaRS - Language Repository of Switzerland. https://doi.org/10.48656/60er-3j55
 
 To refer to the dataset across versions, use
 https://doi.org/10.48656/d4r9-fj97.
