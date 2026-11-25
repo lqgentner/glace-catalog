@@ -28,14 +28,14 @@ Run: uv run tests/test_finalize.py
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import importlib.util
 import json
-import os
 from pathlib import Path
 import shutil
 import sys
 import tempfile
-from typing import TYPE_CHECKING, Any
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import patch
 
 import geopandas as gpd
 import pyarrow as pa
@@ -43,34 +43,13 @@ import pyarrow.parquet as pq
 import pystac
 import shapely
 
+from glace_catalog import finalize_catalog as fin
 from glace_catalog import stac
 from glace_catalog.metadata import vocabulary
-
-if TYPE_CHECKING:
-    from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "catalog"
 TILE_COLUMNS = [column["name"] for column in vocabulary().mirror_columns("tiles")]
-
-
-def _finalizer() -> ModuleType:
-    """Load ``scripts/finalize-catalog.py`` as a module.
-
-    The script resolves its store root on import, so the gate first points it
-    at a local placeholder path.
-    """
-    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
-    spec = importlib.util.spec_from_file_location(
-        "finalize_catalog",
-        ROOT / "scripts" / "finalize-catalog.py",
-    )
-    if spec is None or spec.loader is None:
-        msg = "scripts/finalize-catalog.py did not load"
-        raise RuntimeError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _store(root: Path) -> Path:
@@ -94,7 +73,6 @@ def _source(root: Path) -> Path:
 
 def check_styles(
     checks: dict[str, bool],
-    fin: ModuleType,
     source: Path,
     staged: Path,
 ) -> dict[int, dict[str, Path]]:
@@ -140,7 +118,6 @@ def check_styles(
 
 def check_registration(
     checks: dict[str, bool],
-    fin: ModuleType,
     written: dict[int, dict[str, Path]],
     collection: dict[str, Any],
 ) -> None:
@@ -168,7 +145,7 @@ def check_registration(
     )
 
 
-def check_item_styles_published(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+def check_item_styles_published(checks: dict[str, bool], work: Path) -> None:
     """Check that each year's style reaches the store and its mosaic item."""
     store = _store(work / "item-style-store")
     layout = stac.StoreLayout(store)
@@ -188,7 +165,6 @@ def check_item_styles_published(checks: dict[str, bool], fin: ModuleType, work: 
 
 def check_coverage(
     checks: dict[str, bool],
-    fin: ModuleType,
     store: Path,
     written: dict[int, dict[str, Path]],
 ) -> None:
@@ -220,7 +196,7 @@ def check_coverage(
         stray.unlink()
 
 
-def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+def check_skip_thumbnail(checks: dict[str, bool], store: Path) -> None:
     """Check that skipping the thumbnails needs thumbnails already in the store."""
     layout = stac.StoreLayout(store)
     try:
@@ -240,7 +216,7 @@ def check_skip_thumbnail(checks: dict[str, bool], fin: ModuleType, store: Path) 
         checks["--skip-thumbnail accepts thumbnails already written"] = False
 
 
-def check_encodings(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+def check_encodings(checks: dict[str, bool], store: Path) -> None:
     """Check that an archive encoded over an old range stops finalization."""
     layout = stac.StoreLayout(store)
     for year in (2023, 2024):
@@ -269,7 +245,7 @@ def check_encodings(checks: dict[str, bool], fin: ModuleType, store: Path) -> No
         )
 
 
-def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+def check_render(checks: dict[str, bool], work: Path) -> None:
     """Check that finalization accepts the tracked render and refuses a stale one."""
     rendered = work / "rendered"
     shutil.copytree(SOURCE, rendered)
@@ -287,7 +263,7 @@ def check_render(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
         checks["a stale render stops finalization"] = "default.json" in str(error)
 
 
-def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+def check_grid_stamping(checks: dict[str, bool], store: Path) -> None:
     """Check that both grid assets record the size of their file in the store."""
     layout = stac.StoreLayout(store)
     grid = Path(str(layout.tiles_grid))
@@ -306,7 +282,7 @@ def check_grid_stamping(checks: dict[str, bool], fin: ModuleType, store: Path) -
     checks["the grid table records its size"] = table.get("file:size") == 20
 
 
-def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Path) -> None:
+def check_mirror_description(checks: dict[str, bool], store: Path) -> None:
     """Check that a mirror's types and count are recorded, and undocumented columns refused."""
     layout = stac.StoreLayout(store)
     index = Path(str(layout.mosaics_index))
@@ -332,7 +308,7 @@ def check_mirror_description(checks: dict[str, bool], fin: ModuleType, store: Pa
     index.unlink()
 
 
-def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+def check_grid_style_staged(checks: dict[str, bool], work: Path) -> None:
     """Check that the grid style is published beside the tiles collection, stamped."""
     source = work / "full-source"
     shutil.copytree(SOURCE, source)
@@ -384,7 +360,7 @@ def check_grid_style_staged(checks: dict[str, bool], fin: ModuleType, work: Path
     )
 
 
-def check_stale_year_index(checks: dict[str, bool], fin: ModuleType) -> None:
+def check_stale_year_index(checks: dict[str, bool]) -> None:
     """Check that a year indexed by an older build stops finalization."""
     current = pa.Table.from_pylist([dict.fromkeys(TILE_COLUMNS, "x")])
     fin.require_current_year_indexes([current], [2024])
@@ -399,7 +375,7 @@ def check_stale_year_index(checks: dict[str, bool], fin: ModuleType) -> None:
         )
 
 
-def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> None:
+def check_tiles_extent(checks: dict[str, bool], work: Path) -> None:
     """Check that each collection is bounded by its tiles or items, rounded outward."""
     grid = gpd.GeoDataFrame(
         geometry=[
@@ -444,9 +420,7 @@ def check_tiles_extent(checks: dict[str, bool], fin: ModuleType, work: Path) -> 
     ]["spatial"]["bbox"] == [[8.0, 46.3, 8.1301, 46.49]]
 
 
-def check_grid_conflict_before_writes(
-    checks: dict[str, bool], fin: ModuleType, work: Path
-) -> None:
+def check_grid_conflict_before_writes(checks: dict[str, bool], work: Path) -> None:
     """Check that years disagreeing on a tile stop finalization before it writes anything."""
     store = _store(work / "conflict-store")
     layout = stac.StoreLayout(store)
@@ -471,19 +445,14 @@ def check_grid_conflict_before_writes(
             "print",
             {"coh12_vv_viz": {"scale": encoding.scale, "offset": encoding.offset}},
         )
-    settings, argv = getattr(fin, "settings"), sys.argv  # noqa: B009  (ModuleType has no typed attributes)
-    setattr(fin, "settings", type("Settings", (), {"store_root": store})())  # noqa: B010
-    sys.argv = ["finalize-catalog.py", "--skip-thumbnail", "--skip-validate"]
     try:
-        fin.main()
+        with patch.object(fin, "settings", SimpleNamespace(store_root=store)):
+            fin.main(["--skip-thumbnail", "--skip-validate"])
         stopped = ""
     except SystemExit as error:
         stopped = str(error)
     except Exception as error:  # noqa: BLE001  (any other failure means the order is wrong)
         stopped = f"unexpected {type(error).__name__}"
-    finally:
-        setattr(fin, "settings", settings)  # noqa: B010
-        sys.argv = argv
     checks["a grid conflict stops finalization"] = "32TMS55" in stopped
     checks["a grid conflict stops finalization before any write"] = not Path(
         str(layout.tiles_index),
@@ -492,7 +461,6 @@ def check_grid_conflict_before_writes(
 
 def main() -> int:
     """Run every check; print the failures."""
-    fin = _finalizer()
     checks: dict[str, bool] = {}
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -500,20 +468,20 @@ def main() -> int:
         source = _source(work / "source")
         staged = work / "staged"
 
-        written = check_styles(checks, fin, source, staged)
+        written = check_styles(checks, source, staged)
         document = json.loads((source / "mosaics" / "collection.json").read_text())
-        check_registration(checks, fin, written, document)
-        check_item_styles_published(checks, fin, work)
-        check_coverage(checks, fin, store, written)
-        check_skip_thumbnail(checks, fin, store)
-        check_render(checks, fin, work)
-        check_encodings(checks, fin, store)
-        check_grid_stamping(checks, fin, store)
-        check_mirror_description(checks, fin, store)
-        check_grid_style_staged(checks, fin, work)
-        check_stale_year_index(checks, fin)
-        check_tiles_extent(checks, fin, work)
-        check_grid_conflict_before_writes(checks, fin, work)
+        check_registration(checks, written, document)
+        check_item_styles_published(checks, work)
+        check_coverage(checks, store, written)
+        check_skip_thumbnail(checks, store)
+        check_render(checks, work)
+        check_encodings(checks, store)
+        check_grid_stamping(checks, store)
+        check_mirror_description(checks, store)
+        check_grid_style_staged(checks, work)
+        check_stale_year_index(checks)
+        check_tiles_extent(checks, work)
+        check_grid_conflict_before_writes(checks, work)
 
     failed = [name for name, ok in checks.items() if not ok]
     for name in failed:

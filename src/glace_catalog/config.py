@@ -11,12 +11,13 @@ Three locations are kept separate on purpose:
   credentials for the public bucket.
 
 Settings come from the environment only, so run commands with
-``--env-file .env``. Required settings are checked at import time, so a
-misconfigured build fails before it touches any data.
+``--env-file .env``. A command reads its required settings before it touches
+any data, so a misconfigured build fails first.
 """
 
 from __future__ import annotations
 
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -58,7 +59,11 @@ class Settings:
 
     def __init__(self) -> None:
         self.s3 = S3Settings.from_env("GLACE_S3_")
-        self.locations = StoreSettings()
+
+    @cached_property
+    def locations(self) -> StoreSettings:
+        """The ``GLACE_*`` locations, read and checked on first use."""
+        return StoreSettings()
 
     @property
     def store_root(self) -> AnyDir:

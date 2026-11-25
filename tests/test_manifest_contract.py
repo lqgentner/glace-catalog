@@ -19,17 +19,16 @@ Run: uv run tests/test_manifest_contract.py
 
 from __future__ import annotations
 
-import importlib.util
-import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 from upath import UPath
 
+from glace_catalog import build_year
+from glace_catalog.config import Settings, StoreSettings
 from glace_catalog.stac import store
 from glace_catalog.stac.naming import parse_composite_name
 from glace_catalog.stac.store import (
@@ -43,9 +42,6 @@ from glace_catalog.stac.store import (
     read_manifest,
 )
 from glace_catalog.stac.tags import BandStatistics
-
-if TYPE_CHECKING:
-    from types import ModuleType
 
 PRODUCER_COLUMNS = (
     "filename",
@@ -74,25 +70,6 @@ PRODUCER_COLUMNS = (
 )
 
 DIGEST = "1220" + "ab" * 32
-
-
-def _build_year() -> ModuleType:
-    """Load ``scripts/build-year.py`` as a module.
-
-    The script resolves its store root on import, so the gate first points it
-    at a local placeholder path.
-    """
-    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
-    spec = importlib.util.spec_from_file_location(
-        "build_year",
-        Path(__file__).resolve().parents[1] / "scripts" / "build-year.py",
-    )
-    if spec is None or spec.loader is None:
-        msg = "scripts/build-year.py did not load"
-        raise ImportError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def producer_manifest() -> pd.DataFrame:
@@ -203,7 +180,7 @@ def mosaic_tags_survive_missing_column(frame: pd.DataFrame) -> bool:
     own product's tags: ``PASS_DIRECTION``, for example, appears only for pass
     composites.
     """
-    tags = _build_year().mosaic_tags(frame, "coh12_vv")
+    tags = build_year.mosaic_tags(frame, "coh12_vv")
     return tags.get("COMPOSITING_METHOD") == "LRW" and "PASS_DIRECTION" not in tags
 
 
@@ -274,22 +251,19 @@ def store_writes(tmp: Path) -> dict[str, bool]:
 
 def source_pattern_checks() -> dict[str, bool]:
     """Check that ``GLACE_SOURCE`` names each year's archive and refuses a pattern without one."""
-    settings = _build_year().settings
-    locations = settings.locations
-    original = locations.source
+    settings = Settings()
     refused: dict[str, bool] = {}
-    try:
-        for name, pattern in (("an unset source", None), ("a source without {year}", "/a/b")):
-            locations.source = pattern
-            try:
-                settings.source(2023)
-                refused[f"{name} is refused"] = False
-            except SystemExit as error:
-                refused[f"{name} is refused"] = "GLACE_SOURCE" in str(error)
-        locations.source = "/data/alps-total/{year}/s1-comp"
-        named = str(settings.source(2023)) == "/data/alps-total/2023/s1-comp"
-    finally:
-        locations.source = original
+    for name, pattern in (("an unset source", None), ("a source without {year}", "/a/b")):
+        settings.locations = StoreSettings(store_root="/store", source=pattern)
+        try:
+            settings.source(2023)
+            refused[f"{name} is refused"] = False
+        except SystemExit as error:
+            refused[f"{name} is refused"] = "GLACE_SOURCE" in str(error)
+    settings.locations = StoreSettings(
+        store_root="/store", source="/data/alps-total/{year}/s1-comp"
+    )
+    named = str(settings.source(2023)) == "/data/alps-total/2023/s1-comp"
     return {**refused, "the source pattern names the year's archive": named}
 
 

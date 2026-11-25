@@ -26,13 +26,11 @@ Run: uv run tests/test_items.py
 
 from __future__ import annotations
 
+from argparse import Namespace
 from datetime import UTC, date, datetime
-import importlib.util
-import os
 from pathlib import Path
 import sys
 import tempfile
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from freezebase.mgrs import MGRSGeoBox
@@ -41,6 +39,7 @@ import pystac
 from shapely import get_num_coordinates
 from shapely.geometry import shape
 
+from glace_catalog import build_year
 from glace_catalog.metadata import vocabulary
 from glace_catalog.mosaics import data_footprint
 from glace_catalog.scopes import get_scope
@@ -69,7 +68,6 @@ from glace_catalog.stac.tags import RasterInfo, required_tags
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from types import ModuleType
 
 TILE = "32TPS05"
 WINDOW = "20230718_20231015"
@@ -153,25 +151,6 @@ def _mosaic_item(
     )
 
 
-def _build_year() -> ModuleType:
-    """Load ``scripts/build-year.py`` as a module.
-
-    The script resolves its store root on import, so the gate first points it
-    at a local placeholder path.
-    """
-    os.environ.setdefault("GLACE_STORE_ROOT", str(Path(__file__).parent / "does-not-exist"))
-    spec = importlib.util.spec_from_file_location(
-        "build_year",
-        Path(__file__).resolve().parents[1] / "scripts" / "build-year.py",
-    )
-    if spec is None or spec.loader is None:
-        msg = "scripts/build-year.py did not load"
-        raise RuntimeError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _pmtiles_state() -> BuildState:
     """Build a state holding two archives, as the ``pmtiles`` step records them."""
     state = BuildState(path=Path("/nowhere/.build-state.json"))
@@ -201,9 +180,8 @@ def _pmtiles_state() -> BuildState:
 
 def _staging_checks() -> dict[str, bool]:
     """Check the staging directories and the scratch estimate of the year script."""
-    build_year = _build_year()
     with tempfile.TemporaryDirectory() as tmp:
-        args = SimpleNamespace(cache=Path(tmp), year=2023)
+        args = Namespace(cache=Path(tmp), year=2023)
         killed = Path(tmp) / "glace-store" / "2023" / "pmtiles-killed"
         killed.mkdir(parents=True)
         (killed / "coh12_vv_viz.pmtiles").write_bytes(b"partial")
@@ -220,8 +198,8 @@ def _staging_checks() -> dict[str, bool]:
         except SystemExit as error:
             too_little = "FREEZEBASE_CACHE" in str(error)
     alps = get_scope("alps")
-    every = SimpleNamespace(layers=None, concurrent_layers=12)
-    one = SimpleNamespace(layers=["coh12_vv"], concurrent_layers=12)
+    every = Namespace(layers=None, concurrent_layers=12)
+    one = Namespace(layers=["coh12_vv"], concurrent_layers=12)
     pmtiles = build_year.scratch_needed(every, alps, ["pmtiles"])
     return {
         "a step stages into an empty directory": empty,
@@ -364,7 +342,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     # The archives are reached through `visual` assets alone, a recorded
     # deviation from `PORTO-FMT-011` (docs/conformance.md). Check this on an
     # item that carries the renderings.
-    built = _build_year().visual_assets(_pmtiles_state())
+    built = build_year.visual_assets(_pmtiles_state())
     rendered = _mosaic_item(extra=built)
     mosaic = _mosaic_item()
     checks["the mosaic item links no PMTiles archive"] = not rendered.get_links("pmtiles")
@@ -456,7 +434,7 @@ def main() -> int:  # noqa: PLR0915  (one check per line, and there are many)
     stale = _pmtiles_state()
     stale.details["pmtiles"]["coh12_vv_viz"]["scale"] = 0.005
     try:
-        _build_year().visual_assets(stale)
+        build_year.visual_assets(stale)
         checks["an archive encoded over a stale range is refused"] = False
     except SystemExit:
         checks["an archive encoded over a stale range is refused"] = True
