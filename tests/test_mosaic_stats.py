@@ -24,10 +24,10 @@ from pathlib import Path
 import sys
 import tempfile
 
+from freezebase import vrt
 from freezebase.raster import write_cog
 import numpy as np
 import rasterio
-import rasterio.shutil
 from rasterio.transform import from_origin
 
 from glace_catalog.mosaics import (
@@ -50,7 +50,7 @@ VALUES = np.array(
 """Twelve finite values in sixteen pixels, so the valid percent is not 100."""
 
 
-def _source(tmp: Path) -> Path:
+def _source(tmp: Path) -> vrt.VRT:
     """Write the fixture raster and a VRT over it, as the VRT chain passes it on."""
     source = tmp / "source.tif"
     with rasterio.open(
@@ -66,10 +66,7 @@ def _source(tmp: Path) -> Path:
         nodata=np.nan,
     ) as dst:
         dst.write(VALUES, 1)
-    vrt = tmp / "source.vrt"
-    with rasterio.open(source) as src:
-        rasterio.shutil.copy(src, str(vrt), driver="VRT")
-    return vrt
+    return vrt.from_raster(source)
 
 
 def _expected() -> dict[str, float]:
@@ -100,12 +97,9 @@ def _empty_band_refused(tmp: Path) -> bool:
         nodata=np.nan,
     ) as dst:
         dst.write(np.full((4, 4), np.nan, dtype=np.float32), 1)
-    vrt = tmp / "empty.vrt"
-    with rasterio.open(source) as src:
-        rasterio.shutil.copy(src, str(vrt), driver="VRT")
     try:
         build_mosaic_cog(
-            vrt,
+            vrt.from_raster(source),
             tmp / "empty_out.tif",
             asset_key="rtc_vh_qa_cqm",
         )
@@ -130,10 +124,7 @@ def _overview_checks(tmp: Path) -> dict[str, bool]:
         nodata=np.nan,
     ) as dst:
         dst.write(np.ones((300, 600), dtype=np.float32), 1)
-    vrt = tmp / "wide.vrt"
-    with rasterio.open(source) as src:
-        rasterio.shutil.copy(src, str(vrt), driver="VRT")
-    written = build_mosaic_cog(vrt, tmp / "wide_out.tif", asset_key="coh12_vv")
+    written = build_mosaic_cog(vrt.from_raster(source), tmp / "wide_out.tif", asset_key="coh12_vv")
     with rasterio.open(written.path) as src:
         levels = src.overviews(1)
 

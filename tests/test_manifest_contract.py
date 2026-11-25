@@ -253,7 +253,10 @@ def store_writes(tmp: Path) -> dict[str, bool]:
 
     calls: list[tuple[Path | bytes, str]] = []
 
-    def record(src: Path | bytes, dst: Path | UPath | str) -> None:
+    def record(
+        src: Path | bytes, dst: Path | UPath | str, *, content_type: str | None = None
+    ) -> None:
+        del content_type
         calls.append((src, str(dst)))
 
     original = store.upload_object

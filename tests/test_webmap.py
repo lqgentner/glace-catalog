@@ -27,6 +27,7 @@ from pathlib import Path
 import sys
 import tempfile
 
+from freezebase import vrt
 import numpy as np
 from PIL import Image
 from pmtiles.reader import MmapSource, Reader
@@ -88,7 +89,7 @@ def read_tile(archive: Path, x: int, y: int) -> np.ndarray | None:
 
 def check_intermediate(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     """Check the warped-once raster: RGBA, one tile per block, alpha declared, no overviews."""
-    out = rgba_raster(mosaic, work / "rgba.tif", luts=ENCODING.luts())
+    out = rgba_raster(vrt.from_raster(mosaic), work / "rgba.tif", encoding=ENCODING)
     with rasterio.open(out) as src:
         checks["intermediate is four uint8 bands"] = src.count == 4 and src.dtypes[0] == "uint8"
         checks["intermediate blocks are one tile"] = src.block_shapes[0] == (TILE_PX, TILE_PX)
@@ -101,7 +102,9 @@ def check_intermediate(checks: dict[str, bool], mosaic: Path, work: Path) -> Non
         checks["nodata is transparent, data opaque"] = bool(
             (alpha[TILE_PX:, TILE_PX:] == 0).all() and (alpha[:TILE_PX, :] == 255).all()
         )
-        checks["the LUT VRT is written beside the raster"] = out.with_suffix(".vrt").exists()
+        checks["only the raster is written"] = sorted(path.name for path in work.iterdir()) == (
+            sorted([mosaic.name, out.name])
+        )
         side = TILES_ACROSS * TILE_PX
         expected = ENCODING.encode(np.linspace(VMIN, VMAX, side))
         checks["the intermediate holds the codes, grey"] = all(
@@ -114,8 +117,7 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
     """Check the build over a two-layer chain, warped concurrently into one shared pool."""
     style = LayerStyle(cmap="cmc.batlow", vmin=0.1, vmax=0.9, encoding=ENCODING)
     chain = YearVrts(
-        linear={"coh12_vv": mosaic, "coh12_vh": mosaic},
-        sources_at=mosaic,
+        linear={"coh12_vv": vrt.from_raster(mosaic), "coh12_vh": vrt.from_raster(mosaic)},
     )
     built = build_layers(
         chain,
@@ -181,11 +183,11 @@ def check_build(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
 
 
 def check_decibel(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
-    """Check a decibel layer is tiled from a decibel VRT written beside its linear mosaic."""
+    """Check a decibel layer is tiled from a decibel reading of its linear mosaic."""
     encoding = ValueEncoding(-30.0, 0.0)
     style = LayerStyle(cmap="cmc.batlow", vmin=-30, vmax=0, encoding=encoding, decibel=True)
     built = build_layers(
-        YearVrts(linear={"rtc_vv": mosaic}, sources_at=mosaic),
+        YearVrts(linear={"rtc_vv": vrt.from_raster(mosaic)}),
         work / "decibel",
         year=2024,
         styles={"rtc_vv": style},
@@ -193,9 +195,7 @@ def check_decibel(checks: dict[str, bool], mosaic: Path, work: Path) -> None:
         workers=1,
         scratch=work / "scratch",
     )
-    checks["a decibel layer's VRT is written beside its linear mosaic"] = mosaic.with_name(
-        "rtc_vv_webm13_db.vrt"
-    ).exists()
+    checks["no VRT is written beside the linear mosaic"] = not list(work.glob("*.vrt"))
     tile = read_tile(work / "decibel" / built[0].url, ORIGIN_X, ORIGIN_Y)
     side = TILES_ACROSS * TILE_PX
     expected = encoding.encode(10 * np.log10(np.arange(1, TILE_PX) / (side - 1)))

@@ -99,7 +99,7 @@ GLACE_S3_ENDPOINT_URL=   # UZH gateway, unless set in the profile
 GLACE_SOURCE=            # one year's composite archive, with {year}:
                          #   s3://s1-bursts/data/alps-total/{year}/s1-comp
 GLACE_STORE_ROOT=        # built store: s3:// prefix, or a local directory
-FREEZEBASE_CACHE=        # local scratch: VRT chains, staged mosaics, RGBA rasters
+FREEZEBASE_CACHE=        # local scratch: staged mosaics, RGBA rasters
 ```
 
 `build-year.py` and `finalize-catalog.py` build under `GLACE_STORE_ROOT`. A
@@ -155,8 +155,8 @@ GLACE_STORE_ROOT=/scratch/glace make build YEAR=2023   # another store
 | Step | Result |
 | --- | --- |
 | `copy` | Validates the manifest and supported assets, and leaves out each measurement with no valid pixel and its QA layers. Copies composites server-side without re-encoding, or hard-links them on one local disk. |
-| `mosaics` | Builds a temporary VRT chain onto the analysis grid, then writes twelve annual analysis mosaics. |
-| `pmtiles` | Builds a temporary VRT chain onto the display grid, then writes twelve value-encoded web-map archives. |
+| `mosaics` | Builds an in-memory VRT chain onto the analysis grid, then writes twelve annual analysis mosaics. |
+| `pmtiles` | Builds an in-memory VRT chain onto the display grid, then writes twelve value-encoded web-map archives. |
 | `items` | Writes STAC items and the year's item-index slice. |
 
 Steps can be rerun. Fingerprints skip unchanged work and trigger rebuilds when
@@ -337,10 +337,11 @@ They share files, not imports (`docs/DESIGN.md` §5).
   repository only reads its output files.
 - `../freezebase`: geospatial and IO helpers, including the VRT chain.
 
-Use `freezebase` from PyPI at `>=0.10,<0.11`. It provides `S3Settings`,
+Use `freezebase` from PyPI at `>=0.12,<0.13`. It provides `S3Settings`,
 `list_object_sizes`, `atomic_write_text`, `upload_object`, `content_type_for`,
-`write_cog` and profile endpoints, and its VRT helpers write local sources
-relative to the VRT, so a chain must not be moved. Store writes go through
+`write_cog` and profile endpoints, and the chainable VRTs of `freezebase.vrt`
+(`mosaic`, `reproject`, `derive`, `colorize`, `to_cog`, `to_raster`, `env`).
+Store writes go through
 `stac.store.put_object`: `upload_object` on S3, an atomic rename on a local
 disk. `MGRSGeoBox.from_mgrs` refuses a tile code that lies
 outside its UTM zone. Keep `uv.lock` tracked and do not use editable installs.

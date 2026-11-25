@@ -1,65 +1,62 @@
 """The VRT chain, and the annual mosaic COGs written from it.
 
-Each mosaicking and reprojection step is a VRT: the 10 m tiles of one UTM zone
-form a virtual mosaic, which is warped onto the target grid, and the zones are
-then combined on the scope's fixed extent. Only the final step writes data, as
-a streaming windowed copy.
+Each mosaicking and reprojection step is an in-memory VRT: the 10 m tiles of
+one UTM zone form a virtual mosaic, which is warped onto the target grid, and
+the zones are then combined on the scope's fixed extent. Only the final step
+writes data, as a streaming windowed copy.
 
 The chain is built for two grids, each directly from the UTM composites: the
 equal-area ETRS89-LAEA 20 m grid for the annual analysis mosaics, and the
 WebMercatorQuad z13 grid for the web-map archives. Each output is therefore
 resampled once.
 
-The chain, per year, band ``B`` and UTM zone ``Z``::
+The chain, per year and band, for each UTM zone ``Z``::
 
-    1  {B}_{Z}.vrt            10 m UTM mosaic of that zone's tiles
-    2  {B}_{Z}_webm13.vrt     (1) warped onto the target grid, average
-    3  {B}_webm13.vrt         (2) for every zone, on the scope's fixed extent
-    4  {B}_webm13_db.vrt      (3) in decibels, for the web maps of the layers
-                              ``metadata/assets.yaml`` displays in decibels
+    1  10 m UTM mosaic of the tiles in zone Z
+    2  (1) warped onto the target grid, average
+    3  (2) for every zone, on the scope's fixed extent
+    4  (3) in decibels, for the web maps of the layers
+       ``metadata/assets.yaml`` displays in decibels
 
-Both grids use these filenames, ``webm13`` included, and write their chains to
-separate directories. All published rasters are linear, so warps and COG
-overviews average in the linear domain, where averages are physically
-meaningful.
+All published rasters are linear, so warps and COG overviews average in the
+linear domain, where averages are physically meaningful.
 
 Step (3) feeds the mosaic COGs; (3) or (4) feeds the web-map tiles; the web-map
-build writes (4) itself. The VRTs
-are local scratch files, rebuilt in seconds. They name remote tiles by absolute
-``/vsis3/`` paths and local files relative to the VRT, so a chain is not moved.
-The published record of a run is its manifest, configuration and products.
+build adds (4) itself. The chain is held in memory and rebuilt for each run, in
+about two minutes for the Alps. The published record of a run is its
+manifest, configuration and products.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from concurrent.futures import as_completed
-from contextlib import contextmanager
+from contextlib import nullcontext
 from dataclasses import dataclass
 import logging
 import math
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from freezebase import vrt
 from freezebase.mgrs import MGRSGeoBox, mgrs_to_crs
-from freezebase.raster import get_utm_zone_string, rasterio_open, write_cog
-from freezebase.s3 import s3_env
-from freezebase.vrt import build_vrt_mosaic, create_warped_vrt
+from freezebase.raster import get_utm_zone_string, rasterio_open
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 from rasterio.warp import transform_bounds
-from upath import UPath
 
-from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX
+from glace_catalog.scopes import TILE_PX
 from glace_catalog.stac.items import GEOMETRY_SIMPLIFY_DEG
 from glace_catalog.stac.naming import published_name
 from glace_catalog.stac.tags import BandStatistics
 from glace_catalog.tiler import spawn_pool
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
+    from contextlib import AbstractContextManager
+    from pathlib import Path
 
+    from freezebase.vrt import VRT
     from rasterio.io import DatasetReader
 
     from glace_catalog.scopes import Grid, Scope
@@ -173,44 +170,40 @@ def zone_bounds(tiles: Sequence[str], grid: Grid) -> tuple[float, float, float, 
 
 @dataclass(frozen=True)
 class YearVrts:
-    """The VRT chain of one year, as explicit paths from each step to the next.
-
-    Consumers read their inputs from these paths.
+    """The VRT chain of one year.
 
     Parameters
     ----------
     linear
         Step (3) per asset key: the fixed-grid mosaic every published product
         is written from.
-    sources_at
-        One of the tile paths the chain reads. The VRTs are local but their
-        sources may be remote; :func:`sources_env` uses this path to set up the
-        matching credentials.
     """
 
-    linear: dict[str, Path | UPath]
-    sources_at: Path | UPath | None = None
+    linear: dict[str, VRT]
+
+    def env(self) -> AbstractContextManager[None]:
+        """Return the environment that reads the chain's sources.
+
+        Every layer of a year reads the same store, so one layer's environment
+        serves them all. Enter it in the main thread: rasterio applies options
+        set there to the whole process, but options set in another thread only
+        to that thread, and GDAL reads a VRT's sources in threads of its own.
+        """
+        return next(iter(self.linear.values())).env() if self.linear else nullcontext()
 
 
 def _build_band_vrt(
     asset_key: str,
     zones: Mapping[str, Sequence[CompositeFile]],
-    vrt_dir: Path,
     grid: Grid,
     extents: Mapping[str, tuple[float, float, float, float]],
-) -> Path:
-    """Build one layer's chain: a VRT per UTM zone, warped onto the grid, then mosaicked."""
+) -> VRT:
+    """Build one layer's chain: a mosaic per UTM zone, warped onto the grid, then mosaicked."""
     # QA-NUM is a uint16 count on the tiles, with 0 as nodata. The mosaic
     # holds the float32 average of the source pixels, with NaN as nodata.
     promote = asset_key.endswith("_qa_num")
-    warped: list[Path] = []
-    for zone, zone_files in sorted(zones.items()):
-        zone_vrt = vrt_dir / f"{asset_key}_{zone}.vrt"
-        build_vrt_mosaic(sorted(f.path for f in zone_files), zone_vrt)
-        web_vrt = vrt_dir / f"{asset_key}_{zone}_webm{MOSAIC_ZOOM}.vrt"
-        create_warped_vrt(
-            zone_vrt,
-            web_vrt,
+    warped = [
+        vrt.mosaic(sorted(f.path for f in zone_files)).reproject(
             crs=grid.crs,
             resolution=grid.resolution,
             bounds=extents[zone],
@@ -218,17 +211,15 @@ def _build_band_vrt(
             dtype="float32" if promote else None,
             nodata=float("nan") if promote else None,
         )
-        warped.append(web_vrt)
-    mosaic_vrt = vrt_dir / f"{asset_key}_webm{MOSAIC_ZOOM}.vrt"
+        for zone, zone_files in sorted(zones.items())
+    ]
     # The scope's fixed extent, so every year shares one grid.
-    build_vrt_mosaic(warped, mosaic_vrt, bounds=grid.bounds)
-    return mosaic_vrt
+    return vrt.mosaic(warped, bounds=grid.bounds)
 
 
 def build_year_vrts(
     files: Sequence[CompositeFile],
     scope: Scope,
-    vrt_dir: Path,
     *,
     grid: Grid | None = None,
 ) -> YearVrts:
@@ -245,16 +236,12 @@ def build_year_vrts(
         Target grid. Defaults to the scope's analysis grid; the web-map build
         passes ``scope.display_grid``. Both are warped directly from the UTM
         tiles.
-    vrt_dir
-        Local scratch directory the chain is written into.
 
     Returns
     -------
     YearVrts
         The chain's outputs, keyed by asset key.
     """
-    vrt_dir.mkdir(parents=True, exist_ok=True)
-
     by_band: dict[str, dict[str, list[CompositeFile]]] = defaultdict(lambda: defaultdict(list))
     grid = grid or scope.analysis_grid
     tiles_per_zone: dict[str, set[str]] = defaultdict(set)
@@ -272,28 +259,12 @@ def build_year_vrts(
             _build_band_vrt,
             keys,
             [dict(by_band[key]) for key in keys],
-            [vrt_dir] * len(keys),
             [grid] * len(keys),
             [extents] * len(keys),
         )
-        linear: dict[str, Path | UPath] = dict(zip(keys, built, strict=True))
-    for path in linear.values():
-        logger.info("Built %s", Path(str(path)).name)
-
-    return YearVrts(
-        linear=linear,
-        sources_at=files[0].path if files else None,
-    )
-
-
-@contextmanager
-def sources_env(sources_at: Path | UPath | None) -> Generator[None]:
-    """Enter the environment that reading ``sources_at`` needs, if it is remote."""
-    if sources_at is not None and UPath(sources_at).protocol == "s3":
-        with s3_env(UPath(sources_at)):
-            yield
-    else:
-        yield
+        linear = dict(zip(keys, built, strict=True))
+    logger.info("Built the chains of %s", ", ".join(keys))
+    return YearVrts(linear=linear)
 
 
 def band_statistics(src: DatasetReader, *, asset_key: str) -> BandStatistics:
@@ -400,7 +371,7 @@ class MosaicWrite:
 
 
 def build_mosaic_cog(
-    src_vrt: Path | UPath,
+    src: VRT,
     out_path: Path,
     *,
     asset_key: str,
@@ -408,8 +379,8 @@ def build_mosaic_cog(
 ) -> MosaicWrite:
     """Write one fixed-grid VRT as a LERC_ZSTD mosaic COG.
 
-    :func:`freezebase.raster.write_cog` streams the VRT into the COG block by
-    block, so memory use stays small. The statistics are computed in a separate
+    The VRT is streamed into the COG block by block, so memory use stays
+    small. The statistics are computed in a separate
     streaming pass beforehand and written as band tags, so they end up in the
     COG's own ``GDAL_METADATA`` header, as Portolan rule ``PTL-DAT-009``
     requires.
@@ -420,7 +391,7 @@ def build_mosaic_cog(
 
     Parameters
     ----------
-    src_vrt
+    src
         Step (3) of the chain: the mosaic on the fixed grid.
     out_path
         Destination COG.
@@ -442,11 +413,10 @@ def build_mosaic_cog(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     profile = {**COG_CREATION, "max_z_error": max_z_error(asset_key)}
     logger.info("Writing %s (max_z_error %g)", out_path.name, profile["max_z_error"])
-    with rasterio_open(src_vrt) as src:
-        statistics = band_statistics(src, asset_key=asset_key)
+    with src.open() as dataset:
+        statistics = band_statistics(dataset, asset_key=asset_key)
     with rasterio.Env(GDAL_NUM_THREADS="ALL_CPUS"):
-        checksum = write_cog(
-            src_vrt,
+        checksum = src.to_cog(
             out_path,
             profile,
             band_names=[asset_key],
@@ -461,24 +431,6 @@ def build_mosaic_cog(
         )
     require_overviews(out_path)
     return MosaicWrite(path=out_path, checksum=checksum, statistics=statistics)
-
-
-def _write_mosaic_in_worker(
-    sources_at: Path | UPath | None,
-    src_vrt: Path | UPath,
-    out_path: Path,
-    *,
-    asset_key: str,
-    tags: Mapping[str, str] | None,
-) -> MosaicWrite:
-    """Run :func:`build_mosaic_cog` in a pool worker, with the sources' credentials."""
-    with sources_env(sources_at):
-        return build_mosaic_cog(
-            src_vrt,
-            out_path,
-            asset_key=asset_key,
-            tags=tags,
-        )
 
 
 def build_mosaic_cogs(
@@ -523,8 +475,7 @@ def build_mosaic_cogs(
     with spawn_pool(workers, cache_mb=MOSAIC_GDAL_CACHE_MB) as pool:
         futures = {
             pool.submit(
-                _write_mosaic_in_worker,
-                vrts.sources_at,
+                build_mosaic_cog,
                 vrts.linear[asset_key],
                 out_dir / published_name(asset_key),
                 asset_key=asset_key,
@@ -580,7 +531,6 @@ __all__ = [
     "build_year_vrts",
     "data_footprint",
     "max_z_error",
-    "sources_env",
     "zone_bounds",
     "zone_token",
 ]

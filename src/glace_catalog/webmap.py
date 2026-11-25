@@ -12,7 +12,7 @@ WebMercatorQuad grid at the maximum zoom. The top zoom level is therefore cut
 without resampling, and each lower level halves the resolution, so tiles are
 resampled with ``average``.
 
-Each layer is warped once: the encoded RGBA VRT is copied to a local tiled
+Each layer is warped once: the encoded RGBA VRT is written to a local tiled
 GeoTIFF, and the tiler (:mod:`glace_catalog.tiler`) reads that file, so the
 remote composites are read once per layer. The local copy has no overviews,
 which keeps it small on scratch disk; lower zoom levels are computed from full
@@ -28,14 +28,11 @@ from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING
 
-from freezebase.raster import rasterio_open
-from freezebase.vrt import create_decibel_vrt, create_rgba_vrt
+from freezebase.vrt import PixelFunction
 from rasterio.enums import Resampling
-import rasterio.shutil
 from rasterio.warp import transform_bounds
 
 from glace_catalog.metadata import vocabulary
-from glace_catalog.mosaics import sources_env
 from glace_catalog.scopes import MOSAIC_ZOOM, TILE_PX, VIZ_MIN_ZOOM
 from glace_catalog.stac.naming import ASSET_KEYS, data_key, viz_filename
 from glace_catalog.stac.store import multihash_sha256_file
@@ -47,21 +44,21 @@ if TYPE_CHECKING:
     from concurrent.futures import ProcessPoolExecutor
     from typing import Any
 
-    from upath import UPath
+    from freezebase.vrt import VRT
 
+    from glace_catalog.encoding import ValueEncoding
     from glace_catalog.mosaics import YearVrts
     from glace_catalog.styles import LayerStyle
 
 logger = logging.getLogger(__name__)
 
 RGBA_CREATION = {
-    "driver": "GTiff",
-    "TILED": "YES",
-    "BLOCKXSIZE": TILE_PX,
-    "BLOCKYSIZE": TILE_PX,
-    "COMPRESS": "DEFLATE",
-    "ZLEVEL": 6,
-    "BIGTIFF": "IF_SAFER",
+    "tiled": True,
+    "blockxsize": TILE_PX,
+    "blockysize": TILE_PX,
+    "compress": "deflate",
+    "zlevel": 6,
+    "bigtiff": "IF_SAFER",
 }
 """Creation options of the local RGBA copy each layer is warped into.
 
@@ -126,48 +123,40 @@ def encoding_mismatch(key: str, detail: Mapping[str, Any]) -> str | None:
     )
 
 
-def _wgs84_bounds(dataset: rasterio.DatasetReader) -> list[float]:
-    """Geographic bounding box of a dataset, as ``[west, south, east, north]``."""
-    west, south, east, north = transform_bounds(dataset.crs, "EPSG:4326", *dataset.bounds)
+def _wgs84_bounds(src: VRT) -> list[float]:
+    """Geographic bounding box of a VRT, as ``[west, south, east, north]``."""
+    west, south, east, north = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
     return [west, south, east, north]
 
 
-def rgba_raster(
-    src_vrt: Path | UPath,
-    out_path: Path,
-    *,
-    luts: Sequence[Sequence[tuple[float, int]]],
-) -> Path:
+def rgba_raster(src: VRT, out_path: Path, *, encoding: ValueEncoding) -> Path:
     """Warp and encode one layer into a local RGBA GeoTIFF.
 
-    A 4-band uint8 RGBA lookup-table VRT is written beside ``out_path`` and
-    copied with GDAL's ``CreateCopy`` (as ``gdal_translate`` does), so the
-    whole VRT chain runs once, in one streaming pass. When the sources are
-    remote, call this inside :func:`~glace_catalog.mosaics.sources_env`.
+    The layer is coloured with the encoding's grey code ramp and streamed into
+    the file, so the whole VRT chain runs once. When the sources are remote,
+    call this inside :meth:`~glace_catalog.mosaics.YearVrts.env`, entered in
+    the main thread.
 
     Parameters
     ----------
-    src_vrt
+    src
         A VRT from the chain: linear or decibel.
     out_path
         The GeoTIFF written, on the tiler's grid, four uint8 bands with alpha.
-    luts
-        The encoding, as :func:`freezebase.vrt.create_rgba_vrt` takes it.
+    encoding
+        The layer's encoding.
 
     Returns
     -------
     pathlib.Path
         ``out_path``.
     """
-    lut_vrt = out_path.with_suffix(".vrt")
-    create_rgba_vrt(src_vrt, lut_vrt, luts=luts, src_bands=(1, 1, 1))
-    with rasterio_open(lut_vrt) as src:
-        rasterio.shutil.copy(src, str(out_path), **RGBA_CREATION)
+    src.colorize(encoding.stops()).to_raster(out_path, RGBA_CREATION)
     return out_path
 
 
 def build_pmtiles(
-    src_vrt: Path | UPath,
+    src: VRT,
     out_path: Path,
     *,
     layer_id: str,
@@ -183,7 +172,7 @@ def build_pmtiles(
 
     Parameters
     ----------
-    src_vrt
+    src
         A VRT from the chain: the linear mosaic or its decibel reading.
     out_path
         Destination ``.pmtiles`` file. Must be local, because writing an
@@ -219,17 +208,14 @@ def build_pmtiles(
     """
     encoding = style.encoding
 
-    if bounds is None:
-        with rasterio_open(src_vrt) as dataset:
-            bounds = _wgs84_bounds(dataset)
-    bounds = list(bounds)
+    bounds = _wgs84_bounds(src) if bounds is None else list(bounds)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if scratch is not None:
         scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=scratch, prefix=f"{layer_id}-") as tmp:
         logger.info("Warping %s once, encoded over %s", layer_id, encoding)
-        rgba_path = rgba_raster(src_vrt, Path(tmp) / f"{layer_id}_rgba.tif", luts=encoding.luts())
+        rgba_path = rgba_raster(src, Path(tmp) / f"{layer_id}_rgba.tif", encoding=encoding)
         logger.info("Tiling %s to z%d-%d", out_path.name, min_zoom, max_zoom)
         written = write_archive(
             rgba_path,
@@ -290,8 +276,7 @@ def build_layers(
     Parameters
     ----------
     vrts
-        Chain built by :func:`glace_catalog.mosaics.build_year_vrts`. Its
-        paths are the inputs.
+        Chain built by :func:`glace_catalog.mosaics.build_year_vrts`.
     out_dir
         Local directory the archives are written to.
     year
@@ -299,7 +284,7 @@ def build_layers(
     styles
         Display record per layer, whose transport range the archive is
         encoded over. A layer whose record is in decibels is tiled from a
-        decibel VRT over its linear mosaic, written beside it. Defaults to the
+        decibel VRT over its linear mosaic. Defaults to the
         vocabulary's, from ``metadata/assets.yaml``.
     layers
         Restrict to these layer ids. ``None`` builds all twelve.
@@ -328,7 +313,7 @@ def build_layers(
         styles = {key: vocabulary().display(key) for key in ASSET_KEYS}
     wanted = {key: style for key, style in styles.items() if layers is None or key in layers}
 
-    def build_one(layer_id: str, style: LayerStyle, source: Path | UPath) -> LayerInfo:
+    def build_one(layer_id: str, style: LayerStyle, source: VRT) -> LayerInfo:
         return build_pmtiles(
             source,
             out_dir / viz_filename(layer_id),
@@ -342,26 +327,25 @@ def build_layers(
             pool=pool,
         )
 
-    sources: dict[str, tuple[LayerStyle, Path | UPath]] = {}
+    sources: dict[str, tuple[LayerStyle, VRT]] = {}
     for layer_id, style in sorted(wanted.items()):
         linear = vrts.linear.get(layer_id)
         if linear is None:
             logger.info("No VRT for %s; skipping", layer_id)
         elif style.decibel:
-            decibel = Path(str(linear)).with_name(f"{layer_id}_webm{MOSAIC_ZOOM}_db.vrt")
-            create_decibel_vrt(linear, decibel)
-            sources[layer_id] = (style, decibel)
+            sources[layer_id] = (
+                style,
+                linear.derive(PixelFunction.db(), description="dB", band=1),
+            )
         else:
             sources[layer_id] = (style, linear)
 
-    # The VRTs are local but read remote files, so the store's credentials are
-    # set here, in the main thread, around all warps. rasterio applies options
-    # set in the main thread to the whole process, but options set in another
-    # thread only to that thread. GDAL reads a VRT's sources in its own
-    # threads, so credentials set inside a warp thread would be missing there
-    # ("No valid AWS credentials"). The tiler pool reads local rasters only.
+    # The store's credentials are set here, in the main thread, around all
+    # warps: credentials set inside a warp thread would not reach the threads
+    # GDAL reads a VRT's sources in ("No valid AWS credentials"). The tiler
+    # pool reads local rasters only.
     with (
-        sources_env(vrts.sources_at),
+        vrts.env(),
         spawn_pool(workers) as pool,
         ThreadPoolExecutor(max_workers=max(1, concurrent_layers)) as warps,
     ):

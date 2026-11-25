@@ -86,7 +86,7 @@ class Settings:
 
     @property
     def cache_dir(self) -> Path:
-        """Scratch directory for the VRT chain and other unpublished build files.
+        """Scratch directory for staged mosaics, RGBA rasters and other unpublished build files.
 
         Honours ``FREEZEBASE_CACHE``, falling back to the platform cache
         directory.

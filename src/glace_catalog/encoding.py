@@ -121,18 +121,18 @@ class ValueEncoding:
             band["unit"] = unit
         return band
 
-    def luts(self, *, stops: int = 256) -> list[list[tuple[float, int]]]:
-        """Return GDAL ``<LUT>`` tables that write the code into all three bands.
+    def stops(self, *, count: int = 256) -> list[tuple[float, tuple[int, int, int]]]:
+        """Return colour stops that write the code, grey, into all three bands.
 
         GDAL interpolates linearly between stops; with 256 stops over 254
         codes the rounding error stays under one code. Values below ``lo``
         map to code 1, so every valid pixel has a nonzero code.
         """
-        values = np.linspace(self.lo, self.hi, stops)
-        table = [
-            (float(value), int(1 + round((value - self.lo) / self.scale))) for value in values
-        ]
-        return [table, table, table]
+        stops = []
+        for value in np.linspace(self.lo, self.hi, count):
+            code = int(1 + round((value - self.lo) / self.scale))
+            stops.append((float(value), (code, code, code)))
+        return stops
 
     def ramp(
         self,

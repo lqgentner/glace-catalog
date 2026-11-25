@@ -195,23 +195,17 @@ def step_vrt(
     files: Sequence[stac.CompositeFile],
     *,
     grid: Grid | None = None,
-    name: str = "vrt",
 ) -> mosaics.YearVrts:
-    """Build one of the year's two VRT chains in the local cache.
+    """Build one of the year's two VRT chains in memory.
 
     The mosaics use the scope's equal-area analysis grid and the web maps its
     Web Mercator display grid. Both chains start from the UTM composites, so
-    each product is resampled once.
-
-    Each step that reads a chain builds it afresh, about two minutes for the
-    Alps: the VRTs are local and temporary, and the cache may have been
-    emptied since the last run.
+    each product is resampled once. Each step that reads a chain builds it
+    afresh, in about two minutes for the Alps.
     """
-    vrt_dir = args.cache / "glace-store" / str(args.year) / name
     chain = mosaics.build_year_vrts(
         published_files(files, layout, args.year),
         scope,
-        vrt_dir,
         grid=grid,
     )
     logger.info("vrt: %d layer(s)", len(chain.linear))
@@ -652,9 +646,7 @@ def main() -> None:
             chain = step_vrt(args, scope, layout, files)
             state.record(step, prints[step], step_mosaics(args, scope, layout, chain, frame))
         elif step == "pmtiles":
-            chain = step_vrt(
-                args, scope, layout, files, grid=scope.display_grid, name="vrt-display"
-            )
+            chain = step_vrt(args, scope, layout, files, grid=scope.display_grid)
             state.record(step, prints[step], step_pmtiles(args, layout, chain, files))
         elif step == "items":
             step_items(args, scope, layout, frame, files, state)
