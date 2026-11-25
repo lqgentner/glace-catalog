@@ -176,7 +176,7 @@ composites, so the display path never passes through LAEA and no layer is
 warped twice.
 
 **Each layer is warped once, then tiled locally.** The encoded RGBA VRT over
-the display chain is copied to a local GeoTIFF without overviews, and the
+the display chain is written to a local GeoTIFF without overviews, and the
 tiler reads that copy. Tiling from the VRT would re-warp the remote UTM
 composites for every tile at every zoom level. On a Swiss test, that took
 174 s per layer, against 10 s from the local copy.
@@ -380,9 +380,9 @@ The manifest also records the five `STATISTICS_*` values per band, which
 `PTL-DAT-009/010` require of the *composites*; a run whose files lack them
 cannot be published. This repository writes the annual mosaics, so it
 computes their statistics. `build_mosaic_cog` accumulates the five values over
-the source VRT, window by window, and passes them to freezebase's `write_cog`
-as band tags. `write_cog` sets them on the VRT before the COG encode, the only
-point at which they can reach the file's header.
+the source VRT, window by window, and passes them to the VRT's `to_cog`, from
+freezebase, as band tags. `to_cog` sets them on the VRT before the COG encode,
+the only point at which they can reach the file's header.
 
 ---
 

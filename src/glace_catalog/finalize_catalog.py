@@ -1,6 +1,6 @@
 r"""Write the store's root catalog, collections and item indexes over every built year.
 
-``build-year.py`` writes one year at a time. This script reads the built
+``build-year.py`` writes one year at a time. This command reads the built
 years and writes what spans them:
 
 - the root ``catalog.json``, with an absolute ``self`` link under the public

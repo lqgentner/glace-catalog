@@ -21,7 +21,6 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime, timedelta
 import hashlib
 from io import BytesIO, StringIO
-import os
 from pathlib import Path
 import sys
 import tempfile
@@ -32,15 +31,12 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-# glace_catalog.config resolves its locations on import, so the variable must be
-# set before the tool is imported. A local placeholder path keeps the gate on
-# local disk.
-os.environ.setdefault("GLACE_STORE_ROOT", str(ROOT / "does-not-exist" / "store"))
-
 from botocore.exceptions import ProfileNotFound  # noqa: E402
 from fsspec.implementations.memory import MemoryFileSystem  # noqa: E402
 import publish  # noqa: E402
 from upath import UPath  # noqa: E402
+
+from glace_catalog.config import Settings, StoreSettings  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -323,17 +319,14 @@ def check_local_root() -> dict[str, bool]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         (Path(tmp) / "tiles/2023/.build-state.json").write_text("{}")
-        locations = publish.settings.locations
-        original = locations.store_root
-        locations.store_root = tmp
-        try:
-            with (
-                patch.object(publish, "read_target", lambda: target_root),
-                redirect_stdout(StringIO()),
-            ):
-                code = publish.main(["--confirm"])
-        finally:
-            locations.store_root = original
+        settings = Settings()
+        settings.locations = StoreSettings(store_root=tmp)
+        with (
+            patch.object(publish, "settings", settings),
+            patch.object(publish, "read_target", lambda: target_root),
+            redirect_stdout(StringIO()),
+        ):
+            code = publish.main(["--confirm"])
     checks["a local store root publishes"] = code == 0
     checks["every object arrives with its bytes"] = all(
         (target_root / name).exists() and (target_root / name).read_bytes() == data
